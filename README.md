@@ -11,27 +11,39 @@ Think of it as:
 ⸻
 
 ✨ Features (MVP Roadmap)
+
 	•	🔌 Core Proxy (HTTP/HTTPS)
+
 Intercept and inspect traffic with built-in MITM support.
+
 	•	🧩 Plugin Runtime
+
 Extend APiX with request/response tampering, mocking, logging, etc.
+
 	•	⚡ Tampering Rules
+
 Modify headers, rewrite bodies, or inject responses.
+
 	•	📦 Cross-Platform
+
 Works on Linux, macOS, and Windows.
+
 	•	🛠 Developer-Friendly CLI
+
 Run any app through APiX:
 
 apix run curl https://example.com
 
 
 	•	🗂 Storage (MVP)
+
 Capture requests in memory, with optional export to JSON.
 
 ⸻
 
 🏗 Project Structure
 
+```
 apix/
 ├── cmd/              # Entry points (binaries)
 │   ├── apix-engine/  # Core engine (proxy + API)
@@ -54,7 +66,7 @@ apix/
 ├── build/            # Dockerfiles, CI/CD configs
 ├── tests/            # Integration tests
 └── README.md
-
+```
 
 ⸻
 
@@ -129,4 +141,4 @@ Contributions are welcome!
 
 ⸻
 
-👉 This is developer-friendly and forward-looking but also light enough for an MVP repo.
+👉 This is developer-friendly and forward-looking but also light enough.
