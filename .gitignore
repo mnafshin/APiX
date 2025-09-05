@@ -1,0 +1,69 @@
+# -----------------------
+# Go build artifacts
+# -----------------------
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
+bin/
+dist/
+build/
+coverage.out
+
+# Dependency directories
+vendor/
+
+# -----------------------
+# IDE / Editor files
+# -----------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# -----------------------
+# Logs / Temp
+# -----------------------
+*.log
+*.tmp
+*.cache
+
+# -----------------------
+# Certificates (generated for MITM)
+# -----------------------
+certs/
+*.crt
+*.key
+*.pem
+
+# -----------------------
+# UI (React / Node.js)
+# -----------------------
+ui/node_modules/
+ui/.next/
+ui/build/
+ui/dist/
+ui/.env.local
+ui/.env.development.local
+ui/.env.test.local
+ui/.env.production.local
+
+# -----------------------
+# SQLite / DB storage
+# -----------------------
+*.db
+*.sqlite
+*.sqlite3
+
+# -----------------------
+# Docker / Containers
+# -----------------------
+*.tar
+*.img
+*.pid
