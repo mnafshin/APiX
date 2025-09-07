@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -29,11 +31,69 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
+		transport := &http.Transport{}
+
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			log.Printf("HTTP proxy received request: %s %s", r.Method, r.URL)
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Proxy server placeholder\n"))
+
+			// Clone the request URL to modify it for the proxy request
+			targetURL := r.URL
+			if !targetURL.IsAbs() {
+				// If URL is not absolute, construct it from Host and Scheme
+				scheme := "http"
+				if r.TLS != nil {
+					scheme = "https"
+				}
+				targetURL = &url.URL{
+					Scheme: scheme,
+					Host:   r.Host,
+					Path:   r.URL.Path,
+					RawQuery: r.URL.RawQuery,
+				}
+			}
+
+			// Create a new request to the target URL
+			req, err := http.NewRequest(r.Method, targetURL.String(), r.Body)
+			if err != nil {
+				http.Error(w, "Failed to create request", http.StatusInternalServerError)
+				log.Printf("Failed to create request: %v", err)
+				return
+			}
+
+			// Copy headers
+			req.Header = make(http.Header)
+			for k, vv := range r.Header {
+				for _, v := range vv {
+					req.Header.Add(k, v)
+				}
+			}
+
+			// Use the transport to perform the request
+			resp, err := transport.RoundTrip(req)
+			if err != nil {
+				http.Error(w, "Failed to reach destination", http.StatusBadGateway)
+				log.Printf("Failed to reach destination %s: %v", targetURL.String(), err)
+				return
+			}
+			defer resp.Body.Close()
+
+			// Copy response headers
+			for k, vv := range resp.Header {
+				for _, v := range vv {
+					w.Header().Add(k, v)
+				}
+			}
+
+			w.WriteHeader(resp.StatusCode)
+
+			// Stream response body
+			_, err = io.Copy(w, resp.Body)
+			if err != nil {
+				log.Printf("Error copying response body: %v", err)
+			}
 		})
+
 		srv := &http.Server{Addr: ":8080"}
 
 		go func() {
