@@ -17,7 +17,34 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// gRPC service implementation
+type Engine struct {
+	mu          sync.Mutex
+	requests    []*apix.HttpRequest
+	subscribers []chan *apix.HttpRequest
+}
+
+func (e *Engine) AddRequest(req *apix.HttpRequest) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.requests = append(e.requests, req)
+	for _, sub := range e.subscribers {
+		select {
+		case sub <- req:
+		default:
+		}
+	}
+}
+
+func (e *Engine) Subscribe() chan *apix.HttpRequest {
+	ch := make(chan *apix.HttpRequest, 10)
+	e.mu.Lock()
+	e.subscribers = append(e.subscribers, ch)
+	e.mu.Unlock()
+	return ch
+}
+
+var engine = &Engine{}
+
 type server struct {
 	apix.UnimplementedEngineServer
 }
@@ -30,21 +57,32 @@ func (s *server) GetStatus(ctx context.Context, req *apix.StatusRequest) (*apix.
 }
 
 func (s *server) CaptureTraffic(req *apix.CaptureRequest, stream apix.Engine_CaptureTrafficServer) error {
-	// Send dummy HttpRequest messages
-	for i := 0; i < 2; i++ {
-		err := stream.Send(&apix.HttpRequest{
-			Method: "GET",
-			Url:    "http://example.com",
-			Headers: map[string]string{
-				"User-Agent": "apix-proxy",
-			},
-			Body: "dummy body",
-		})
-		if err != nil {
-			return err
+	ch := engine.Subscribe()
+	defer func() {
+		engine.mu.Lock()
+		for i, sub := range engine.subscribers {
+			if sub == ch {
+				engine.subscribers = append(engine.subscribers[:i], engine.subscribers[i+1:]...)
+				break
+			}
+		}
+		engine.mu.Unlock()
+		close(ch)
+	}()
+
+	for {
+		select {
+		case reqInfo, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(reqInfo); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			return nil
 		}
 	}
-	return nil
 }
 
 func (s *server) ListPlugins(ctx context.Context, req *apix.PluginListRequest) (*apix.PluginListResponse, error) {
@@ -138,6 +176,19 @@ func main() {
 			if err != nil {
 				log.Printf("Error copying response body: %v", err)
 			}
+
+			reqInfo := &apix.HttpRequest{
+				Method:  r.Method,
+				Url:     targetURL.String(),
+				Headers: map[string]string{},
+			}
+			for k, vv := range r.Header {
+				if len(vv) > 0 {
+					reqInfo.Headers[k] = vv[0]
+				}
+			}
+
+			engine.AddRequest(reqInfo)
 		})
 
 		srv := &http.Server{Addr: ":8080"}
