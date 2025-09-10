@@ -30,9 +30,11 @@ Works on Linux, macOS, and Windows.
 
 	•	🛠 Developer-Friendly CLI
 
-Run any app through APiX:
+Run APiX CLI commands to interact with the engine:
 
-apix run curl https://example.com
+apix status
+apix plugins
+apix log
 
 
 	•	🗂 Storage (MVP)
@@ -72,22 +74,92 @@ apix/
 
 🔧 Getting Started (MVP)
 
-1. Build the Engine
+1. Start the Engine
 
+Build and run the gRPC-enabled engine:
+
+```
 cd cmd/apix-engine
 go build -o apix-engine
 ./apix-engine
+```
+
+The engine runs a gRPC server with reflection enabled, allowing introspection and interaction.
 
 2. Run the CLI
 
+In another terminal, build and run the CLI to interact with the engine:
+
+```
 cd cmd/apix-cli
-go build -o apix
-./apix run curl https://example.com
+go build -o apix-cli
+./apix-cli status
+./apix-cli plugins
+./apix-cli log
+```
 
-3. View Captured Traffic
+3. Test Traffic Capture
 
-./apix log
+Use `curl` with APiX as an HTTP proxy to generate traffic:
 
+```
+curl -x http://localhost:8080 https://example.com
+```
+
+This will be intercepted and logged by the engine.
+
+⸻
+
+🛠 CLI Command Examples
+
+- `apix-cli status`
+
+Shows the current status of the APiX engine.
+
+Example output:
+
+```
+Engine Status: Running
+Uptime: 2m35s
+Active Connections: 1
+```
+
+- `apix-cli plugins`
+
+Lists loaded plugins and their statuses.
+
+Example output:
+
+```
+Loaded Plugins:
+- HeaderEditor (enabled)
+- EnvSubst (enabled)
+- MockResponse (disabled)
+```
+
+- `apix-cli log`
+
+Displays captured HTTP requests and responses.
+
+Example output:
+
+```
+[1] GET https://example.com/ - 200 OK
+[2] POST https://api.example.com/login - 401 Unauthorized
+```
+
+⸻
+
+🔍 gRPC Reflection and Testing
+
+The engine enables gRPC reflection, so you can also inspect and interact with it using tools like `grpcurl`:
+
+```
+grpcurl -plaintext localhost:50051 list
+grpcurl -plaintext localhost:50051 describe apix.EngineService
+```
+
+This allows advanced users to query engine internals and manage it programmatically.
 
 ⸻
 
