@@ -12,11 +12,56 @@ import (
 	"sync"
 	"syscall"
 
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
 )
 
-// Placeholder gRPC service implementation
-type server struct{}
+// gRPC service implementation
+type server struct {
+	apix.UnimplementedEngineServer
+}
+
+func (s *server) GetStatus(ctx context.Context, req *apix.StatusRequest) (*apix.StatusResponse, error) {
+	return &apix.StatusResponse{
+		Status:  "OK",
+		Version: "1.0.0",
+	}, nil
+}
+
+func (s *server) CaptureTraffic(req *apix.CaptureRequest, stream apix.Engine_CaptureTrafficServer) error {
+	// Send dummy HttpRequest messages
+	for i := 0; i < 2; i++ {
+		err := stream.Send(&apix.HttpRequest{
+			Method: "GET",
+			Url:    "http://example.com",
+			Headers: map[string]string{
+				"User-Agent": "apix-proxy",
+			},
+			Body: []byte("dummy body"),
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *server) ListPlugins(ctx context.Context, req *apix.PluginListRequest) (*apix.PluginListResponse, error) {
+	return &apix.PluginListResponse{
+		Plugins: []*apix.PluginInfo{
+			{
+				Name:        "PluginA",
+				Description: "Dummy plugin A",
+				Version:     "0.1",
+			},
+			{
+				Name:        "PluginB",
+				Description: "Dummy plugin B",
+				Version:     "0.2",
+			},
+		},
+	}, nil
+}
 
 func main() {
 	// Channel to listen for interrupt or termination signals
@@ -46,9 +91,9 @@ func main() {
 					scheme = "https"
 				}
 				targetURL = &url.URL{
-					Scheme: scheme,
-					Host:   r.Host,
-					Path:   r.URL.Path,
+					Scheme:   scheme,
+					Host:     r.Host,
+					Path:     r.URL.Path,
 					RawQuery: r.URL.RawQuery,
 				}
 			}
@@ -118,6 +163,7 @@ func main() {
 		}
 		grpcServer := grpc.NewServer()
 		// Register your gRPC service here if you have one
+		apix.RegisterEngineServer(grpcServer, &server{})
 		go func() {
 			<-ctx.Done()
 			grpcServer.GracefulStop()

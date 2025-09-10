@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package apix;
+
+option go_package = "github.com/mnafshin/apix/pkg/api/generated;generated";
+
+// -------- Messages --------
+
+// A single HTTP request captured by the proxy
+message HttpRequest {
+  string method = 1;
+  string url = 2;
+  map<string, string> headers = 3;
+  string body = 4;
+  int64 timestamp = 5;
+}
+
+// A single HTTP response captured by the proxy
+message HttpResponse {
+  int32 status_code = 1;
+  map<string, string> headers = 2;
+  string body = 3;
+}
+
+// Plugins info
+message PluginInfo {
+  string name = 1;
+  string version = 2;
+  string description = 3;
+}
+
+// Empty request/response for simple RPCs
+message Empty {}
+
+// -------- Services --------
+
+service Engine {
+  // Health check
+  rpc GetStatus(Empty) returns (StatusReply);
+
+  // Stream captured HTTP requests
+  rpc CaptureTraffic(Empty) returns (stream HttpRequest);
+
+  // List installed plugins
+  rpc ListPlugins(Empty) returns (PluginList);
+}
+
+// -------- Replies --------
+
+message StatusReply {
+  string status = 1; 
+  string version = 2;
+}
+
+message PluginList {
+  repeated PluginInfo plugins = 1;
+}
