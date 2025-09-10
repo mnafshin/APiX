@@ -48,20 +48,25 @@ Capture requests in memory, with optional export to JSON.
 ```
 apix/
 ├── cmd/              # Entry points (binaries)
-│   ├── apix-engine/  # Core engine (proxy + API)
+│   ├── apix-engine/  # Core engine (HTTP proxy + gRPC server)
 │   └── apix-cli/     # Developer CLI
 │
 ├── pkg/              # Core packages
-│   ├── api/          # gRPC/REST API
-│   ├── proxy/        # HTTP/HTTPS proxy
+│   ├── api/          # gRPC/REST API definitions
+│   ├── proxy/        # HTTP/HTTPS proxy helpers (if any)
 │   ├── plugins/      # Plugin runtime + SDK
 │   ├── storage/      # Logging & persistence
 │   ├── tamper/       # Request/response modification
 │   └── breakpoints/  # Breakpoint manager (future)
 │
 ├── internal/         # Non-exported helpers
-│   ├── config/       # Engine config
-│   └── utils/        # Certs, logging, misc
+│   ├── config/       # Engine configuration loader
+│   │   └── config.go
+│   ├── engine/       # Core Engine struct and request handling
+│   │   └── engine.go
+│   └── server/       # Servers
+│       ├── http.go   # HTTP proxy server
+│       └── grpc.go   # gRPC server
 │
 ├── ui/               # (Future) React-based UI
 ├── scripts/          # Build/release scripts
