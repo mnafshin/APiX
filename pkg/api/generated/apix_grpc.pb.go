@@ -29,11 +29,11 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EngineClient interface {
 	// Health check
-	GetStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusReply, error)
+	GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	// Stream captured HTTP requests
-	CaptureTraffic(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error)
+	CaptureTraffic(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error)
 	// List installed plugins
-	ListPlugins(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*PluginList, error)
+	ListPlugins(ctx context.Context, in *PluginListRequest, opts ...grpc.CallOption) (*PluginListResponse, error)
 }
 
 type engineClient struct {
@@ -44,9 +44,9 @@ func NewEngineClient(cc grpc.ClientConnInterface) EngineClient {
 	return &engineClient{cc}
 }
 
-func (c *engineClient) GetStatus(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*StatusReply, error) {
+func (c *engineClient) GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(StatusReply)
+	out := new(StatusResponse)
 	err := c.cc.Invoke(ctx, Engine_GetStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -54,13 +54,13 @@ func (c *engineClient) GetStatus(ctx context.Context, in *Empty, opts ...grpc.Ca
 	return out, nil
 }
 
-func (c *engineClient) CaptureTraffic(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error) {
+func (c *engineClient) CaptureTraffic(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Engine_ServiceDesc.Streams[0], Engine_CaptureTraffic_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[Empty, HttpRequest]{ClientStream: stream}
+	x := &grpc.GenericClientStream[CaptureRequest, HttpRequest]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -73,9 +73,9 @@ func (c *engineClient) CaptureTraffic(ctx context.Context, in *Empty, opts ...gr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Engine_CaptureTrafficClient = grpc.ServerStreamingClient[HttpRequest]
 
-func (c *engineClient) ListPlugins(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*PluginList, error) {
+func (c *engineClient) ListPlugins(ctx context.Context, in *PluginListRequest, opts ...grpc.CallOption) (*PluginListResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PluginList)
+	out := new(PluginListResponse)
 	err := c.cc.Invoke(ctx, Engine_ListPlugins_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -88,11 +88,11 @@ func (c *engineClient) ListPlugins(ctx context.Context, in *Empty, opts ...grpc.
 // for forward compatibility.
 type EngineServer interface {
 	// Health check
-	GetStatus(context.Context, *Empty) (*StatusReply, error)
+	GetStatus(context.Context, *StatusRequest) (*StatusResponse, error)
 	// Stream captured HTTP requests
-	CaptureTraffic(*Empty, grpc.ServerStreamingServer[HttpRequest]) error
+	CaptureTraffic(*CaptureRequest, grpc.ServerStreamingServer[HttpRequest]) error
 	// List installed plugins
-	ListPlugins(context.Context, *Empty) (*PluginList, error)
+	ListPlugins(context.Context, *PluginListRequest) (*PluginListResponse, error)
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -103,13 +103,13 @@ type EngineServer interface {
 // pointer dereference when methods are called.
 type UnimplementedEngineServer struct{}
 
-func (UnimplementedEngineServer) GetStatus(context.Context, *Empty) (*StatusReply, error) {
+func (UnimplementedEngineServer) GetStatus(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
 }
-func (UnimplementedEngineServer) CaptureTraffic(*Empty, grpc.ServerStreamingServer[HttpRequest]) error {
+func (UnimplementedEngineServer) CaptureTraffic(*CaptureRequest, grpc.ServerStreamingServer[HttpRequest]) error {
 	return status.Errorf(codes.Unimplemented, "method CaptureTraffic not implemented")
 }
-func (UnimplementedEngineServer) ListPlugins(context.Context, *Empty) (*PluginList, error) {
+func (UnimplementedEngineServer) ListPlugins(context.Context, *PluginListRequest) (*PluginListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPlugins not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
@@ -134,7 +134,7 @@ func RegisterEngineServer(s grpc.ServiceRegistrar, srv EngineServer) {
 }
 
 func _Engine_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+	in := new(StatusRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -146,24 +146,24 @@ func _Engine_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(in
 		FullMethod: Engine_GetStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EngineServer).GetStatus(ctx, req.(*Empty))
+		return srv.(EngineServer).GetStatus(ctx, req.(*StatusRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _Engine_CaptureTraffic_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Empty)
+	m := new(CaptureRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(EngineServer).CaptureTraffic(m, &grpc.GenericServerStream[Empty, HttpRequest]{ServerStream: stream})
+	return srv.(EngineServer).CaptureTraffic(m, &grpc.GenericServerStream[CaptureRequest, HttpRequest]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Engine_CaptureTrafficServer = grpc.ServerStreamingServer[HttpRequest]
 
 func _Engine_ListPlugins_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+	in := new(PluginListRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func _Engine_ListPlugins_Handler(srv interface{}, ctx context.Context, dec func(
 		FullMethod: Engine_ListPlugins_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EngineServer).ListPlugins(ctx, req.(*Empty))
+		return srv.(EngineServer).ListPlugins(ctx, req.(*PluginListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

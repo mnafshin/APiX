@@ -1,4 +1,4 @@
-module github.com/mnafshin/APiX
+module github.com/mnafshin/apix
 
 go 1.25.1
 

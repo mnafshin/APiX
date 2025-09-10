@@ -14,6 +14,7 @@ import (
 
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // gRPC service implementation
@@ -37,7 +38,7 @@ func (s *server) CaptureTraffic(req *apix.CaptureRequest, stream apix.Engine_Cap
 			Headers: map[string]string{
 				"User-Agent": "apix-proxy",
 			},
-			Body: []byte("dummy body"),
+			Body: "dummy body",
 		})
 		if err != nil {
 			return err
@@ -164,6 +165,7 @@ func main() {
 		grpcServer := grpc.NewServer()
 		// Register your gRPC service here if you have one
 		apix.RegisterEngineServer(grpcServer, &server{})
+		reflection.Register(grpcServer)
 		go func() {
 			<-ctx.Done()
 			grpcServer.GracefulStop()

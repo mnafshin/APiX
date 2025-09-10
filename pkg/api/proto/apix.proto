@@ -29,29 +29,35 @@ message PluginInfo {
   string description = 3;
 }
 
-// Empty request/response for simple RPCs
-message Empty {}
+// Request message for status RPC
+message StatusRequest {}
+
+// New empty message for CaptureTraffic RPC
+message CaptureRequest {}
+
+// New empty message for ListPlugins request
+message PluginListRequest {}
 
 // -------- Services --------
 
 service Engine {
   // Health check
-  rpc GetStatus(Empty) returns (StatusReply);
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
 
   // Stream captured HTTP requests
-  rpc CaptureTraffic(Empty) returns (stream HttpRequest);
+  rpc CaptureTraffic(CaptureRequest) returns (stream HttpRequest);
 
   // List installed plugins
-  rpc ListPlugins(Empty) returns (PluginList);
+  rpc ListPlugins(PluginListRequest) returns (PluginListResponse);
 }
 
 // -------- Replies --------
 
-message StatusReply {
+message StatusResponse {
   string status = 1; 
   string version = 2;
 }
 
-message PluginList {
+message PluginListResponse {
   repeated PluginInfo plugins = 1;
 }

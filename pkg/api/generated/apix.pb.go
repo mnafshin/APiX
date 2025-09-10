@@ -220,27 +220,27 @@ func (x *PluginInfo) GetDescription() string {
 	return ""
 }
 
-// Empty request/response for simple RPCs
-type Empty struct {
+// Request message for status RPC
+type StatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Empty) Reset() {
-	*x = Empty{}
+func (x *StatusRequest) Reset() {
+	*x = StatusRequest{}
 	mi := &file_apix_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Empty) String() string {
+func (x *StatusRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Empty) ProtoMessage() {}
+func (*StatusRequest) ProtoMessage() {}
 
-func (x *Empty) ProtoReflect() protoreflect.Message {
+func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_apix_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -252,12 +252,86 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
-func (*Empty) Descriptor() ([]byte, []int) {
+// Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
+func (*StatusRequest) Descriptor() ([]byte, []int) {
 	return file_apix_proto_rawDescGZIP(), []int{3}
 }
 
-type StatusReply struct {
+// New empty message for CaptureTraffic RPC
+type CaptureRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CaptureRequest) Reset() {
+	*x = CaptureRequest{}
+	mi := &file_apix_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CaptureRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CaptureRequest) ProtoMessage() {}
+
+func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
+func (*CaptureRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{4}
+}
+
+// New empty message for ListPlugins request
+type PluginListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginListRequest) Reset() {
+	*x = PluginListRequest{}
+	mi := &file_apix_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginListRequest) ProtoMessage() {}
+
+func (x *PluginListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginListRequest.ProtoReflect.Descriptor instead.
+func (*PluginListRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{5}
+}
+
+type StatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
@@ -265,21 +339,21 @@ type StatusReply struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *StatusReply) Reset() {
-	*x = StatusReply{}
-	mi := &file_apix_proto_msgTypes[4]
+func (x *StatusResponse) Reset() {
+	*x = StatusResponse{}
+	mi := &file_apix_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *StatusReply) String() string {
+func (x *StatusResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*StatusReply) ProtoMessage() {}
+func (*StatusResponse) ProtoMessage() {}
 
-func (x *StatusReply) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[4]
+func (x *StatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,47 +364,47 @@ func (x *StatusReply) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use StatusReply.ProtoReflect.Descriptor instead.
-func (*StatusReply) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{4}
+// Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
+func (*StatusResponse) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *StatusReply) GetStatus() string {
+func (x *StatusResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *StatusReply) GetVersion() string {
+func (x *StatusResponse) GetVersion() string {
 	if x != nil {
 		return x.Version
 	}
 	return ""
 }
 
-type PluginList struct {
+type PluginListResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Plugins       []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PluginList) Reset() {
-	*x = PluginList{}
-	mi := &file_apix_proto_msgTypes[5]
+func (x *PluginListResponse) Reset() {
+	*x = PluginListResponse{}
+	mi := &file_apix_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PluginList) String() string {
+func (x *PluginListResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PluginList) ProtoMessage() {}
+func (*PluginListResponse) ProtoMessage() {}
 
-func (x *PluginList) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[5]
+func (x *PluginListResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -341,12 +415,12 @@ func (x *PluginList) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PluginList.ProtoReflect.Descriptor instead.
-func (*PluginList) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{5}
+// Deprecated: Use PluginListResponse.ProtoReflect.Descriptor instead.
+func (*PluginListResponse) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *PluginList) GetPlugins() []*PluginInfo {
+func (x *PluginListResponse) GetPlugins() []*PluginInfo {
 	if x != nil {
 		return x.Plugins
 	}
@@ -380,18 +454,19 @@ const file_apix_proto_rawDesc = "" +
 	"PluginInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\a\n" +
-	"\x05Empty\"?\n" +
-	"\vStatusReply\x12\x16\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x0f\n" +
+	"\rStatusRequest\"\x10\n" +
+	"\x0eCaptureRequest\"\x13\n" +
+	"\x11PluginListRequest\"B\n" +
+	"\x0eStatusResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"8\n" +
-	"\n" +
-	"PluginList\x12*\n" +
-	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins2\x97\x01\n" +
-	"\x06Engine\x12+\n" +
-	"\tGetStatus\x12\v.apix.Empty\x1a\x11.apix.StatusReply\x122\n" +
-	"\x0eCaptureTraffic\x12\v.apix.Empty\x1a\x11.apix.HttpRequest0\x01\x12,\n" +
-	"\vListPlugins\x12\v.apix.Empty\x1a\x10.apix.PluginListB6Z4github.com/mnafshin/apix/pkg/api/generated;generatedb\x06proto3"
+	"\aversion\x18\x02 \x01(\tR\aversion\"@\n" +
+	"\x12PluginListResponse\x12*\n" +
+	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins2\xbf\x01\n" +
+	"\x06Engine\x126\n" +
+	"\tGetStatus\x12\x13.apix.StatusRequest\x1a\x14.apix.StatusResponse\x12;\n" +
+	"\x0eCaptureTraffic\x12\x14.apix.CaptureRequest\x1a\x11.apix.HttpRequest0\x01\x12@\n" +
+	"\vListPlugins\x12\x17.apix.PluginListRequest\x1a\x18.apix.PluginListResponseB6Z4github.com/mnafshin/apix/pkg/api/generated;generatedb\x06proto3"
 
 var (
 	file_apix_proto_rawDescOnce sync.Once
@@ -405,27 +480,29 @@ func file_apix_proto_rawDescGZIP() []byte {
 	return file_apix_proto_rawDescData
 }
 
-var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_apix_proto_goTypes = []any{
-	(*HttpRequest)(nil),  // 0: apix.HttpRequest
-	(*HttpResponse)(nil), // 1: apix.HttpResponse
-	(*PluginInfo)(nil),   // 2: apix.PluginInfo
-	(*Empty)(nil),        // 3: apix.Empty
-	(*StatusReply)(nil),  // 4: apix.StatusReply
-	(*PluginList)(nil),   // 5: apix.PluginList
-	nil,                  // 6: apix.HttpRequest.HeadersEntry
-	nil,                  // 7: apix.HttpResponse.HeadersEntry
+	(*HttpRequest)(nil),        // 0: apix.HttpRequest
+	(*HttpResponse)(nil),       // 1: apix.HttpResponse
+	(*PluginInfo)(nil),         // 2: apix.PluginInfo
+	(*StatusRequest)(nil),      // 3: apix.StatusRequest
+	(*CaptureRequest)(nil),     // 4: apix.CaptureRequest
+	(*PluginListRequest)(nil),  // 5: apix.PluginListRequest
+	(*StatusResponse)(nil),     // 6: apix.StatusResponse
+	(*PluginListResponse)(nil), // 7: apix.PluginListResponse
+	nil,                        // 8: apix.HttpRequest.HeadersEntry
+	nil,                        // 9: apix.HttpResponse.HeadersEntry
 }
 var file_apix_proto_depIdxs = []int32{
-	6, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
-	7, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
-	2, // 2: apix.PluginList.plugins:type_name -> apix.PluginInfo
-	3, // 3: apix.Engine.GetStatus:input_type -> apix.Empty
-	3, // 4: apix.Engine.CaptureTraffic:input_type -> apix.Empty
-	3, // 5: apix.Engine.ListPlugins:input_type -> apix.Empty
-	4, // 6: apix.Engine.GetStatus:output_type -> apix.StatusReply
+	8, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
+	9, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
+	2, // 2: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
+	3, // 3: apix.Engine.GetStatus:input_type -> apix.StatusRequest
+	4, // 4: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
+	5, // 5: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
+	6, // 6: apix.Engine.GetStatus:output_type -> apix.StatusResponse
 	0, // 7: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
-	5, // 8: apix.Engine.ListPlugins:output_type -> apix.PluginList
+	7, // 8: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
 	6, // [6:9] is the sub-list for method output_type
 	3, // [3:6] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -444,7 +521,7 @@ func file_apix_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apix_proto_rawDesc), len(file_apix_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
