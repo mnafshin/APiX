@@ -12,6 +12,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/mnafshin/apix/internal/config"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -111,6 +112,8 @@ func main() {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 
+	cfg := config.LoadConfig("internal/config/config.yaml")
+
 	// Start HTTP proxy server
 	wg.Add(1)
 	go func() {
@@ -191,14 +194,13 @@ func main() {
 			engine.AddRequest(reqInfo)
 		})
 
-		srv := &http.Server{Addr: ":8080"}
+		srv := &http.Server{Addr: ":" + cfg.HTTPPort}
 
 		go func() {
 			<-ctx.Done()
 			srv.Shutdown(context.Background())
 		}()
-
-		log.Println("Starting HTTP proxy server on :8080")
+		log.Printf("Starting HTTP proxy server on :%s", cfg.HTTPPort)
 		if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 		}
@@ -209,9 +211,9 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lis, err := net.Listen("tcp", ":9090")
+		lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 		if err != nil {
-			log.Fatalf("Failed to listen on :9090: %v", err)
+			log.Fatalf("Failed to listen on :%s: %v", cfg.GRPCPort, err)
 		}
 		grpcServer := grpc.NewServer()
 		// Register your gRPC service here if you have one
@@ -222,7 +224,7 @@ func main() {
 			grpcServer.GracefulStop()
 		}()
 
-		log.Println("Starting gRPC server on :9090")
+		log.Printf("Starting gRPC server on :%s", cfg.GRPCPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Printf("gRPC server error: %v", err)
 		}
