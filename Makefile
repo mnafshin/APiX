@@ -24,12 +24,11 @@ test-one:
 lint:
 	go vet ./...
 
-# Regenerate proto
+# Regenerate proto (VS Code extension uses a symlink — no copy needed)
 proto:
 	protoc --go_out=pkg/api/generated --go-grpc_out=pkg/api/generated \
 		--go_opt=paths=source_relative --go-grpc_opt=paths=source_relative \
 		pkg/api/proto/apix.proto
-	cp pkg/api/proto/apix.proto apix-vscode/proto/apix.proto
 
 # Build VS Code extension
 ext-build:

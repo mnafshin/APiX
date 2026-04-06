@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mnafshin/apix/internal/plugins"
+	"github.com/mnafshin/apix/pkg/plugins"
 )
 
 // HTTPProxy is a forward proxy that intercepts plain HTTP traffic and tunnels

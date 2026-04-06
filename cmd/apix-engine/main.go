@@ -11,8 +11,8 @@ import (
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
-	"github.com/mnafshin/apix/internal/plugins"
-	"github.com/mnafshin/apix/internal/plugins/builtins"
+	"github.com/mnafshin/apix/internal/pluginrt"
+	"github.com/mnafshin/apix/internal/pluginrt/builtins"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/server"
@@ -46,7 +46,7 @@ func main() {
 	bpManager := breakpoints.NewManager()
 
 	// 5. Create plugin runtime and register built-ins.
-	pluginRT := plugins.NewRuntime()
+	pluginRT := pluginrt.NewRuntime()
 	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
 		log.Printf("register header-editor: %v", err)
 	}

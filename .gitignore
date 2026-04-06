@@ -62,12 +62,15 @@ ui/.env.production.local
 # SQLite / DB storage
 # -----------------------
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
 # Engine binaries
 apix-engine
 apix-engine-*
+apix-cli
 
 # VS Code Extension
 apix-vscode/out/

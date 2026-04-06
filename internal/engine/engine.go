@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/internal/breakpoints"
-	"github.com/mnafshin/apix/internal/plugins"
+	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/storage"
 )
@@ -22,12 +22,12 @@ type Engine struct {
 	mu          sync.Mutex
 	db          *storage.DB
 	bpManager   *breakpoints.Manager
-	pluginRT    *plugins.Runtime
+	pluginRT    *pluginrt.Runtime
 	subscribers []chan *apix.HttpRequest
 }
 
 // New creates a new Engine wiring together all sub-systems.
-func New(db *storage.DB, bpManager *breakpoints.Manager, rt *plugins.Runtime) *Engine {
+func New(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *Engine {
 	return &Engine{
 		db:        db,
 		bpManager: bpManager,
@@ -187,4 +187,4 @@ func (e *Engine) DB() *storage.DB { return e.db }
 func (e *Engine) BreakpointManager() *breakpoints.Manager { return e.bpManager }
 
 // PluginRuntime returns the plugin runtime.
-func (e *Engine) PluginRuntime() *plugins.Runtime { return e.pluginRT }
+func (e *Engine) PluginRuntime() *pluginrt.Runtime { return e.pluginRT }

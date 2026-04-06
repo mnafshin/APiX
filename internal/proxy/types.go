@@ -3,7 +3,8 @@ package proxy
 import (
 	"context"
 
-	"github.com/mnafshin/apix/internal/plugins"
+	"github.com/mnafshin/apix/internal/breakpoints"
+	"github.com/mnafshin/apix/pkg/plugins"
 )
 
 // ProxyRequest is an alias for the plugins-layer request type.
@@ -31,12 +32,13 @@ type PluginChain interface {
 }
 
 // ResumeAction mirrors the proto enum for the proxy layer.
-type ResumeAction int
+// It is an alias of breakpoints.ResumeAction — defined once, used everywhere.
+type ResumeAction = breakpoints.ResumeAction
 
 const (
-	ResumeForward  ResumeAction = iota // forward (optionally modified)
-	ResumeDrop                         // drop → 502
-	ResumeRespond                      // return synthetic response
+	ResumeForward = breakpoints.ActionForward
+	ResumeDrop    = breakpoints.ActionDrop
+	ResumeRespond = breakpoints.ActionRespond
 )
 
 // Transaction groups a request and its (eventual) response.

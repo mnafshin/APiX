@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mnafshin/apix/internal/plugins"
+	"github.com/mnafshin/apix/pkg/plugins"
 )
 
 // TLSProxy performs MITM TLS interception.
