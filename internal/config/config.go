@@ -21,7 +21,11 @@ type Config struct {
 // LoadConfig reads configuration from a YAML file.
 // It falls back to sane defaults if the file doesn't exist.
 func LoadConfig(path string) *Config {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("config: cannot determine home directory, falling back to .apix: %v", err)
+		home = "."
+	}
 	cfg := &Config{
 		HTTPPort:   "8080",
 		GRPCPort:   "9090",

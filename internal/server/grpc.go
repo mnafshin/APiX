@@ -43,8 +43,14 @@ func NewEngineServer(eng *engine.Engine, re *replay.Engine, cfg *config.Config) 
 // ----- Health -----
 
 func (s *EngineServer) GetStatus(ctx context.Context, _ *apix.StatusRequest) (*apix.StatusResponse, error) {
-	httpPort, _ := strconv.Atoi(s.cfg.HTTPPort)
-	grpcPort, _ := strconv.Atoi(s.cfg.GRPCPort)
+	httpPort, err := strconv.Atoi(s.cfg.HTTPPort)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid http_port %q: %v", s.cfg.HTTPPort, err)
+	}
+	grpcPort, err := strconv.Atoi(s.cfg.GRPCPort)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid grpc_port %q: %v", s.cfg.GRPCPort, err)
+	}
 	return &apix.StatusResponse{
 		Status:     "OK",
 		Version:    "1.0.0",

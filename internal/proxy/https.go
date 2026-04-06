@@ -159,7 +159,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 	defer upResp.Body.Close()
 
-	respBody, _ := io.ReadAll(upResp.Body)
+	respBody, err := io.ReadAll(upResp.Body)
+	if err != nil {
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read upstream response body: %v", err))
+		return
+	}
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
@@ -222,14 +226,21 @@ func writeHTTPError(conn net.Conn, code int, msg string) {
 		Body:       io.NopCloser(bytes.NewBufferString(msg)),
 	}
 	resp.ContentLength = int64(len(msg))
-	_ = resp.Write(conn)
+	if err := resp.Write(conn); err != nil {
+		log.Printf("tls proxy: write error response to client: %v", err)
+	}
 }
 
 // writeProxyResponseToConn serialises a ProxyResponse to a net.Conn.
 func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 	var body []byte
 	if resp.Body != nil {
-		body, _ = io.ReadAll(resp.Body)
+		var err error
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("tls proxy: read response body for write: %v", err)
+			return
+		}
 	}
 	httpResp := &http.Response{
 		StatusCode:    resp.StatusCode,
@@ -241,5 +252,7 @@ func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 		Body:          io.NopCloser(bytes.NewReader(body)),
 		ContentLength: int64(len(body)),
 	}
-	_ = httpResp.Write(conn)
+	if err := httpResp.Write(conn); err != nil {
+		log.Printf("tls proxy: write response to client: %v", err)
+	}
 }

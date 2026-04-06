@@ -168,7 +168,11 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	defer upResp.Body.Close()
 
 	// Convert to ProxyResponse.
-	respBody, _ := io.ReadAll(upResp.Body)
+	respBody, err := io.ReadAll(upResp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("read upstream response body: %v", err), http.StatusBadGateway)
+		return
+	}
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
@@ -208,8 +212,14 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	if resp.Body != nil {
-		body, _ := io.ReadAll(resp.Body)
-		_, _ = w.Write(body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("proxy: read response body for write: %v", err)
+			return
+		}
+		if _, err := w.Write(body); err != nil {
+			log.Printf("proxy: write response to client: %v", err)
+		}
 	}
 }
 
