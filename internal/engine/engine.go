@@ -115,12 +115,19 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 }
 
 // PauseRequest holds a request at a breakpoint until resumed.
+// It first evaluates whether any enabled rule matches; if none matches the
+// request is forwarded immediately without blocking.
 func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.ResumeAction, error) {
 	if tx.Request == nil || tx.Request.Raw == nil {
 		return tx, proxy.ResumeForward, nil
 	}
 
-	entry := breakpoints.NewPausedEntry(tx.ID, "", tx.Request.Raw)
+	bpID := e.bpManager.Evaluate(tx.Request.Method, tx.Request.URL.String())
+	if bpID == "" {
+		return tx, proxy.ResumeForward, nil
+	}
+
+	entry := breakpoints.NewPausedEntry(tx.ID, bpID, tx.Request.Raw)
 	decision, err := e.bpManager.Pause(tx.Request.Raw.Context(), entry)
 	if err != nil {
 		return tx, proxy.ResumeForward, fmt.Errorf("pause request: %w", err)

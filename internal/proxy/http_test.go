@@ -261,6 +261,16 @@ func TestHTTPProxy_BreakpointPausesAndForwards(t *testing.T) {
 	httpP, _, _, bpMgr, _ := newTestStack(t)
 	// Intentionally no startAutoResume — we control the resume ourselves.
 
+	// Register a breakpoint rule that matches any URL so the proxy will pause
+	// the request below.
+	if _, err := bpMgr.AddRule(&breakpoints.BreakpointRule{
+		URLPattern: `.*`,
+		Enabled:    true,
+		Label:      "test-bp",
+	}); err != nil {
+		t.Fatalf("AddRule: %v", err)
+	}
+
 	proxySrv := httptest.NewServer(httpP)
 	t.Cleanup(proxySrv.Close)
 
