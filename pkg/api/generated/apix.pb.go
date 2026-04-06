@@ -21,21 +21,107 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// A single HTTP request captured by the proxy
+type ResumeAction_Action int32
+
+const (
+	ResumeAction_FORWARD ResumeAction_Action = 0 // forward (optionally modified)
+	ResumeAction_DROP    ResumeAction_Action = 1 // drop the request, return 502
+	ResumeAction_RESPOND ResumeAction_Action = 2 // return a synthetic response (modified_response must be set)
+)
+
+// Enum value maps for ResumeAction_Action.
+var (
+	ResumeAction_Action_name = map[int32]string{
+		0: "FORWARD",
+		1: "DROP",
+		2: "RESPOND",
+	}
+	ResumeAction_Action_value = map[string]int32{
+		"FORWARD": 0,
+		"DROP":    1,
+		"RESPOND": 2,
+	}
+)
+
+func (x ResumeAction_Action) Enum() *ResumeAction_Action {
+	p := new(ResumeAction_Action)
+	*p = x
+	return p
+}
+
+func (x ResumeAction_Action) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ResumeAction_Action) Descriptor() protoreflect.EnumDescriptor {
+	return file_apix_proto_enumTypes[0].Descriptor()
+}
+
+func (ResumeAction_Action) Type() protoreflect.EnumType {
+	return &file_apix_proto_enumTypes[0]
+}
+
+func (x ResumeAction_Action) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ResumeAction_Action.Descriptor instead.
+func (ResumeAction_Action) EnumDescriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{15, 0}
+}
+
+type Empty struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Empty) Reset() {
+	*x = Empty{}
+	mi := &file_apix_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Empty) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Empty) ProtoMessage() {}
+
+func (x *Empty) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
+func (*Empty) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{0}
+}
+
+// HttpRequest represents a captured or synthesized HTTP request.
 type HttpRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Method        string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
 	Url           string                 `protobuf:"bytes,2,opt,name=url,proto3" json:"url,omitempty"`
 	Headers       map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	Body          []byte                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Id            string                 `protobuf:"bytes,6,opt,name=id,proto3" json:"id,omitempty"` // UUID assigned at capture time
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HttpRequest) Reset() {
 	*x = HttpRequest{}
-	mi := &file_apix_proto_msgTypes[0]
+	mi := &file_apix_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +133,7 @@ func (x *HttpRequest) String() string {
 func (*HttpRequest) ProtoMessage() {}
 
 func (x *HttpRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[0]
+	mi := &file_apix_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +146,7 @@ func (x *HttpRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HttpRequest.ProtoReflect.Descriptor instead.
 func (*HttpRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{0}
+	return file_apix_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *HttpRequest) GetMethod() string {
@@ -84,11 +170,11 @@ func (x *HttpRequest) GetHeaders() map[string]string {
 	return nil
 }
 
-func (x *HttpRequest) GetBody() string {
+func (x *HttpRequest) GetBody() []byte {
 	if x != nil {
 		return x.Body
 	}
-	return ""
+	return nil
 }
 
 func (x *HttpRequest) GetTimestamp() int64 {
@@ -98,19 +184,27 @@ func (x *HttpRequest) GetTimestamp() int64 {
 	return 0
 }
 
-// A single HTTP response captured by the proxy
+func (x *HttpRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// HttpResponse represents a captured or synthesized HTTP response.
 type HttpResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	StatusCode    int32                  `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
-	Headers       map[string]string      `protobuf:"bytes,2,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Body          string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	StatusText    string                 `protobuf:"bytes,2,opt,name=status_text,json=statusText,proto3" json:"status_text,omitempty"`
+	Headers       map[string]string      `protobuf:"bytes,3,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Body          []byte                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HttpResponse) Reset() {
 	*x = HttpResponse{}
-	mi := &file_apix_proto_msgTypes[1]
+	mi := &file_apix_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -122,7 +216,7 @@ func (x *HttpResponse) String() string {
 func (*HttpResponse) ProtoMessage() {}
 
 func (x *HttpResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[1]
+	mi := &file_apix_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -135,7 +229,7 @@ func (x *HttpResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HttpResponse.ProtoReflect.Descriptor instead.
 func (*HttpResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{1}
+	return file_apix_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *HttpResponse) GetStatusCode() int32 {
@@ -145,6 +239,13 @@ func (x *HttpResponse) GetStatusCode() int32 {
 	return 0
 }
 
+func (x *HttpResponse) GetStatusText() string {
+	if x != nil {
+		return x.StatusText
+	}
+	return ""
+}
+
 func (x *HttpResponse) GetHeaders() map[string]string {
 	if x != nil {
 		return x.Headers
@@ -152,26 +253,103 @@ func (x *HttpResponse) GetHeaders() map[string]string {
 	return nil
 }
 
-func (x *HttpResponse) GetBody() string {
+func (x *HttpResponse) GetBody() []byte {
 	if x != nil {
 		return x.Body
+	}
+	return nil
+}
+
+// HttpTransaction pairs a request with its response plus metadata.
+type HttpTransaction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Request       *HttpRequest           `protobuf:"bytes,2,opt,name=request,proto3" json:"request,omitempty"`
+	Response      *HttpResponse          `protobuf:"bytes,3,opt,name=response,proto3" json:"response,omitempty"`
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix ms
+	DurationMs    int64                  `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HttpTransaction) Reset() {
+	*x = HttpTransaction{}
+	mi := &file_apix_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HttpTransaction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HttpTransaction) ProtoMessage() {}
+
+func (x *HttpTransaction) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HttpTransaction.ProtoReflect.Descriptor instead.
+func (*HttpTransaction) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *HttpTransaction) GetId() string {
+	if x != nil {
+		return x.Id
 	}
 	return ""
 }
 
-// Plugins info
+func (x *HttpTransaction) GetRequest() *HttpRequest {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *HttpTransaction) GetResponse() *HttpResponse {
+	if x != nil {
+		return x.Response
+	}
+	return nil
+}
+
+func (x *HttpTransaction) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *HttpTransaction) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
 type PluginInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PluginInfo) Reset() {
 	*x = PluginInfo{}
-	mi := &file_apix_proto_msgTypes[2]
+	mi := &file_apix_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -183,7 +361,7 @@ func (x *PluginInfo) String() string {
 func (*PluginInfo) ProtoMessage() {}
 
 func (x *PluginInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[2]
+	mi := &file_apix_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -196,7 +374,7 @@ func (x *PluginInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginInfo.ProtoReflect.Descriptor instead.
 func (*PluginInfo) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{2}
+	return file_apix_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PluginInfo) GetName() string {
@@ -220,7 +398,13 @@ func (x *PluginInfo) GetDescription() string {
 	return ""
 }
 
-// Request message for status RPC
+func (x *PluginInfo) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
 type StatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -229,7 +413,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_apix_proto_msgTypes[3]
+	mi := &file_apix_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -241,7 +425,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[3]
+	mi := &file_apix_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -254,80 +438,6 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{3}
-}
-
-// New empty message for CaptureTraffic RPC
-type CaptureRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CaptureRequest) Reset() {
-	*x = CaptureRequest{}
-	mi := &file_apix_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CaptureRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CaptureRequest) ProtoMessage() {}
-
-func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
-func (*CaptureRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{4}
-}
-
-// New empty message for ListPlugins request
-type PluginListRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PluginListRequest) Reset() {
-	*x = PluginListRequest{}
-	mi := &file_apix_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PluginListRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PluginListRequest) ProtoMessage() {}
-
-func (x *PluginListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PluginListRequest.ProtoReflect.Descriptor instead.
-func (*PluginListRequest) Descriptor() ([]byte, []int) {
 	return file_apix_proto_rawDescGZIP(), []int{5}
 }
 
@@ -335,6 +445,9 @@ type StatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	ProxyPort     int32                  `protobuf:"varint,3,opt,name=proxy_port,json=proxyPort,proto3" json:"proxy_port,omitempty"`
+	GrpcPort      int32                  `protobuf:"varint,4,opt,name=grpc_port,json=grpcPort,proto3" json:"grpc_port,omitempty"`
+	TlsEnabled    bool                   `protobuf:"varint,5,opt,name=tls_enabled,json=tlsEnabled,proto3" json:"tls_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -383,6 +496,99 @@ func (x *StatusResponse) GetVersion() string {
 	return ""
 }
 
+func (x *StatusResponse) GetProxyPort() int32 {
+	if x != nil {
+		return x.ProxyPort
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetGrpcPort() int32 {
+	if x != nil {
+		return x.GrpcPort
+	}
+	return 0
+}
+
+func (x *StatusResponse) GetTlsEnabled() bool {
+	if x != nil {
+		return x.TlsEnabled
+	}
+	return false
+}
+
+type CaptureRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CaptureRequest) Reset() {
+	*x = CaptureRequest{}
+	mi := &file_apix_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CaptureRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CaptureRequest) ProtoMessage() {}
+
+func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
+func (*CaptureRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{7}
+}
+
+type PluginListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PluginListRequest) Reset() {
+	*x = PluginListRequest{}
+	mi := &file_apix_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PluginListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PluginListRequest) ProtoMessage() {}
+
+func (x *PluginListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PluginListRequest.ProtoReflect.Descriptor instead.
+func (*PluginListRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{8}
+}
+
 type PluginListResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Plugins       []*PluginInfo          `protobuf:"bytes,1,rep,name=plugins,proto3" json:"plugins,omitempty"`
@@ -392,7 +598,7 @@ type PluginListResponse struct {
 
 func (x *PluginListResponse) Reset() {
 	*x = PluginListResponse{}
-	mi := &file_apix_proto_msgTypes[7]
+	mi := &file_apix_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +610,7 @@ func (x *PluginListResponse) String() string {
 func (*PluginListResponse) ProtoMessage() {}
 
 func (x *PluginListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[7]
+	mi := &file_apix_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +623,7 @@ func (x *PluginListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginListResponse.ProtoReflect.Descriptor instead.
 func (*PluginListResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{7}
+	return file_apix_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PluginListResponse) GetPlugins() []*PluginInfo {
@@ -427,46 +633,663 @@ func (x *PluginListResponse) GetPlugins() []*PluginInfo {
 	return nil
 }
 
+// BreakpointRule defines a URL pattern to pause on.
+type BreakpointRule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                                   // UUID; empty on creation, server assigns
+	UrlPattern    string                 `protobuf:"bytes,2,opt,name=url_pattern,json=urlPattern,proto3" json:"url_pattern,omitempty"` // regex or glob pattern matched against full URL
+	Methods       []string               `protobuf:"bytes,3,rep,name=methods,proto3" json:"methods,omitempty"`                         // empty = all methods
+	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Label         string                 `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"` // human-readable label (optional)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BreakpointRule) Reset() {
+	*x = BreakpointRule{}
+	mi := &file_apix_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BreakpointRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BreakpointRule) ProtoMessage() {}
+
+func (x *BreakpointRule) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BreakpointRule.ProtoReflect.Descriptor instead.
+func (*BreakpointRule) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *BreakpointRule) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *BreakpointRule) GetUrlPattern() string {
+	if x != nil {
+		return x.UrlPattern
+	}
+	return ""
+}
+
+func (x *BreakpointRule) GetMethods() []string {
+	if x != nil {
+		return x.Methods
+	}
+	return nil
+}
+
+func (x *BreakpointRule) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *BreakpointRule) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+type BreakpointID struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BreakpointID) Reset() {
+	*x = BreakpointID{}
+	mi := &file_apix_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BreakpointID) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BreakpointID) ProtoMessage() {}
+
+func (x *BreakpointID) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BreakpointID.ProtoReflect.Descriptor instead.
+func (*BreakpointID) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *BreakpointID) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+type BreakpointList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Breakpoints   []*BreakpointRule      `protobuf:"bytes,1,rep,name=breakpoints,proto3" json:"breakpoints,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BreakpointList) Reset() {
+	*x = BreakpointList{}
+	mi := &file_apix_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BreakpointList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BreakpointList) ProtoMessage() {}
+
+func (x *BreakpointList) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BreakpointList.ProtoReflect.Descriptor instead.
+func (*BreakpointList) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *BreakpointList) GetBreakpoints() []*BreakpointRule {
+	if x != nil {
+		return x.Breakpoints
+	}
+	return nil
+}
+
+// BreakpointResponse is returned after setting a breakpoint.
+type BreakpointResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Breakpoint    *BreakpointRule        `protobuf:"bytes,1,opt,name=breakpoint,proto3" json:"breakpoint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BreakpointResponse) Reset() {
+	*x = BreakpointResponse{}
+	mi := &file_apix_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BreakpointResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BreakpointResponse) ProtoMessage() {}
+
+func (x *BreakpointResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BreakpointResponse.ProtoReflect.Descriptor instead.
+func (*BreakpointResponse) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *BreakpointResponse) GetBreakpoint() *BreakpointRule {
+	if x != nil {
+		return x.Breakpoint
+	}
+	return nil
+}
+
+// PausedRequest is streamed to the client when a request hits a breakpoint.
+type PausedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Request       *HttpRequest           `protobuf:"bytes,2,opt,name=request,proto3" json:"request,omitempty"`
+	BreakpointId  string                 `protobuf:"bytes,3,opt,name=breakpoint_id,json=breakpointId,proto3" json:"breakpoint_id,omitempty"`
+	PausedAt      int64                  `protobuf:"varint,4,opt,name=paused_at,json=pausedAt,proto3" json:"paused_at,omitempty"` // Unix ms
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PausedRequest) Reset() {
+	*x = PausedRequest{}
+	mi := &file_apix_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PausedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PausedRequest) ProtoMessage() {}
+
+func (x *PausedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PausedRequest.ProtoReflect.Descriptor instead.
+func (*PausedRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *PausedRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *PausedRequest) GetRequest() *HttpRequest {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *PausedRequest) GetBreakpointId() string {
+	if x != nil {
+		return x.BreakpointId
+	}
+	return ""
+}
+
+func (x *PausedRequest) GetPausedAt() int64 {
+	if x != nil {
+		return x.PausedAt
+	}
+	return 0
+}
+
+// ResumeAction tells the engine what to do with a paused request.
+type ResumeAction struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	RequestId        string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	ModifiedRequest  *HttpRequest           `protobuf:"bytes,2,opt,name=modified_request,json=modifiedRequest,proto3" json:"modified_request,omitempty"` // nil = forward original
+	Action           ResumeAction_Action    `protobuf:"varint,3,opt,name=action,proto3,enum=apix.ResumeAction_Action" json:"action,omitempty"`
+	ModifiedResponse *HttpResponse          `protobuf:"bytes,4,opt,name=modified_response,json=modifiedResponse,proto3" json:"modified_response,omitempty"` // only used when action = RESPOND
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ResumeAction) Reset() {
+	*x = ResumeAction{}
+	mi := &file_apix_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeAction) ProtoMessage() {}
+
+func (x *ResumeAction) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeAction.ProtoReflect.Descriptor instead.
+func (*ResumeAction) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ResumeAction) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *ResumeAction) GetModifiedRequest() *HttpRequest {
+	if x != nil {
+		return x.ModifiedRequest
+	}
+	return nil
+}
+
+func (x *ResumeAction) GetAction() ResumeAction_Action {
+	if x != nil {
+		return x.Action
+	}
+	return ResumeAction_FORWARD
+}
+
+func (x *ResumeAction) GetModifiedResponse() *HttpResponse {
+	if x != nil {
+		return x.ModifiedResponse
+	}
+	return nil
+}
+
+// ReplaySpec describes what to replay and optional overrides.
+type ReplaySpec struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Source:
+	//
+	//	*ReplaySpec_RequestId
+	//	*ReplaySpec_RawRequest
+	Source          isReplaySpec_Source `protobuf_oneof:"source"`
+	OverrideHeaders map[string]string   `protobuf:"bytes,3,rep,name=override_headers,json=overrideHeaders,proto3" json:"override_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	OverrideBody    []byte              `protobuf:"bytes,4,opt,name=override_body,json=overrideBody,proto3" json:"override_body,omitempty"`
+	FollowRedirects bool                `protobuf:"varint,5,opt,name=follow_redirects,json=followRedirects,proto3" json:"follow_redirects,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ReplaySpec) Reset() {
+	*x = ReplaySpec{}
+	mi := &file_apix_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaySpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaySpec) ProtoMessage() {}
+
+func (x *ReplaySpec) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaySpec.ProtoReflect.Descriptor instead.
+func (*ReplaySpec) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ReplaySpec) GetSource() isReplaySpec_Source {
+	if x != nil {
+		return x.Source
+	}
+	return nil
+}
+
+func (x *ReplaySpec) GetRequestId() string {
+	if x != nil {
+		if x, ok := x.Source.(*ReplaySpec_RequestId); ok {
+			return x.RequestId
+		}
+	}
+	return ""
+}
+
+func (x *ReplaySpec) GetRawRequest() *HttpRequest {
+	if x != nil {
+		if x, ok := x.Source.(*ReplaySpec_RawRequest); ok {
+			return x.RawRequest
+		}
+	}
+	return nil
+}
+
+func (x *ReplaySpec) GetOverrideHeaders() map[string]string {
+	if x != nil {
+		return x.OverrideHeaders
+	}
+	return nil
+}
+
+func (x *ReplaySpec) GetOverrideBody() []byte {
+	if x != nil {
+		return x.OverrideBody
+	}
+	return nil
+}
+
+func (x *ReplaySpec) GetFollowRedirects() bool {
+	if x != nil {
+		return x.FollowRedirects
+	}
+	return false
+}
+
+type isReplaySpec_Source interface {
+	isReplaySpec_Source()
+}
+
+type ReplaySpec_RequestId struct {
+	RequestId string `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3,oneof"` // replay from history by ID
+}
+
+type ReplaySpec_RawRequest struct {
+	RawRequest *HttpRequest `protobuf:"bytes,2,opt,name=raw_request,json=rawRequest,proto3,oneof"` // replay an arbitrary request
+}
+
+func (*ReplaySpec_RequestId) isReplaySpec_Source() {}
+
+func (*ReplaySpec_RawRequest) isReplaySpec_Source() {}
+
+type HistoryQuery struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int32                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"` // default 100
+	Offset        int32                  `protobuf:"varint,2,opt,name=offset,proto3" json:"offset,omitempty"`
+	UrlFilter     string                 `protobuf:"bytes,3,opt,name=url_filter,json=urlFilter,proto3" json:"url_filter,omitempty"`           // substring or regex
+	MethodFilter  string                 `protobuf:"bytes,4,opt,name=method_filter,json=methodFilter,proto3" json:"method_filter,omitempty"`  // e.g. "GET"
+	StatusFilter  int32                  `protobuf:"varint,5,opt,name=status_filter,json=statusFilter,proto3" json:"status_filter,omitempty"` // e.g. 404; 0 = no filter
+	SinceMs       int64                  `protobuf:"varint,6,opt,name=since_ms,json=sinceMs,proto3" json:"since_ms,omitempty"`                // only transactions after this Unix ms timestamp
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HistoryQuery) Reset() {
+	*x = HistoryQuery{}
+	mi := &file_apix_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HistoryQuery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HistoryQuery) ProtoMessage() {}
+
+func (x *HistoryQuery) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HistoryQuery.ProtoReflect.Descriptor instead.
+func (*HistoryQuery) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *HistoryQuery) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *HistoryQuery) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *HistoryQuery) GetUrlFilter() string {
+	if x != nil {
+		return x.UrlFilter
+	}
+	return ""
+}
+
+func (x *HistoryQuery) GetMethodFilter() string {
+	if x != nil {
+		return x.MethodFilter
+	}
+	return ""
+}
+
+func (x *HistoryQuery) GetStatusFilter() int32 {
+	if x != nil {
+		return x.StatusFilter
+	}
+	return 0
+}
+
+func (x *HistoryQuery) GetSinceMs() int64 {
+	if x != nil {
+		return x.SinceMs
+	}
+	return 0
+}
+
 var File_apix_proto protoreflect.FileDescriptor
 
 const file_apix_proto_rawDesc = "" +
 	"\n" +
 	"\n" +
-	"apix.proto\x12\x04apix\"\xdf\x01\n" +
+	"apix.proto\x12\x04apix\"\a\n" +
+	"\x05Empty\"\xef\x01\n" +
 	"\vHttpRequest\x12\x16\n" +
 	"\x06method\x18\x01 \x01(\tR\x06method\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x128\n" +
 	"\aheaders\x18\x03 \x03(\v2\x1e.apix.HttpRequest.HeadersEntryR\aheaders\x12\x12\n" +
-	"\x04body\x18\x04 \x01(\tR\x04body\x12\x1c\n" +
-	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x1a:\n" +
+	"\x04body\x18\x04 \x01(\fR\x04body\x12\x1c\n" +
+	"\ttimestamp\x18\x05 \x01(\x03R\ttimestamp\x12\x0e\n" +
+	"\x02id\x18\x06 \x01(\tR\x02id\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xba\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdb\x01\n" +
 	"\fHttpResponse\x12\x1f\n" +
 	"\vstatus_code\x18\x01 \x01(\x05R\n" +
-	"statusCode\x129\n" +
-	"\aheaders\x18\x02 \x03(\v2\x1f.apix.HttpResponse.HeadersEntryR\aheaders\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\tR\x04body\x1a:\n" +
+	"statusCode\x12\x1f\n" +
+	"\vstatus_text\x18\x02 \x01(\tR\n" +
+	"statusText\x129\n" +
+	"\aheaders\x18\x03 \x03(\v2\x1f.apix.HttpResponse.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\x04 \x01(\fR\x04body\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\\\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbd\x01\n" +
+	"\x0fHttpTransaction\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
+	"\arequest\x18\x02 \x01(\v2\x11.apix.HttpRequestR\arequest\x12.\n" +
+	"\bresponse\x18\x03 \x01(\v2\x12.apix.HttpResponseR\bresponse\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1f\n" +
+	"\vduration_ms\x18\x05 \x01(\x03R\n" +
+	"durationMs\"v\n" +
 	"\n" +
 	"PluginInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\x0f\n" +
-	"\rStatusRequest\"\x10\n" +
-	"\x0eCaptureRequest\"\x13\n" +
-	"\x11PluginListRequest\"B\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\"\x0f\n" +
+	"\rStatusRequest\"\x9f\x01\n" +
 	"\x0eStatusResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"@\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1d\n" +
+	"\n" +
+	"proxy_port\x18\x03 \x01(\x05R\tproxyPort\x12\x1b\n" +
+	"\tgrpc_port\x18\x04 \x01(\x05R\bgrpcPort\x12\x1f\n" +
+	"\vtls_enabled\x18\x05 \x01(\bR\n" +
+	"tlsEnabled\"\x10\n" +
+	"\x0eCaptureRequest\"\x13\n" +
+	"\x11PluginListRequest\"@\n" +
 	"\x12PluginListResponse\x12*\n" +
-	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins2\xbf\x01\n" +
+	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins\"\x8b\x01\n" +
+	"\x0eBreakpointRule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
+	"\vurl_pattern\x18\x02 \x01(\tR\n" +
+	"urlPattern\x12\x18\n" +
+	"\amethods\x18\x03 \x03(\tR\amethods\x12\x18\n" +
+	"\aenabled\x18\x04 \x01(\bR\aenabled\x12\x14\n" +
+	"\x05label\x18\x05 \x01(\tR\x05label\"\x1e\n" +
+	"\fBreakpointID\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
+	"\x0eBreakpointList\x126\n" +
+	"\vbreakpoints\x18\x01 \x03(\v2\x14.apix.BreakpointRuleR\vbreakpoints\"J\n" +
+	"\x12BreakpointResponse\x124\n" +
+	"\n" +
+	"breakpoint\x18\x01 \x01(\v2\x14.apix.BreakpointRuleR\n" +
+	"breakpoint\"\x9d\x01\n" +
+	"\rPausedRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12+\n" +
+	"\arequest\x18\x02 \x01(\v2\x11.apix.HttpRequestR\arequest\x12#\n" +
+	"\rbreakpoint_id\x18\x03 \x01(\tR\fbreakpointId\x12\x1b\n" +
+	"\tpaused_at\x18\x04 \x01(\x03R\bpausedAt\"\x8d\x02\n" +
+	"\fResumeAction\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12<\n" +
+	"\x10modified_request\x18\x02 \x01(\v2\x11.apix.HttpRequestR\x0fmodifiedRequest\x121\n" +
+	"\x06action\x18\x03 \x01(\x0e2\x19.apix.ResumeAction.ActionR\x06action\x12?\n" +
+	"\x11modified_response\x18\x04 \x01(\v2\x12.apix.HttpResponseR\x10modifiedResponse\",\n" +
+	"\x06Action\x12\v\n" +
+	"\aFORWARD\x10\x00\x12\b\n" +
+	"\x04DROP\x10\x01\x12\v\n" +
+	"\aRESPOND\x10\x02\"\xd3\x02\n" +
+	"\n" +
+	"ReplaySpec\x12\x1f\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tH\x00R\trequestId\x124\n" +
+	"\vraw_request\x18\x02 \x01(\v2\x11.apix.HttpRequestH\x00R\n" +
+	"rawRequest\x12P\n" +
+	"\x10override_headers\x18\x03 \x03(\v2%.apix.ReplaySpec.OverrideHeadersEntryR\x0foverrideHeaders\x12#\n" +
+	"\roverride_body\x18\x04 \x01(\fR\foverrideBody\x12)\n" +
+	"\x10follow_redirects\x18\x05 \x01(\bR\x0ffollowRedirects\x1aB\n" +
+	"\x14OverrideHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\b\n" +
+	"\x06source\"\xc0\x01\n" +
+	"\fHistoryQuery\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x02 \x01(\x05R\x06offset\x12\x1d\n" +
+	"\n" +
+	"url_filter\x18\x03 \x01(\tR\turlFilter\x12#\n" +
+	"\rmethod_filter\x18\x04 \x01(\tR\fmethodFilter\x12#\n" +
+	"\rstatus_filter\x18\x05 \x01(\x05R\fstatusFilter\x12\x19\n" +
+	"\bsince_ms\x18\x06 \x01(\x03R\asinceMs2\xf4\x04\n" +
 	"\x06Engine\x126\n" +
 	"\tGetStatus\x12\x13.apix.StatusRequest\x1a\x14.apix.StatusResponse\x12;\n" +
 	"\x0eCaptureTraffic\x12\x14.apix.CaptureRequest\x1a\x11.apix.HttpRequest0\x01\x12@\n" +
-	"\vListPlugins\x12\x17.apix.PluginListRequest\x1a\x18.apix.PluginListResponseB6Z4github.com/mnafshin/apix/pkg/api/generated;generatedb\x06proto3"
+	"\vListPlugins\x12\x17.apix.PluginListRequest\x1a\x18.apix.PluginListResponse\x12?\n" +
+	"\rSetBreakpoint\x12\x14.apix.BreakpointRule\x1a\x18.apix.BreakpointResponse\x123\n" +
+	"\x10DeleteBreakpoint\x12\x12.apix.BreakpointID\x1a\v.apix.Empty\x124\n" +
+	"\x0fListBreakpoints\x12\v.apix.Empty\x1a\x14.apix.BreakpointList\x129\n" +
+	"\x13WatchPausedRequests\x12\v.apix.Empty\x1a\x13.apix.PausedRequest0\x01\x120\n" +
+	"\rResumeRequest\x12\x12.apix.ResumeAction\x1a\v.apix.Empty\x125\n" +
+	"\rReplayRequest\x12\x10.apix.ReplaySpec\x1a\x12.apix.HttpResponse\x129\n" +
+	"\n" +
+	"GetHistory\x12\x12.apix.HistoryQuery\x1a\x15.apix.HttpTransaction0\x01\x12(\n" +
+	"\fClearHistory\x12\v.apix.Empty\x1a\v.apix.EmptyB6Z4github.com/mnafshin/apix/pkg/api/generated;generatedb\x06proto3"
 
 var (
 	file_apix_proto_rawDescOnce sync.Once
@@ -480,34 +1303,73 @@ func file_apix_proto_rawDescGZIP() []byte {
 	return file_apix_proto_rawDescData
 }
 
-var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_apix_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_apix_proto_goTypes = []any{
-	(*HttpRequest)(nil),        // 0: apix.HttpRequest
-	(*HttpResponse)(nil),       // 1: apix.HttpResponse
-	(*PluginInfo)(nil),         // 2: apix.PluginInfo
-	(*StatusRequest)(nil),      // 3: apix.StatusRequest
-	(*CaptureRequest)(nil),     // 4: apix.CaptureRequest
-	(*PluginListRequest)(nil),  // 5: apix.PluginListRequest
-	(*StatusResponse)(nil),     // 6: apix.StatusResponse
-	(*PluginListResponse)(nil), // 7: apix.PluginListResponse
-	nil,                        // 8: apix.HttpRequest.HeadersEntry
-	nil,                        // 9: apix.HttpResponse.HeadersEntry
+	(ResumeAction_Action)(0),   // 0: apix.ResumeAction.Action
+	(*Empty)(nil),              // 1: apix.Empty
+	(*HttpRequest)(nil),        // 2: apix.HttpRequest
+	(*HttpResponse)(nil),       // 3: apix.HttpResponse
+	(*HttpTransaction)(nil),    // 4: apix.HttpTransaction
+	(*PluginInfo)(nil),         // 5: apix.PluginInfo
+	(*StatusRequest)(nil),      // 6: apix.StatusRequest
+	(*StatusResponse)(nil),     // 7: apix.StatusResponse
+	(*CaptureRequest)(nil),     // 8: apix.CaptureRequest
+	(*PluginListRequest)(nil),  // 9: apix.PluginListRequest
+	(*PluginListResponse)(nil), // 10: apix.PluginListResponse
+	(*BreakpointRule)(nil),     // 11: apix.BreakpointRule
+	(*BreakpointID)(nil),       // 12: apix.BreakpointID
+	(*BreakpointList)(nil),     // 13: apix.BreakpointList
+	(*BreakpointResponse)(nil), // 14: apix.BreakpointResponse
+	(*PausedRequest)(nil),      // 15: apix.PausedRequest
+	(*ResumeAction)(nil),       // 16: apix.ResumeAction
+	(*ReplaySpec)(nil),         // 17: apix.ReplaySpec
+	(*HistoryQuery)(nil),       // 18: apix.HistoryQuery
+	nil,                        // 19: apix.HttpRequest.HeadersEntry
+	nil,                        // 20: apix.HttpResponse.HeadersEntry
+	nil,                        // 21: apix.ReplaySpec.OverrideHeadersEntry
 }
 var file_apix_proto_depIdxs = []int32{
-	8, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
-	9, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
-	2, // 2: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
-	3, // 3: apix.Engine.GetStatus:input_type -> apix.StatusRequest
-	4, // 4: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
-	5, // 5: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
-	6, // 6: apix.Engine.GetStatus:output_type -> apix.StatusResponse
-	0, // 7: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
-	7, // 8: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
-	6, // [6:9] is the sub-list for method output_type
-	3, // [3:6] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	19, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
+	20, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
+	2,  // 2: apix.HttpTransaction.request:type_name -> apix.HttpRequest
+	3,  // 3: apix.HttpTransaction.response:type_name -> apix.HttpResponse
+	5,  // 4: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
+	11, // 5: apix.BreakpointList.breakpoints:type_name -> apix.BreakpointRule
+	11, // 6: apix.BreakpointResponse.breakpoint:type_name -> apix.BreakpointRule
+	2,  // 7: apix.PausedRequest.request:type_name -> apix.HttpRequest
+	2,  // 8: apix.ResumeAction.modified_request:type_name -> apix.HttpRequest
+	0,  // 9: apix.ResumeAction.action:type_name -> apix.ResumeAction.Action
+	3,  // 10: apix.ResumeAction.modified_response:type_name -> apix.HttpResponse
+	2,  // 11: apix.ReplaySpec.raw_request:type_name -> apix.HttpRequest
+	21, // 12: apix.ReplaySpec.override_headers:type_name -> apix.ReplaySpec.OverrideHeadersEntry
+	6,  // 13: apix.Engine.GetStatus:input_type -> apix.StatusRequest
+	8,  // 14: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
+	9,  // 15: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
+	11, // 16: apix.Engine.SetBreakpoint:input_type -> apix.BreakpointRule
+	12, // 17: apix.Engine.DeleteBreakpoint:input_type -> apix.BreakpointID
+	1,  // 18: apix.Engine.ListBreakpoints:input_type -> apix.Empty
+	1,  // 19: apix.Engine.WatchPausedRequests:input_type -> apix.Empty
+	16, // 20: apix.Engine.ResumeRequest:input_type -> apix.ResumeAction
+	17, // 21: apix.Engine.ReplayRequest:input_type -> apix.ReplaySpec
+	18, // 22: apix.Engine.GetHistory:input_type -> apix.HistoryQuery
+	1,  // 23: apix.Engine.ClearHistory:input_type -> apix.Empty
+	7,  // 24: apix.Engine.GetStatus:output_type -> apix.StatusResponse
+	2,  // 25: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
+	10, // 26: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
+	14, // 27: apix.Engine.SetBreakpoint:output_type -> apix.BreakpointResponse
+	1,  // 28: apix.Engine.DeleteBreakpoint:output_type -> apix.Empty
+	13, // 29: apix.Engine.ListBreakpoints:output_type -> apix.BreakpointList
+	15, // 30: apix.Engine.WatchPausedRequests:output_type -> apix.PausedRequest
+	1,  // 31: apix.Engine.ResumeRequest:output_type -> apix.Empty
+	3,  // 32: apix.Engine.ReplayRequest:output_type -> apix.HttpResponse
+	4,  // 33: apix.Engine.GetHistory:output_type -> apix.HttpTransaction
+	1,  // 34: apix.Engine.ClearHistory:output_type -> apix.Empty
+	24, // [24:35] is the sub-list for method output_type
+	13, // [13:24] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_apix_proto_init() }
@@ -515,18 +1377,23 @@ func file_apix_proto_init() {
 	if File_apix_proto != nil {
 		return
 	}
+	file_apix_proto_msgTypes[16].OneofWrappers = []any{
+		(*ReplaySpec_RequestId)(nil),
+		(*ReplaySpec_RawRequest)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apix_proto_rawDesc), len(file_apix_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   10,
+			NumEnums:      1,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_apix_proto_goTypes,
 		DependencyIndexes: file_apix_proto_depIdxs,
+		EnumInfos:         file_apix_proto_enumTypes,
 		MessageInfos:      file_apix_proto_msgTypes,
 	}.Build()
 	File_apix_proto = out.File

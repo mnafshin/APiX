@@ -1,221 +1,160 @@
-![APiX Project Icon](/public/assets/img/APiX.png)
-APiX — The API Extension & Debugging Toolkit
+![APiX](/public/assets/img/APiX.png)
 
-APiX is a developer-first API debugging and extension toolkit.
-It combines features of a proxy, man-in-the-middle debugger, and a plugin runtime — giving developers full control over requests and responses.
+# APiX — API Debugger
 
-Think of it as:
-	•	proxychains + mitmproxy + plugin framework
-	•	With CLI, UI, and CI/CD support.
+> Intercept, inspect, and debug HTTP/HTTPS traffic directly in VS Code.
 
-⸻
+![Build](https://github.com/mnafshin/apix/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)
+![VS Code](https://img.shields.io/badge/vscode-%5E1.85-007ACC.svg)
 
-✨ Features (MVP Roadmap)
+## What is APiX?
 
-	•	🔌 Core Proxy (HTTP/HTTPS)
+APiX is an API debugging toolkit that runs as a VS Code extension backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behaviour with plugins — all without leaving your editor.
 
-Intercept and inspect traffic with built-in MITM support.
+## Features
 
-	•	🧩 Plugin Runtime
+- 🔌 **HTTP/HTTPS intercepting proxy** with MITM support
+- 🛑 **URL breakpoints** — pause, inspect, edit, and resume requests
+- 🔁 **Request replay** with header/body overrides
+- 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
+- 💾 **SQLite persistent storage** — traffic history survives restarts
+- 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
+- 🌐 **Works in browser** (vscode.dev) via remote engine over TLS
+- 📦 **Cross-platform** — macOS, Linux, Windows
 
-Extend APiX with request/response tampering, mocking, logging, etc.
+## Quick Start
 
-	•	⚡ Tampering Rules
+```bash
+# 1. Build the engine
+make build
 
-Modify headers, rewrite bodies, or inject responses.
+# 2. Build the VS Code extension
+make ext-build
 
-	•	📦 Cross-Platform
+# 3. Package and install the extension
+make ext-package
+make ext-install
 
-Works on Linux, macOS, and Windows.
-
-	•	🛠 Developer-Friendly CLI
-
-Run APiX CLI commands to interact with the engine:
-
-apix status
-apix plugins
-apix log
-
-
-	•	🗂 Storage (MVP)
-
-Capture requests in memory, with optional export to JSON.
-
-⸻
-
-🏗 Project Structure
-
-```
-apix/
-├── cmd/              # Entry points (binaries)
-│   ├── apix-engine/  # Core engine (HTTP proxy + gRPC server)
-│   └── apix-cli/     # Developer CLI
-│
-├── pkg/              # Core packages
-│   ├── api/          # gRPC/REST API definitions
-│   ├── proxy/        # HTTP/HTTPS proxy helpers (if any)
-│   ├── plugins/      # Plugin runtime + SDK
-│   ├── storage/      # Logging & persistence
-│   ├── tamper/       # Request/response modification
-│   └── breakpoints/  # Breakpoint manager (future)
-│
-├── internal/         # Non-exported helpers
-│   ├── config/       # Engine configuration loader
-│   │   └── config.go
-│   ├── engine/       # Core Engine struct and request handling
-│   │   └── engine.go
-│   └── server/       # Servers
-│       ├── http.go   # HTTP proxy server
-│       └── grpc.go   # gRPC server
-│
-├── ui/               # (Future) React-based UI
-├── scripts/          # Build/release scripts
-├── build/            # Dockerfiles, CI/CD configs
-├── tests/            # Integration tests
-└── README.md
+# 4. Open VS Code — APiX starts automatically
 ```
 
-⸻
+Point your HTTP client at `http://localhost:8080` to route traffic through APiX.
 
-🔧 Getting Started (MVP)
-
-1. Start the Engine
-
-Build and run the gRPC-enabled engine:
+## Architecture
 
 ```
-cd cmd/apix-engine
-go build -o apix-engine
-./apix-engine
+┌─────────────────────────┐         ┌──────────────────────────────┐
+│    VS Code Extension    │  gRPC   │         Go Engine            │
+│  ┌───────────────────┐  │ ──────► │  ┌────────────────────────┐  │
+│  │  Traffic Inspector│  │         │  │   gRPC Server (:9090)  │  │
+│  │  Breakpoints View │  │ ◄────── │  │   Breakpoint Manager   │  │
+│  │  Replay Panel     │  │         │  │   Plugin Runtime       │  │
+│  └───────────────────┘  │         │  │   SQLite Storage       │  │
+└─────────────────────────┘         │  └────────┬───────────────┘  │
+                                    │           │                   │
+                                    │  ┌────────▼───────────────┐  │
+                                    │  │  HTTP/HTTPS Proxy      │  │
+                                    │  │  (:8080, MITM)         │  │
+                                    │  └────────────────────────┘  │
+                                    └──────────────────────────────┘
 ```
 
-The engine runs a gRPC server with reflection enabled, allowing introspection and interaction.
+## Development
 
-2. Run the CLI
+```bash
+# Build everything (engine + extension)
+make dev
 
-In another terminal, build and run the CLI to interact with the engine:
+# Run Go tests (with race detector)
+make test
 
-```
-cd cmd/apix-cli
-go build -o apix-cli
-./apix-cli status
-./apix-cli plugins
-./apix-cli log
-```
+# Run a single test
+make test-one TEST=TestSaveAndGetRequest PKG=./internal/storage/
 
-3. Test Traffic Capture
+# Run tests with coverage
+make test-coverage
 
-Use `curl` with APiX as an HTTP proxy to generate traffic:
+# Lint
+make lint
 
-```
-curl -x http://localhost:8080 https://example.com
-```
+# Regenerate protobuf code
+make proto
 
-This will be intercepted and logged by the engine.
-
-⸻
-
-🛠 CLI Command Examples
-
-- `apix-cli status`
-
-Shows the current status of the APiX engine.
-
-Example output:
-
-```
-Engine Status: Running
-Uptime: 2m35s
-Active Connections: 1
+# Cross-compile engine for all platforms
+make build-all
 ```
 
-- `apix-cli plugins`
+## gRPC API
 
-Lists loaded plugins and their statuses.
+The engine exposes a single `Engine` service on port `9090`.
 
-Example output:
+| RPC | Type | Description |
+|-----|------|-------------|
+| `GetStatus` | Unary | Engine health, version, ports |
+| `CaptureTraffic` | Server-stream | Live stream of captured HTTP requests |
+| `ListPlugins` | Unary | List loaded plugins and their status |
+| `SetBreakpoint` | Unary | Register a URL pattern to pause on |
+| `DeleteBreakpoint` | Unary | Remove a breakpoint by ID |
+| `ListBreakpoints` | Unary | List all active breakpoints |
+| `WatchPausedRequests` | Server-stream | Stream requests that hit a breakpoint |
+| `ResumeRequest` | Unary | Forward, drop, or synthetically respond to a paused request |
+| `ReplayRequest` | Unary | Re-send a stored or arbitrary request with optional overrides |
+| `GetHistory` | Server-stream | Query stored request/response pairs from SQLite |
+| `ClearHistory` | Unary | Delete all stored traffic history |
 
+Proto definition: [`pkg/api/proto/apix.proto`](pkg/api/proto/apix.proto)
+
+## Plugins
+
+Built-in plugins live in `internal/plugins/builtins/`:
+
+| Plugin | Description |
+|--------|-------------|
+| `HeaderEditor` | Add, modify, or remove request/response headers |
+| `MockResponse` | Return a synthetic response without hitting upstream |
+| `EnvSubst` | Replace `${VAR}` placeholders in request bodies with environment values |
+
+**Custom plugins** implement the `Plugin` interface in `internal/plugins/sdk.go`:
+
+```go
+type Plugin interface {
+    Name() string
+    Version() string
+    Description() string
+    OnRequest(ctx context.Context, req *ProxyRequest) (*ProxyRequest, error)
+    OnResponse(ctx context.Context, req *ProxyRequest, resp *ProxyResponse) (*ProxyResponse, error)
+}
 ```
-Loaded Plugins:
-- HeaderEditor (enabled)
-- EnvSubst (enabled)
-- MockResponse (disabled)
-```
 
-- `apix-cli log`
+Create a file in `internal/plugins/builtins/` and register it in `cmd/apix-engine/main.go`. See [CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide.
 
-Displays captured HTTP requests and responses.
+## Remote Engine (vscode.dev)
 
-Example output:
+APiX works in the browser via vscode.dev by connecting to a remotely hosted engine:
 
-```
-[1] GET https://example.com/ - 200 OK
-[2] POST https://api.example.com/login - 401 Unauthorized
-```
+1. Run the engine on your server with TLS enabled and an auth token set in `config.yaml`
+2. In VS Code settings, configure:
+   - `apix.engine.host` — your server hostname
+   - `apix.engine.grpcPort` — gRPC port (default `9090`)
+   - `apix.engine.tlsEnabled` — `true`
+   - `apix.engine.authToken` — your token
+3. Open VS Code at [vscode.dev](https://vscode.dev) and install the extension
 
-⸻
+## Roadmap
 
-🔍 gRPC Reflection and Testing
+**v0.2**
+- [ ] WebSocket traffic inspection
+- [ ] Export/import traffic sessions (HAR format)
+- [ ] Breakpoint conditions (match on headers/body)
+- [ ] UI panel for plugin configuration
+- [ ] `make ext-install` without manual `.vsix` step
 
-The engine enables gRPC reflection, so you can also inspect and interact with it using tools like `grpcurl`:
+## Contributing
 
-```
-grpcurl -plaintext localhost:50051 list
-grpcurl -plaintext localhost:50051 describe apix.EngineService
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-This allows advanced users to query engine internals and manage it programmatically.
+## License
 
-⸻
-
-🧩 Plugins
-
-Plugins can extend APiX by hooking into request/response flows.
-Example built-in plugins:
-	•	HeaderEditor → add/modify headers
-	•	EnvSubst → replace ${VARS} with environment values
-	•	MockResponse → fake API responses
-
-Custom plugins can be developed using the APiX plugin SDK.
-
-⸻
-
-📍 Roadmap
-
-MVP (v0.1)
-	•	HTTP/HTTPS proxy
-	•	gRPC API for engine
-	•	CLI with run + log
-	•	In-memory storage
-	•	Basic plugins
-
-v0.2
-	•	Breakpoints (pause/resume requests)
-	•	Replay modified requests
-	•	SQLite storage backend
-	•	Remote engine support (auth + TLS)
-
-v1.0
-	•	UI frontend (React)
-	•	OS-specific plugins (iptables, WinDivert, macOS NE)
-	•	CI/CD integration helpers
-	•	Advanced tamper scripting
-
-⸻
-
-⚖️ License
-
-Apache 2.0
-
-⸻
-
-🤝 Contributing
-
-Contributions are welcome!
-	•	Fork & PR
-	•	Add new plugins
-	•	Improve docs & tests
-
-⸻
-
-👉 This is developer-friendly and forward-looking but also light enough.
+Apache 2.0 — see [LICENSE](LICENSE).

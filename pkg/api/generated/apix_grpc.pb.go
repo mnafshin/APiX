@@ -19,21 +19,49 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Engine_GetStatus_FullMethodName      = "/apix.Engine/GetStatus"
-	Engine_CaptureTraffic_FullMethodName = "/apix.Engine/CaptureTraffic"
-	Engine_ListPlugins_FullMethodName    = "/apix.Engine/ListPlugins"
+	Engine_GetStatus_FullMethodName           = "/apix.Engine/GetStatus"
+	Engine_CaptureTraffic_FullMethodName      = "/apix.Engine/CaptureTraffic"
+	Engine_ListPlugins_FullMethodName         = "/apix.Engine/ListPlugins"
+	Engine_SetBreakpoint_FullMethodName       = "/apix.Engine/SetBreakpoint"
+	Engine_DeleteBreakpoint_FullMethodName    = "/apix.Engine/DeleteBreakpoint"
+	Engine_ListBreakpoints_FullMethodName     = "/apix.Engine/ListBreakpoints"
+	Engine_WatchPausedRequests_FullMethodName = "/apix.Engine/WatchPausedRequests"
+	Engine_ResumeRequest_FullMethodName       = "/apix.Engine/ResumeRequest"
+	Engine_ReplayRequest_FullMethodName       = "/apix.Engine/ReplayRequest"
+	Engine_GetHistory_FullMethodName          = "/apix.Engine/GetHistory"
+	Engine_ClearHistory_FullMethodName        = "/apix.Engine/ClearHistory"
 )
 
 // EngineClient is the client API for Engine service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EngineClient interface {
-	// Health check
+	// ----- Health -----
 	GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	// Stream captured HTTP requests
+	// ----- Traffic capture -----
+	// Stream all captured HTTP requests in real time.
 	CaptureTraffic(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error)
-	// List installed plugins
+	// ----- Plugins -----
 	ListPlugins(ctx context.Context, in *PluginListRequest, opts ...grpc.CallOption) (*PluginListResponse, error)
+	// ----- Breakpoints -----
+	// Register a URL pattern to pause on.
+	SetBreakpoint(ctx context.Context, in *BreakpointRule, opts ...grpc.CallOption) (*BreakpointResponse, error)
+	// Remove a breakpoint by ID.
+	DeleteBreakpoint(ctx context.Context, in *BreakpointID, opts ...grpc.CallOption) (*Empty, error)
+	// List all active breakpoints.
+	ListBreakpoints(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*BreakpointList, error)
+	// Server-streams newly paused requests to the client.
+	WatchPausedRequests(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PausedRequest], error)
+	// Resume (or drop) a paused request, optionally with modifications.
+	ResumeRequest(ctx context.Context, in *ResumeAction, opts ...grpc.CallOption) (*Empty, error)
+	// ----- Replay -----
+	// Replay a stored or synthetic request and return the response.
+	ReplayRequest(ctx context.Context, in *ReplaySpec, opts ...grpc.CallOption) (*HttpResponse, error)
+	// ----- History -----
+	// Retrieve stored request/response pairs from SQLite.
+	GetHistory(ctx context.Context, in *HistoryQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpTransaction], error)
+	// Clear all stored history.
+	ClearHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type engineClient struct {
@@ -83,16 +111,134 @@ func (c *engineClient) ListPlugins(ctx context.Context, in *PluginListRequest, o
 	return out, nil
 }
 
+func (c *engineClient) SetBreakpoint(ctx context.Context, in *BreakpointRule, opts ...grpc.CallOption) (*BreakpointResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BreakpointResponse)
+	err := c.cc.Invoke(ctx, Engine_SetBreakpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) DeleteBreakpoint(ctx context.Context, in *BreakpointID, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Engine_DeleteBreakpoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ListBreakpoints(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*BreakpointList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BreakpointList)
+	err := c.cc.Invoke(ctx, Engine_ListBreakpoints_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) WatchPausedRequests(ctx context.Context, in *Empty, opts ...grpc.CallOption) (grpc.ServerStreamingClient[PausedRequest], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Engine_ServiceDesc.Streams[1], Engine_WatchPausedRequests_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[Empty, PausedRequest]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_WatchPausedRequestsClient = grpc.ServerStreamingClient[PausedRequest]
+
+func (c *engineClient) ResumeRequest(ctx context.Context, in *ResumeAction, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Engine_ResumeRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ReplayRequest(ctx context.Context, in *ReplaySpec, opts ...grpc.CallOption) (*HttpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HttpResponse)
+	err := c.cc.Invoke(ctx, Engine_ReplayRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) GetHistory(ctx context.Context, in *HistoryQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpTransaction], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Engine_ServiceDesc.Streams[2], Engine_GetHistory_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[HistoryQuery, HttpTransaction]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_GetHistoryClient = grpc.ServerStreamingClient[HttpTransaction]
+
+func (c *engineClient) ClearHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Engine_ClearHistory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EngineServer is the server API for Engine service.
 // All implementations must embed UnimplementedEngineServer
 // for forward compatibility.
 type EngineServer interface {
-	// Health check
+	// ----- Health -----
 	GetStatus(context.Context, *StatusRequest) (*StatusResponse, error)
-	// Stream captured HTTP requests
+	// ----- Traffic capture -----
+	// Stream all captured HTTP requests in real time.
 	CaptureTraffic(*CaptureRequest, grpc.ServerStreamingServer[HttpRequest]) error
-	// List installed plugins
+	// ----- Plugins -----
 	ListPlugins(context.Context, *PluginListRequest) (*PluginListResponse, error)
+	// ----- Breakpoints -----
+	// Register a URL pattern to pause on.
+	SetBreakpoint(context.Context, *BreakpointRule) (*BreakpointResponse, error)
+	// Remove a breakpoint by ID.
+	DeleteBreakpoint(context.Context, *BreakpointID) (*Empty, error)
+	// List all active breakpoints.
+	ListBreakpoints(context.Context, *Empty) (*BreakpointList, error)
+	// Server-streams newly paused requests to the client.
+	WatchPausedRequests(*Empty, grpc.ServerStreamingServer[PausedRequest]) error
+	// Resume (or drop) a paused request, optionally with modifications.
+	ResumeRequest(context.Context, *ResumeAction) (*Empty, error)
+	// ----- Replay -----
+	// Replay a stored or synthetic request and return the response.
+	ReplayRequest(context.Context, *ReplaySpec) (*HttpResponse, error)
+	// ----- History -----
+	// Retrieve stored request/response pairs from SQLite.
+	GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error
+	// Clear all stored history.
+	ClearHistory(context.Context, *Empty) (*Empty, error)
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -111,6 +257,30 @@ func (UnimplementedEngineServer) CaptureTraffic(*CaptureRequest, grpc.ServerStre
 }
 func (UnimplementedEngineServer) ListPlugins(context.Context, *PluginListRequest) (*PluginListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPlugins not implemented")
+}
+func (UnimplementedEngineServer) SetBreakpoint(context.Context, *BreakpointRule) (*BreakpointResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetBreakpoint not implemented")
+}
+func (UnimplementedEngineServer) DeleteBreakpoint(context.Context, *BreakpointID) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteBreakpoint not implemented")
+}
+func (UnimplementedEngineServer) ListBreakpoints(context.Context, *Empty) (*BreakpointList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBreakpoints not implemented")
+}
+func (UnimplementedEngineServer) WatchPausedRequests(*Empty, grpc.ServerStreamingServer[PausedRequest]) error {
+	return status.Errorf(codes.Unimplemented, "method WatchPausedRequests not implemented")
+}
+func (UnimplementedEngineServer) ResumeRequest(context.Context, *ResumeAction) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResumeRequest not implemented")
+}
+func (UnimplementedEngineServer) ReplayRequest(context.Context, *ReplaySpec) (*HttpResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplayRequest not implemented")
+}
+func (UnimplementedEngineServer) GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error {
+	return status.Errorf(codes.Unimplemented, "method GetHistory not implemented")
+}
+func (UnimplementedEngineServer) ClearHistory(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClearHistory not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
 func (UnimplementedEngineServer) testEmbeddedByValue()                {}
@@ -180,6 +350,136 @@ func _Engine_ListPlugins_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_SetBreakpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BreakpointRule)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).SetBreakpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_SetBreakpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).SetBreakpoint(ctx, req.(*BreakpointRule))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_DeleteBreakpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BreakpointID)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).DeleteBreakpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_DeleteBreakpoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).DeleteBreakpoint(ctx, req.(*BreakpointID))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ListBreakpoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ListBreakpoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ListBreakpoints_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ListBreakpoints(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_WatchPausedRequests_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EngineServer).WatchPausedRequests(m, &grpc.GenericServerStream[Empty, PausedRequest]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_WatchPausedRequestsServer = grpc.ServerStreamingServer[PausedRequest]
+
+func _Engine_ResumeRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeAction)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ResumeRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ResumeRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ResumeRequest(ctx, req.(*ResumeAction))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ReplayRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplaySpec)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ReplayRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ReplayRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ReplayRequest(ctx, req.(*ReplaySpec))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_GetHistory_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(HistoryQuery)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EngineServer).GetHistory(m, &grpc.GenericServerStream[HistoryQuery, HttpTransaction]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_GetHistoryServer = grpc.ServerStreamingServer[HttpTransaction]
+
+func _Engine_ClearHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ClearHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ClearHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ClearHistory(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Engine_ServiceDesc is the grpc.ServiceDesc for Engine service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -195,11 +495,45 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListPlugins",
 			Handler:    _Engine_ListPlugins_Handler,
 		},
+		{
+			MethodName: "SetBreakpoint",
+			Handler:    _Engine_SetBreakpoint_Handler,
+		},
+		{
+			MethodName: "DeleteBreakpoint",
+			Handler:    _Engine_DeleteBreakpoint_Handler,
+		},
+		{
+			MethodName: "ListBreakpoints",
+			Handler:    _Engine_ListBreakpoints_Handler,
+		},
+		{
+			MethodName: "ResumeRequest",
+			Handler:    _Engine_ResumeRequest_Handler,
+		},
+		{
+			MethodName: "ReplayRequest",
+			Handler:    _Engine_ReplayRequest_Handler,
+		},
+		{
+			MethodName: "ClearHistory",
+			Handler:    _Engine_ClearHistory_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "CaptureTraffic",
 			Handler:       _Engine_CaptureTraffic_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "WatchPausedRequests",
+			Handler:       _Engine_WatchPausedRequests_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetHistory",
+			Handler:       _Engine_GetHistory_Handler,
 			ServerStreams: true,
 		},
 	},

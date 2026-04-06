@@ -12,8 +12,12 @@
 # Go workspace
 bin/
 dist/
-build/
 coverage.out
+
+# Build artifacts (keep build/Dockerfile tracked)
+!build/
+build/*.tar
+build/*.img
 
 # Dependency directories
 vendor/
@@ -60,6 +64,15 @@ ui/.env.production.local
 *.db
 *.sqlite
 *.sqlite3
+
+# Engine binaries
+apix-engine
+apix-engine-*
+
+# VS Code Extension
+apix-vscode/out/
+apix-vscode/node_modules/
+apix-vscode/*.vsix
 
 # -----------------------
 # Docker / Containers

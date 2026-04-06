@@ -8,9 +8,15 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
+	"github.com/mnafshin/apix/internal/plugins"
+	"github.com/mnafshin/apix/internal/plugins/builtins"
+	"github.com/mnafshin/apix/internal/proxy"
+	"github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/server"
+	"github.com/mnafshin/apix/internal/storage"
 )
 
 func main() {
@@ -20,24 +26,67 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
+	// 1. Load config.
 	cfg := config.LoadConfig("internal/config/config.yaml")
-	eng := engine.New()
 
+	// 2. Open SQLite database.
+	db, err := storage.Open(cfg.DBPath)
+	if err != nil {
+		log.Fatalf("open database: %v", err)
+	}
+	defer db.Close()
+
+	// 3. Create CertAuthority.
+	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)
+	if err != nil {
+		log.Fatalf("create cert authority: %v", err)
+	}
+
+	// 4. Create breakpoints manager.
+	bpManager := breakpoints.NewManager()
+
+	// 5. Create plugin runtime and register built-ins.
+	pluginRT := plugins.NewRuntime()
+	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
+		log.Printf("register header-editor: %v", err)
+	}
+	if err := pluginRT.Register(&builtins.MockResponse{}); err != nil {
+		log.Printf("register mock-response: %v", err)
+	}
+	if err := pluginRT.Register(&builtins.EnvSubst{}); err != nil {
+		log.Printf("register env-subst: %v", err)
+	}
+
+	// 6. Create Engine.
+	eng := engine.New(db, bpManager, pluginRT)
+
+	// 7. Create replay Engine.
+	replayEng := replay.NewEngine(db, nil)
+
+	// 8. Create TLS + HTTP proxies.
+	tlsProxy := proxy.NewTLSProxy(ca, eng)
+	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng)
+
+	// 9. Start gRPC server.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		server.StartHTTPProxy(ctx, eng, cfg.HTTPPort)
+		server.StartGRPCServer(ctx, eng, replayEng, cfg)
 	}()
 
+	// 10. Start HTTP proxy.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		server.StartGRPCServer(ctx, eng, cfg.GRPCPort)
+		if err := httpProxy.Start(ctx); err != nil {
+			log.Printf("HTTP proxy stopped: %v", err)
+		}
 	}()
 
+	// 11. Wait for shutdown signal.
 	<-stop
-	log.Println("Shutting down servers...")
+	log.Println("Shutting down…")
 	cancel()
 	wg.Wait()
-	log.Println("Servers gracefully stopped")
+	log.Println("Goodbye.")
 }
