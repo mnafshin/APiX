@@ -18,9 +18,10 @@ import (
 
 // TLSProxy performs MITM TLS interception.
 type TLSProxy struct {
-	ca      *CertAuthority
-	engine  TrafficEngine
-	plugins PluginChain
+	ca              *CertAuthority
+	engine          TrafficEngine
+	plugins         PluginChain
+	upstreamTLSCfg  *tls.Config // optional; overrides default upstream TLS (useful in tests)
 }
 
 // NewTLSProxy creates a MITM TLS proxy using the provided CA.
@@ -34,6 +35,18 @@ func NewTLSProxy(ca *CertAuthority, engine TrafficEngine) *TLSProxy {
 // SetPlugins wires the plugin chain into the TLS proxy.
 func (p *TLSProxy) SetPlugins(chain PluginChain) {
 	p.plugins = chain
+}
+
+// SetUpstreamTLSConfig sets a custom TLS configuration used when dialling the
+// upstream server. Primarily useful in tests to trust self-signed test certs.
+func (p *TLSProxy) SetUpstreamTLSConfig(cfg *tls.Config) {
+	p.upstreamTLSCfg = cfg
+}
+
+// CACertPEM returns the PEM-encoded CA certificate so callers can build a
+// trusted cert pool for clients connecting through the MITM proxy.
+func (p *TLSProxy) CACertPEM() ([]byte, error) {
+	return p.ca.CACertPEM()
 }
 
 // HandleConn performs MITM interception on a raw TCP connection destined for host.
@@ -206,7 +219,12 @@ func (p *TLSProxy) dialUpstream(ctx context.Context, host string) (*tls.Conn, er
 		return nil, fmt.Errorf("dial %s: %w", host, err)
 	}
 	hostname, _, _ := net.SplitHostPort(host)
-	tlsConn := tls.Client(rawConn, &tls.Config{ServerName: hostname})
+	tlsCfg := &tls.Config{ServerName: hostname}
+	if p.upstreamTLSCfg != nil {
+		tlsCfg = p.upstreamTLSCfg.Clone()
+		tlsCfg.ServerName = hostname
+	}
+	tlsConn := tls.Client(rawConn, tlsCfg)
 	if err := tlsConn.Handshake(); err != nil {
 		rawConn.Close()
 		return nil, fmt.Errorf("tls handshake with %s: %w", host, err)

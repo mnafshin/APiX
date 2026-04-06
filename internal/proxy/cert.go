@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -155,6 +156,12 @@ func (ca *CertAuthority) CertForHost(host string) (*tls.Certificate, error) {
 		NotAfter:     now.Add(365 * 24 * time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	// When host is an IP address, use IPAddresses SAN instead of DNSNames so
+	// that TLS clients performing IP-based verification accept the certificate.
+	if ip := net.ParseIP(host); ip != nil {
+		tmpl.DNSNames = nil
+		tmpl.IPAddresses = []net.IP{ip}
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, ca.caCert, &key.PublicKey, ca.caKey)
