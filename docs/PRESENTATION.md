@@ -1,5 +1,33 @@
+---
+marp: false
+theme: default
+paginate: true
+backgroundColor: #0d1117
+color: #e6edf3
+style: |
+  section {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 48px 64px;
+  }
+  h1 { color: #58a6ff; font-size: 2.2em; margin-bottom: 0.2em; }
+  h2 { color: #58a6ff; border-bottom: 2px solid #21262d; padding-bottom: 0.3em; }
+  h3 { color: #79c0ff; }
+  code { background: #161b22; color: #f0883e; padding: 2px 6px; border-radius: 4px; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  pre code { color: #e6edf3; background: none; padding: 0; }
+  ul li { margin: 0.4em 0; }
+  strong { color: #ffa657; }
+  em { color: #79c0ff; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85em; }
+  th { background: #21262d; color: #58a6ff; padding: 8px 12px; }
+  td { padding: 8px 12px; border-top: 1px solid #21262d; }
+---
+
+<!-- _class: lead -->
 # APiX — API Debugger
 ### Debug HTTP/HTTPS traffic without leaving VS Code
+
+_Intercept · Inspect · Edit · Replay_
 
 ---
 
@@ -14,17 +42,17 @@ APiX is an **API debugging toolkit** built as a VS Code extension backed by a Go
 
 ---
 
-## Core Capabilities
-
-### 1. Traffic Inspection
+## Ability #1 — Traffic Inspection
 - Route any HTTP/HTTPS client through `http://localhost:8080`
-- Every request/response is captured and shown in the **Traffic Inspector** panel
+- Every request/response is captured in the **Traffic Inspector** panel
 - Live streaming — see requests appear as they happen
-- Filter by URL, click to view headers and body
-- Traffic persists to **SQLite** — history survives restarts
+- Click any item to view headers and body
+- Persists to **SQLite** — history survives restarts
 
-### 2. URL Breakpoints
-- Set a regex/glob pattern to match URLs (e.g. `.*api/users.*`)
+---
+
+## Ability #2 — URL Breakpoints
+- Set a regex pattern to match URLs (e.g. `.*api/users.*`)
 - Matching requests are **paused** before being forwarded
 - The **Request Editor** opens automatically — inspect headers and body
 - Choose to:
@@ -32,12 +60,16 @@ APiX is an **API debugging toolkit** built as a VS Code extension backed by a Go
   - ✕ **Drop** (returns 502 to client)
   - ↩ **Respond** (return a synthetic response without hitting upstream)
 
-### 3. Request Replay
+---
+
+## Ability #3 — Request Replay
 - Right-click any captured request → **Replay**
 - Override headers and/or body before resending
 - Response shown inline — compare against original
 
-### 4. Plugin System
+---
+
+## Ability #4 — Plugin System
 Three built-in plugins, plus a public SDK to write your own:
 
 | Plugin | What it does |
@@ -48,7 +80,9 @@ Three built-in plugins, plus a public SDK to write your own:
 
 Custom plugins implement the `Plugin` interface from `pkg/plugins/sdk.go`.
 
-### 5. Remote Engine (vscode.dev / browser)
+---
+
+## Ability #5 — Remote Engine (vscode.dev / browser)
 - Run `apix-engine` on any server with TLS + auth token
 - Connect the VS Code extension via `apix.engine.host` / `apix.engine.tlsEnabled`
 - Full feature parity — no installation required on the client machine
@@ -290,3 +324,23 @@ apix/
 | **v0.1 (current)** | MITM proxy, breakpoints, replay, plugins, SQLite, VS Code extension |
 | **v0.2** | WebSocket support, conditional breakpoints, plugin config UI, gRPC proxy support |
 | **v1.0** | Wasm plugin sandbox (external plugins without recompile), VS Code Marketplace publish, CI/CD integration hooks |
+
+---
+
+<!-- _class: lead -->
+
+## Get Started
+
+```bash
+git clone https://github.com/mnafshin/apix && cd apix
+make build && make ext-install
+```
+
+Open VS Code — the **APiX panel** appears in the sidebar.
+
+---
+
+_Apache 2.0 · github.com/mnafshin/apix_
+
+> **Tip:** View this deck with [Marp for VS Code](https://marketplace.visualstudio.com/items?itemName=marp-team.marp-vscode) —
+> install the extension, open this file, and click the **preview** icon (top-right) for live slides.
