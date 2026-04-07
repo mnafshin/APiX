@@ -46,10 +46,10 @@ func newTestStack(t *testing.T) (*proxy.HTTPProxy, *proxy.TLSProxy, *engine.Engi
 		t.Fatalf("NewCertAuthority: %v", err)
 	}
 
-	tlsP := proxy.NewTLSProxy(ca, eng)
+	tlsP := proxy.NewTLSProxy(ca, eng, proxy.TransportOptions{})
 	tlsP.SetPlugins(rt)
 
-	httpP := proxy.NewHTTPProxy("", tlsP, eng)
+	httpP := proxy.NewHTTPProxy("", tlsP, eng, proxy.TransportOptions{})
 	httpP.SetPlugins(rt)
 
 	return httpP, tlsP, eng, bpMgr, rt

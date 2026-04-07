@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
@@ -64,8 +65,13 @@ func main() {
 	replayEng := replay.NewEngine(db, nil)
 
 	// 8. Create TLS + HTTP proxies.
-	tlsProxy := proxy.NewTLSProxy(ca, eng)
-	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng)
+	transportOpts := proxy.TransportOptions{
+		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
+		IdleConnTimeout:     time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
+		DialTimeout:         time.Duration(cfg.DialTimeoutSec) * time.Second,
+	}
+	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts)
+	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts)
 
 	// 9. Start gRPC server.
 	wg.Add(1)

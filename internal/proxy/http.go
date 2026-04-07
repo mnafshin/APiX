@@ -16,18 +16,20 @@ import (
 // HTTPProxy is a forward proxy that intercepts plain HTTP traffic and tunnels
 // HTTPS CONNECT requests to the MITM TLS proxy.
 type HTTPProxy struct {
-	addr     string
-	tlsProxy *TLSProxy
-	plugins  PluginChain
-	engine   TrafficEngine
+	addr      string
+	tlsProxy  *TLSProxy
+	plugins   PluginChain
+	engine    TrafficEngine
+	transport *http.Transport
 }
 
 // NewHTTPProxy creates a new HTTP proxy listening on addr.
-func NewHTTPProxy(addr string, tlsProxy *TLSProxy, engine TrafficEngine) *HTTPProxy {
+func NewHTTPProxy(addr string, tlsProxy *TLSProxy, engine TrafficEngine, opts TransportOptions) *HTTPProxy {
 	return &HTTPProxy{
-		addr:     addr,
-		tlsProxy: tlsProxy,
-		engine:   engine,
+		addr:      addr,
+		tlsProxy:  tlsProxy,
+		engine:    engine,
+		transport: newTransport(nil, opts),
 	}
 }
 
@@ -172,8 +174,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	upReq.Header = proxyReq.Headers
 
-	transport := &http.Transport{}
-	upResp, err := transport.RoundTrip(upReq)
+	upResp, err := p.transport.RoundTrip(upReq)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		return

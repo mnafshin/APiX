@@ -18,17 +18,20 @@ import (
 
 // TLSProxy performs MITM TLS interception.
 type TLSProxy struct {
-	ca              *CertAuthority
-	engine          TrafficEngine
-	plugins         PluginChain
-	upstreamTLSCfg  *tls.Config // optional; overrides default upstream TLS (useful in tests)
+	ca            *CertAuthority
+	engine        TrafficEngine
+	plugins       PluginChain
+	transport     *http.Transport
+	transportOpts TransportOptions // retained so SetUpstreamTLSConfig can rebuild
 }
 
 // NewTLSProxy creates a MITM TLS proxy using the provided CA.
-func NewTLSProxy(ca *CertAuthority, engine TrafficEngine) *TLSProxy {
+func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions) *TLSProxy {
 	return &TLSProxy{
-		ca:     ca,
-		engine: engine,
+		ca:            ca,
+		engine:        engine,
+		transportOpts: opts,
+		transport:     newTransport(nil, opts),
 	}
 }
 
@@ -39,8 +42,9 @@ func (p *TLSProxy) SetPlugins(chain PluginChain) {
 
 // SetUpstreamTLSConfig sets a custom TLS configuration used when dialling the
 // upstream server. Primarily useful in tests to trust self-signed test certs.
+// Calling this replaces the shared transport so the new TLS config takes effect.
 func (p *TLSProxy) SetUpstreamTLSConfig(cfg *tls.Config) {
-	p.upstreamTLSCfg = cfg
+	p.transport = newTransport(cfg, p.transportOpts)
 }
 
 // CACertPEM returns the PEM-encoded CA certificate so callers can build a
@@ -163,24 +167,17 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		}
 	}
 
-	// Forward to upstream.
-	upConn, err := p.dialUpstream(ctx, host)
+	// Build and send upstream request using the shared pooled transport.
+	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream connect: %v", err))
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("build upstream request: %v", err))
 		return
 	}
-	defer upConn.Close()
+	upReq.Header = proxyReq.Headers.Clone()
 
-	// Send request upstream.
-	if err := r.Write(upConn); err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("write upstream: %v", err))
-		return
-	}
-
-	// Read upstream response.
-	upResp, err := http.ReadResponse(bufio.NewReader(upConn), r)
+	upResp, err := p.transport.RoundTrip(upReq)
 	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read upstream response: %v", err))
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", err))
 		return
 	}
 	defer upResp.Body.Close()
@@ -232,31 +229,6 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 
 	writeProxyResponseToConn(conn, proxyResp)
-}
-
-// dialUpstream opens a TLS connection to the target host.
-func (p *TLSProxy) dialUpstream(ctx context.Context, host string) (*tls.Conn, error) {
-	// Ensure host has a port.
-	if _, _, err := net.SplitHostPort(host); err != nil {
-		host = host + ":443"
-	}
-	dialer := &net.Dialer{}
-	rawConn, err := dialer.DialContext(ctx, "tcp", host)
-	if err != nil {
-		return nil, fmt.Errorf("dial %s: %w", host, err)
-	}
-	hostname, _, _ := net.SplitHostPort(host)
-	tlsCfg := &tls.Config{ServerName: hostname}
-	if p.upstreamTLSCfg != nil {
-		tlsCfg = p.upstreamTLSCfg.Clone()
-		tlsCfg.ServerName = hostname
-	}
-	tlsConn := tls.Client(rawConn, tlsCfg)
-	if err := tlsConn.Handshake(); err != nil {
-		rawConn.Close()
-		return nil, fmt.Errorf("tls handshake with %s: %w", host, err)
-	}
-	return tlsConn, nil
 }
 
 // writeHTTPError writes a minimal HTTP error response to the connection.

@@ -9,13 +9,16 @@ import (
 )
 
 type Config struct {
-	HTTPPort   string `yaml:"http_port"`
-	GRPCPort   string `yaml:"grpc_port"`
-	DBPath     string `yaml:"db_path"`
-	CACertPath string `yaml:"ca_cert_path"`
-	CAKeyPath  string `yaml:"ca_key_path"`
-	TLSEnabled bool   `yaml:"tls_enabled"`
-	AuthToken  string `yaml:"auth_token"`
+	HTTPPort            string `yaml:"http_port"`
+	GRPCPort            string `yaml:"grpc_port"`
+	DBPath              string `yaml:"db_path"`
+	CACertPath          string `yaml:"ca_cert_path"`
+	CAKeyPath           string `yaml:"ca_key_path"`
+	TLSEnabled          bool   `yaml:"tls_enabled"`
+	AuthToken           string `yaml:"auth_token"`
+	MaxIdleConnsPerHost int    `yaml:"max_idle_conns_per_host"`
+	IdleConnTimeoutSec  int    `yaml:"idle_conn_timeout_sec"`
+	DialTimeoutSec      int    `yaml:"dial_timeout_sec"`
 }
 
 // LoadConfig reads configuration from a YAML file.
@@ -27,12 +30,15 @@ func LoadConfig(path string) *Config {
 		home = "."
 	}
 	cfg := &Config{
-		HTTPPort:   "8080",
-		GRPCPort:   "9090",
-		DBPath:     "apix.db",
-		CACertPath: filepath.Join(home, ".apix", "ca.pem"),
-		CAKeyPath:  filepath.Join(home, ".apix", "ca-key.pem"),
-		TLSEnabled: false,
+		HTTPPort:            "8080",
+		GRPCPort:            "9090",
+		DBPath:              "apix.db",
+		CACertPath:          filepath.Join(home, ".apix", "ca.pem"),
+		CAKeyPath:           filepath.Join(home, ".apix", "ca-key.pem"),
+		TLSEnabled:          false,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeoutSec:  90,
+		DialTimeoutSec:      10,
 	}
 
 	file, err := os.ReadFile(path)

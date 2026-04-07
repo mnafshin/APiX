@@ -78,7 +78,7 @@ func startStack(t *testing.T) *testStack {
 		t.Fatalf("proxy listen: %v", err)
 	}
 	proxyPort := proxyLis.Addr().(*net.TCPAddr).Port
-	httpProxy := iproxy.NewHTTPProxy("", nil, eng)
+	httpProxy := iproxy.NewHTTPProxy("", nil, eng, iproxy.TransportOptions{})
 	httpSrv := &http.Server{Handler: httpProxy}
 	go httpSrv.Serve(proxyLis) //nolint:errcheck
 
