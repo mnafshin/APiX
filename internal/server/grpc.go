@@ -19,6 +19,7 @@ import (
 	"github.com/mnafshin/apix/internal/replay"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
@@ -355,6 +356,64 @@ func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.E
 	return &apix.Empty{}, nil
 }
 
+// validateToken checks the incoming metadata for a valid Bearer token.
+// It returns Unauthenticated if the metadata or Authorization header is missing,
+// or if the token does not match expectedToken.
+func validateToken(ctx context.Context, expectedToken string) error {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing metadata")
+	}
+	auth := md.Get("authorization")
+	if len(auth) == 0 {
+		return status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+	if auth[0] != "Bearer "+expectedToken {
+		return status.Error(codes.Unauthenticated, "invalid token")
+	}
+	return nil
+}
+
+// authUnaryInterceptor returns a gRPC unary interceptor that validates the
+// Bearer token from incoming metadata. When token is empty, auth is skipped
+// (local desktop mode).
+func authUnaryInterceptor(token string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if token == "" {
+			return handler(ctx, req)
+		}
+		if err := validateToken(ctx, token); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+}
+
+// authStreamInterceptor returns a gRPC streaming interceptor that validates
+// the Bearer token from incoming metadata. When token is empty, auth is
+// skipped (local desktop mode).
+func authStreamInterceptor(token string) grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if token == "" {
+			return handler(srv, ss)
+		}
+		if err := validateToken(ss.Context(), token); err != nil {
+			return err
+		}
+		return handler(srv, ss)
+	}
+}
+
+// NewGRPCServer creates a new *grpc.Server configured with auth interceptors
+// derived from cfg.AuthToken. When AuthToken is empty, calls are allowed
+// without credentials (local desktop mode).
+func NewGRPCServer(cfg *config.Config) *grpc.Server {
+	return grpc.NewServer(
+		grpc.UnaryInterceptor(authUnaryInterceptor(cfg.AuthToken)),
+		grpc.StreamInterceptor(authStreamInterceptor(cfg.AuthToken)),
+	)
+}
+
 // StartGRPCServer starts the gRPC server and blocks until ctx is cancelled.
 func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine, cfg *config.Config) {
 	addr := ":" + cfg.GRPCPort
@@ -363,7 +422,7 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 		log.Fatalf("gRPC listen on %s: %v", addr, err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := NewGRPCServer(cfg)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
 	reflection.Register(grpcServer)
 

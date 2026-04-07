@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
@@ -482,7 +483,118 @@ func TestReplayRequest_UnknownID(t *testing.T) {
 	}
 }
 
+// ── Auth interceptor ───────────────────────────────────────────────────────
+
+func TestAuthInterceptor_NoToken_Passes(t *testing.T) {
+	t.Parallel()
+	// Empty token = auth disabled; any call should succeed without credentials.
+	f := newFixtureWithToken(t, "")
+	defer f.stop()
+
+	_, err := f.client.GetStatus(context.Background(), &apix.StatusRequest{})
+	if err != nil {
+		t.Fatalf("GetStatus with no token configured: %v", err)
+	}
+}
+
+func TestAuthInterceptor_ValidToken_Passes(t *testing.T) {
+	t.Parallel()
+	f := newFixtureWithToken(t, "secret")
+	defer f.stop()
+
+	_, err := f.client.GetStatus(ctxWithToken("secret"), &apix.StatusRequest{})
+	if err != nil {
+		t.Fatalf("GetStatus with valid token: %v", err)
+	}
+}
+
+func TestAuthInterceptor_InvalidToken_Fails(t *testing.T) {
+	t.Parallel()
+	f := newFixtureWithToken(t, "secret")
+	defer f.stop()
+
+	_, err := f.client.GetStatus(ctxWithToken("wrong"), &apix.StatusRequest{})
+	if err == nil {
+		t.Fatal("expected Unauthenticated error for wrong token, got nil")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.Unauthenticated {
+		t.Errorf("expected codes.Unauthenticated, got %v", err)
+	}
+}
+
+func TestAuthInterceptor_MissingHeader_Fails(t *testing.T) {
+	t.Parallel()
+	f := newFixtureWithToken(t, "secret")
+	defer f.stop()
+
+	// Call without any Authorization header.
+	_, err := f.client.GetStatus(context.Background(), &apix.StatusRequest{})
+	if err == nil {
+		t.Fatal("expected Unauthenticated error for missing header, got nil")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.Unauthenticated {
+		t.Errorf("expected codes.Unauthenticated, got %v", err)
+	}
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
+
+// newFixtureWithToken is like newFixture but spins up the gRPC server with
+// auth interceptors enabled for the given token.
+func newFixtureWithToken(t *testing.T, token string) *fixture {
+	t.Helper()
+
+	lis := bufconn.Listen(bufSize)
+
+	db, err := storage.Open(":memory:")
+	if err != nil {
+		t.Fatalf("storage.Open: %v", err)
+	}
+
+	bpm := breakpoints.NewManager()
+	prt := pluginrt.NewRuntime()
+	eng := engine.New(db, bpm, prt)
+	re := replay.NewEngine(db, nil)
+	cfg := &config.Config{HTTPPort: "8080", GRPCPort: "9090", AuthToken: token}
+
+	grpcSrv := server.NewGRPCServer(cfg)
+	apix.RegisterEngineServer(grpcSrv, server.NewEngineServer(eng, re, cfg))
+	go grpcSrv.Serve(lis) //nolint:errcheck
+
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return lis.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		grpcSrv.Stop()
+		db.Close()
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+
+	stop := func() {
+		conn.Close()
+		grpcSrv.Stop()
+		db.Close()
+	}
+
+	return &fixture{
+		client: apix.NewEngineClient(conn),
+		db:     db,
+		bpm:    bpm,
+		eng:    eng,
+		stop:   stop,
+	}
+}
+
+// ctxWithToken returns a context that carries an Authorization: Bearer <token>
+// metadata entry for outgoing gRPC calls.
+func ctxWithToken(token string) context.Context {
+	md := metadata.Pairs("authorization", "Bearer "+token)
+	return metadata.NewOutgoingContext(context.Background(), md)
+}
 
 // drainHistory reads all messages from a GetHistory stream until EOF and
 // returns the count.
