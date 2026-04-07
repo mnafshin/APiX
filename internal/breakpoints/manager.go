@@ -30,8 +30,25 @@ func NewManager() *Manager {
 	}
 }
 
+// validHTTPMethods is the set of RFC 9110 standard methods.
+var validHTTPMethods = map[string]bool{
+	"GET": true, "POST": true, "PUT": true, "PATCH": true,
+	"DELETE": true, "HEAD": true, "OPTIONS": true, "CONNECT": true, "TRACE": true,
+}
+
 // AddRule registers a new breakpoint rule. Assigns a UUID if rule.ID is empty.
 func (m *Manager) AddRule(rule *BreakpointRule) (*BreakpointRule, error) {
+	if rule.URLPattern == "" {
+		return nil, fmt.Errorf("url_pattern is required")
+	}
+	if len(rule.URLPattern) > 500 {
+		return nil, fmt.Errorf("url_pattern exceeds 500 characters")
+	}
+	for _, method := range rule.Methods {
+		if !validHTTPMethods[strings.ToUpper(method)] {
+			return nil, fmt.Errorf("invalid HTTP method: %q", method)
+		}
+	}
 	re, err := regexp.Compile(rule.URLPattern)
 	if err != nil {
 		return nil, fmt.Errorf("invalid url_pattern %q: %w", rule.URLPattern, err)

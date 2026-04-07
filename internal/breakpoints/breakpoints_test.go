@@ -33,6 +33,57 @@ func TestAddRule(t *testing.T) {
 	}
 }
 
+func TestAddRuleEmptyPattern(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	_, err := m.AddRule(&BreakpointRule{URLPattern: "", Enabled: true})
+	if err == nil {
+		t.Error("expected error for empty url_pattern, got nil")
+	}
+}
+
+func TestAddRulePatternTooLong(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	long := make([]byte, 501)
+	for i := range long {
+		long[i] = 'a'
+	}
+	_, err := m.AddRule(&BreakpointRule{URLPattern: string(long), Enabled: true})
+	if err == nil {
+		t.Error("expected error for pattern > 500 chars, got nil")
+	}
+}
+
+func TestAddRuleInvalidMethod(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	_, err := m.AddRule(&BreakpointRule{
+		URLPattern: ".*",
+		Methods:    []string{"INVALID"},
+		Enabled:    true,
+	})
+	if err == nil {
+		t.Error("expected error for invalid HTTP method, got nil")
+	}
+}
+
+func TestAddRuleValidMethods(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	methods := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE"}
+	for _, method := range methods {
+		_, err := m.AddRule(&BreakpointRule{
+			URLPattern: ".*",
+			Methods:    []string{method},
+			Enabled:    true,
+		})
+		if err != nil {
+			t.Errorf("AddRule with method %q: unexpected error: %v", method, err)
+		}
+	}
+}
+
 func TestAddRuleInvalidRegex(t *testing.T) {
 	t.Parallel()
 	m := NewManager()
