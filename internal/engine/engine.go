@@ -99,6 +99,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			StatusCode: resp.StatusCode,
 			StatusText: resp.Status,
 			Headers:    hdrs,
+			Body:       tx.ResponseBody,
 		}
 		if err := e.db.SaveResponse(rec); err != nil {
 			log.Printf("engine: save response: %v", err)

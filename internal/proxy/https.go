@@ -208,9 +208,23 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		}
 	}
 
+	// Buffer the final response body (plugins may have modified it) so we can
+	// both persist it and still write it to the client.
+	var finalRespBody []byte
+	if proxyResp.Body != nil {
+		var readErr error
+		finalRespBody, readErr = io.ReadAll(proxyResp.Body)
+		if readErr != nil {
+			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read response body: %v", readErr))
+			return
+		}
+		proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
+	}
+
 	// Store transaction.
 	if p.engine != nil {
 		tx.Response = proxyResp
+		tx.ResponseBody = finalRespBody
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
 			log.Printf("tls proxy: store transaction: %v", err)
