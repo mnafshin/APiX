@@ -130,11 +130,42 @@ type Plugin interface {
 
 Create a file in `internal/plugins/builtins/` and register it in `cmd/apix-engine/main.go`. See [CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide.
 
+## Authentication
+
+When running with an auth token, prefer the `APIX_AUTH_TOKEN` environment variable over `auth_token` in `config.yaml` to avoid storing secrets in plaintext files.
+
+```bash
+# Recommended
+APIX_AUTH_TOKEN=your-secret ./apix-engine
+
+# Works but prints a startup warning
+echo 'auth_token: "your-secret"' >> internal/config/config.yaml
+./apix-engine
+```
+
+For long-running deployments use a systemd `EnvironmentFile`:
+
+```ini
+# /etc/apix/secrets
+APIX_AUTH_TOKEN=your-secret
+```
+
+```ini
+# /etc/systemd/system/apix.service
+[Service]
+EnvironmentFile=/etc/apix/secrets
+ExecStart=/usr/local/bin/apix-engine
+```
+
 ## Remote Engine (vscode.dev)
 
 APiX works in the browser via vscode.dev by connecting to a remotely hosted engine:
 
-1. Run the engine on your server with TLS enabled and an auth token set in `config.yaml`
+1. Run the engine on your server with TLS enabled and an auth token:
+   ```bash
+   APIX_AUTH_TOKEN=your-secret ./apix-engine
+   ```
+   Alternatively set `auth_token` in `config.yaml` (a startup warning will remind you to prefer the env var).
 2. In VS Code settings, configure:
    - `apix.engine.host` — your server hostname
    - `apix.engine.grpcPort` — gRPC port (default `9090`)

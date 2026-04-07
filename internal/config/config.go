@@ -44,12 +44,24 @@ func LoadConfig(path string) *Config {
 	file, err := os.ReadFile(path)
 	if err != nil {
 		log.Printf("Config file not found (%s), using defaults: %v", path, err)
+		if envToken := os.Getenv("APIX_AUTH_TOKEN"); envToken != "" {
+			cfg.AuthToken = envToken
+		}
 		return cfg
 	}
 
 	if err := yaml.Unmarshal(file, cfg); err != nil {
 		log.Printf("Failed to parse config file, using defaults: %v", err)
 		return cfg
+	}
+
+	tokenFromFile := cfg.AuthToken != ""
+
+	// APIX_AUTH_TOKEN env var takes precedence over the config file value.
+	if envToken := os.Getenv("APIX_AUTH_TOKEN"); envToken != "" {
+		cfg.AuthToken = envToken
+	} else if tokenFromFile {
+		log.Println("WARNING: auth_token is set in config.yaml. Consider using the APIX_AUTH_TOKEN environment variable instead to avoid storing secrets in plaintext.")
 	}
 
 	return cfg
