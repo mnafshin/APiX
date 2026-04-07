@@ -210,7 +210,7 @@ Body:     (editable textarea)
 ## Developer Workflow
 
 ```bash
-make test                                           # Run 41 Go tests (with race detector)
+make test                                           # Run 89 Go tests (with race detector)
 make test-one TEST=TestSaveAndGetRequest PKG=./internal/storage/  # Single test
 make proto                                          # Regenerate gRPC code after .proto changes
 make build-all                                      # Cross-compile (macOS/Linux/Windows)
@@ -255,12 +255,9 @@ pluginRT.Register(&myplugin.MyPlugin{})
 
 ## Remote / vscode.dev Setup
 
-```yaml
-# config.yaml
-grpc_port: "9090"
-http_port: "8080"
-tls_enabled: true
-auth_token: "your-secret-token"
+```bash
+# Recommended: use the environment variable
+APIX_AUTH_TOKEN=your-secret-token ./apix-engine
 ```
 
 ```jsonc

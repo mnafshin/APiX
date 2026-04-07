@@ -23,8 +23,7 @@ apix/
 │   ├── breakpoints/        # Breakpoint manager
 │   ├── config/             # Config loader (config.yaml)
 │   ├── engine/             # Core engine orchestration
-│   ├── plugins/            # Plugin runtime, SDK, and builtins
-│   │   └── builtins/       # HeaderEditor, MockResponse, EnvSubst
+│   ├── pluginrt/           # Plugin runtime + builtins (HeaderEditor, MockResponse, EnvSubst)
 │   ├── proxy/              # HTTP/HTTPS MITM proxy
 │   ├── replay/             # Request replay logic
 │   ├── server/             # gRPC server handlers
@@ -57,14 +56,14 @@ apix/
 
 ## Adding a Plugin
 
-1. Create a file in `internal/plugins/builtins/`, e.g. `rate_limiter.go`:
+1. Create a file in `internal/pluginrt/builtins/`, e.g. `rate_limiter.go`:
 
 ```go
 package builtins
 
 import (
     "context"
-    "github.com/mnafshin/apix/internal/plugins"
+    "github.com/mnafshin/apix/pkg/plugins"
 )
 
 type RateLimiter struct{}
@@ -86,12 +85,12 @@ func (r *RateLimiter) OnResponse(ctx context.Context, req *plugins.ProxyRequest,
 2. Register it in `cmd/apix-engine/main.go` alongside the existing plugins:
 
 ```go
-runtime.Register(&builtins.RateLimiter{})
+pluginRT.Register(&builtins.RateLimiter{})
 ```
 
-3. Add tests in `internal/plugins/builtins/builtins_test.go`.
+3. Add tests in `internal/pluginrt/builtins/builtins_test.go`.
 
-The full `Plugin` interface is documented in [`internal/plugins/sdk.go`](internal/plugins/sdk.go).
+The full `Plugin` interface is documented in [`pkg/plugins/sdk.go`](pkg/plugins/sdk.go).
 
 ## Proto Changes
 

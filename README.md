@@ -106,6 +106,8 @@ The engine exposes a single `Engine` service on port `9090`.
 
 Proto definition: [`pkg/api/proto/apix.proto`](pkg/api/proto/apix.proto)
 
+`SetBreakpoint` validates its input: `url_pattern` is required and must not exceed 500 characters; `methods` must be standard HTTP methods (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`, `CONNECT`, `TRACE`). Invalid input returns `codes.InvalidArgument`.
+
 ## Plugins
 
 Built-in plugins live in `internal/plugins/builtins/`:
@@ -129,6 +131,23 @@ type Plugin interface {
 ```
 
 Create a file in `internal/plugins/builtins/` and register it in `cmd/apix-engine/main.go`. See [CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide.
+
+## Configuration
+
+All settings live in `internal/config/config.yaml`. The file is optional — defaults are used when it is absent.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `http_port` | `8080` | HTTP proxy listen port |
+| `grpc_port` | `9090` | gRPC API listen port |
+| `db_path` | `apix.db` | SQLite database path |
+| `ca_cert_path` | `~/.apix/ca.pem` | MITM CA certificate |
+| `ca_key_path` | `~/.apix/ca-key.pem` | MITM CA private key |
+| `tls_enabled` | `false` | Enable TLS on the gRPC server |
+| `auth_token` | `""` | Bearer token for gRPC auth (prefer `APIX_AUTH_TOKEN` env var) |
+| `max_idle_conns_per_host` | `10` | Max idle upstream connections per host |
+| `idle_conn_timeout_sec` | `90` | Seconds an idle upstream connection stays open |
+| `dial_timeout_sec` | `10` | Seconds allowed for a TCP dial to upstream |
 
 ## Authentication
 
