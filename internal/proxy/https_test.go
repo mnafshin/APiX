@@ -1,12 +1,16 @@
 package proxy_test
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	replayengine "github.com/mnafshin/apix/internal/replay"
 )
 
 // TestHTTPSProxy_CONNECTTunnel starts a TLS mock upstream and verifies that an
@@ -136,3 +140,91 @@ func TestHTTPSProxy_MITMCertGenerated(t *testing.T) {
 		t.Error("MITM cert should not be verifiable by the upstream's original CA")
 	}
 }
+
+// TestHTTPSProxy_PostBodyStoredAndReplayed verifies the https.go body-buffering
+// fix end-to-end: a POST with a JSON body tunnelled through CONNECT is stored
+// in SQLite and correctly replayed to the upstream.
+func TestHTTPSProxy_PostBodyStoredAndReplayed(t *testing.T) {
+	t.Parallel()
+
+	const wantBody = `{"https":"body"}`
+	var upstreamReceivedBody string
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		upstreamReceivedBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, tlsP, eng, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+	tlsP.SetUpstreamTLSConfig(upstream.Client().Transport.(*http.Transport).TLSClientConfig)
+
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	caPEM, err := tlsP.CACertPEM()
+	if err != nil {
+		t.Fatalf("CACertPEM: %v", err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caPEM)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL)),
+			TLSClientConfig: &tls.Config{
+				RootCAs: caPool,
+			},
+		},
+	}
+
+	// Send POST with a JSON body over HTTPS through the MITM proxy.
+	resp, err := client.Post(upstream.URL+"/api", "application/json", strings.NewReader(wantBody))
+	if err != nil {
+		t.Fatalf("HTTPS POST through MITM proxy: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status: got %d, want 200", resp.StatusCode)
+	}
+
+	// Verify the upstream received the body during the proxied request.
+	if upstreamReceivedBody != wantBody {
+		t.Errorf("upstream received body during HTTPS proxy: got %q, want %q", upstreamReceivedBody, wantBody)
+	}
+
+	// Verify the body was persisted in storage.
+	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0)
+	if err != nil {
+		t.Fatalf("list transactions: %v", err)
+	}
+	if len(reqs) == 0 {
+		t.Fatal("no POST transaction found in storage after HTTPS proxy")
+	}
+	if string(reqs[0].Body) != wantBody {
+		t.Errorf("stored request body: got %q, want %q", string(reqs[0].Body), wantBody)
+	}
+
+	// Replay the stored request and verify the upstream receives the same body.
+	upstreamReceivedBody = ""
+	replayEng := replayengine.NewEngine(eng.DB(), &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: upstream.Client().Transport.(*http.Transport).TLSClientConfig,
+		},
+	})
+	replayResp, err := replayEng.ReplayRequest(context.Background(), &replayengine.ReplayRequest{
+		RequestID:       reqs[0].ID,
+		FollowRedirects: true,
+	})
+	if err != nil {
+		t.Fatalf("ReplayRequest: %v", err)
+	}
+	replayResp.Body.Close()
+
+	if upstreamReceivedBody != wantBody {
+		t.Errorf("upstream received body during HTTPS replay: got %q, want %q", upstreamReceivedBody, wantBody)
+	}
+}
+

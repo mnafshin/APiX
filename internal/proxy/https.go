@@ -103,12 +103,25 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	reqID := uuid.NewString()
 	start := time.Now()
 
+	// Buffer the entire request body so it can be stored and forwarded.
+	var bodyBytes []byte
+	if r.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(r.Body)
+		if err != nil {
+			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read request body: %v", err))
+			return
+		}
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+
 	proxyReq := &plugins.ProxyRequest{
 		ID:      reqID,
 		Method:  r.Method,
 		URL:     r.URL,
 		Headers: r.Header.Clone(),
-		Body:    r.Body,
+		Body:    io.NopCloser(bytes.NewReader(bodyBytes)),
 		Raw:     r,
 	}
 
@@ -129,7 +142,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 
 	// Breakpoint check.
-	tx := &Transaction{ID: reqID, Request: proxyReq}
+	tx := &Transaction{ID: reqID, Request: proxyReq, RequestBody: bodyBytes}
 	if p.engine != nil {
 		modified, action, err := p.engine.PauseRequest(tx)
 		if err != nil {

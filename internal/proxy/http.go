@@ -98,13 +98,25 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	reqID := uuid.NewString()
 	start := time.Now()
 
+	// Buffer the entire request body so it can be stored and forwarded.
+	var bodyBytes []byte
+	if r.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("read request body: %v", err), http.StatusBadGateway)
+			return
+		}
+		r.Body.Close()
+	}
+
 	// Convert net/http request to ProxyRequest.
 	proxyReq := &plugins.ProxyRequest{
 		ID:      reqID,
 		Method:  r.Method,
 		URL:     r.URL,
 		Headers: r.Header.Clone(),
-		Body:    r.Body,
+		Body:    io.NopCloser(bytes.NewReader(bodyBytes)),
 		Raw:     r,
 	}
 
@@ -126,8 +138,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Check breakpoints.
 	tx := &Transaction{
-		ID:      reqID,
-		Request: proxyReq,
+		ID:          reqID,
+		Request:     proxyReq,
+		RequestBody: bodyBytes,
 	}
 	if p.engine != nil {
 		bpID := "" // The engine handles evaluation internally via PauseRequest.

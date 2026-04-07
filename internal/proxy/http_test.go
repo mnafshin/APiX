@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
+	replayengine "github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/storage"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -245,7 +247,79 @@ func TestHTTPProxy_PluginModifiesResponseHeader(t *testing.T) {
 	}
 }
 
-// TestHTTPProxy_BreakpointPausesAndForwards verifies that the proxy pauses at a
+// TestHTTPProxy_PostBodyStoredAndReplayed is an end-to-end test that sends a
+// POST with a JSON body through the proxy, verifies the body is persisted in
+// storage, then replays the stored request and confirms the upstream receives
+// the original body unchanged.
+func TestHTTPProxy_PostBodyStoredAndReplayed(t *testing.T) {
+	t.Parallel()
+
+	const wantBody = `{"key":"value"}`
+	var upstreamReceivedBody string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		upstreamReceivedBody = string(b)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, eng, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL)),
+		},
+	}
+
+	// Send POST with a JSON body through the proxy.
+	resp, err := client.Post(upstream.URL+"/api", "application/json", strings.NewReader(wantBody))
+	if err != nil {
+		t.Fatalf("POST through proxy: %v", err)
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status: got %d, want 200", resp.StatusCode)
+	}
+
+	// Verify the upstream received the body during the proxied request.
+	if upstreamReceivedBody != wantBody {
+		t.Errorf("upstream received body during proxy: got %q, want %q", upstreamReceivedBody, wantBody)
+	}
+
+	// Verify the body was persisted in storage.
+	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0)
+	if err != nil {
+		t.Fatalf("list transactions: %v", err)
+	}
+	if len(reqs) == 0 {
+		t.Fatal("no POST transaction found in storage")
+	}
+	if string(reqs[0].Body) != wantBody {
+		t.Errorf("stored request body: got %q, want %q", string(reqs[0].Body), wantBody)
+	}
+
+	// Replay the stored request and verify the upstream receives the same body.
+	upstreamReceivedBody = ""
+	replayEng := replayengine.NewEngine(eng.DB(), nil)
+	replayResp, err := replayEng.ReplayRequest(context.Background(), &replayengine.ReplayRequest{
+		RequestID:       reqs[0].ID,
+		FollowRedirects: true,
+	})
+	if err != nil {
+		t.Fatalf("ReplayRequest: %v", err)
+	}
+	replayResp.Body.Close()
+
+	if upstreamReceivedBody != wantBody {
+		t.Errorf("upstream received body during replay: got %q, want %q", upstreamReceivedBody, wantBody)
+	}
+}
+
 // breakpoint, waits for an explicit resume decision, and then delivers the
 // correct upstream response to the client.
 func TestHTTPProxy_BreakpointPausesAndForwards(t *testing.T) {

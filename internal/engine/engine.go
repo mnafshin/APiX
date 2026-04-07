@@ -54,20 +54,13 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 				hdrs[k] = vv[0]
 			}
 		}
-		var body []byte
-		if req.Body != nil {
-			// body was already drained during proxy handling; Raw may hold a snapshot
-		}
-		if req.Raw != nil && req.Raw.Body != nil {
-			// body has been consumed; use empty
-		}
 
 		rec := &storage.RequestRecord{
 			ID:         tx.ID,
 			Method:     req.Method,
 			URL:        req.URL.String(),
 			Headers:    hdrs,
-			Body:       body,
+			Body:       tx.RequestBody,
 			Timestamp:  time.Now(),
 			DurationMs: tx.DurationMs,
 		}
