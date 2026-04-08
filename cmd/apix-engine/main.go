@@ -73,7 +73,7 @@ func main() {
 		DialTimeout:         time.Duration(cfg.DialTimeoutSec) * time.Second,
 	}
 	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts)
-	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts)
+	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)
 
 	// 9. Start gRPC server.
 	wg.Add(1)

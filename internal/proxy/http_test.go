@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mnafshin/apix/internal/breakpoints"
+	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
@@ -49,7 +50,12 @@ func newTestStack(t *testing.T) (*proxy.HTTPProxy, *proxy.TLSProxy, *engine.Engi
 	tlsP := proxy.NewTLSProxy(ca, eng, proxy.TransportOptions{})
 	tlsP.SetPlugins(rt)
 
-	httpP := proxy.NewHTTPProxy("", tlsP, eng, proxy.TransportOptions{})
+	cfg := &config.Config{
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
+	}
+	httpP := proxy.NewHTTPProxy("", tlsP, eng, proxy.TransportOptions{}, cfg)
 	httpP.SetPlugins(rt)
 
 	return httpP, tlsP, eng, bpMgr, rt
