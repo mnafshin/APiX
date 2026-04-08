@@ -11,76 +11,86 @@ import * as path from 'path';
  */
 export class EngineProcessManager {
     private process: child_process.ChildProcess | null = null;
+    private isStarting = false;
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     /** Start the engine subprocess. Resolves when the engine signals readiness. */
     async start(): Promise<void> {
-        if (this.isRunning()) { return; }
+        // Idempotent: if already running or starting, return immediately
+        if (this.isRunning() || this.isStarting) { return; }
 
-        const binaryPath = this._binaryPath();
-        const outputChannel = vscode.window.createOutputChannel('APiX Engine');
-        outputChannel.show(true);
+        this.isStarting = true;
+        try {
+            const binaryPath = this._binaryPath();
+            const outputChannel = vscode.window.createOutputChannel('APiX Engine');
+            outputChannel.show(true);
 
-        return new Promise((resolve, reject) => {
-            try {
-                const proc = child_process.spawn(binaryPath, [], {
-                    stdio: ['ignore', 'pipe', 'pipe'],
-                });
-                this.process = proc;
+            return new Promise((resolve, reject) => {
+                try {
+                    const proc = child_process.spawn(binaryPath, [], {
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                    });
+                    this.process = proc;
 
-                let resolved = false;
-                const resolveOnce = () => {
-                    if (!resolved) {
-                        resolved = true;
-                        resolve();
-                    }
-                };
+                    let resolved = false;
+                    const resolveOnce = () => {
+                        if (!resolved) {
+                            resolved = true;
+                            this.isStarting = false;
+                            resolve();
+                        }
+                    };
 
-                const timeout = setTimeout(() => {
-                    outputChannel.appendLine('[APiX] Warning: engine did not signal ready within 10s — proceeding anyway.');
-                    resolveOnce();
-                }, 10000);
-
-                proc.stdout?.on('data', (data: Buffer) => {
-                    const text = data.toString();
-                    outputChannel.append(text);
-                    if (text.includes('gRPC server listening') || text.includes('Starting gRPC')) {
-                        clearTimeout(timeout);
+                    const timeout = setTimeout(() => {
+                        outputChannel.appendLine('[APiX] Warning: engine did not signal ready within 10s — proceeding anyway.');
                         resolveOnce();
-                    }
-                });
+                    }, 10000);
 
-                proc.stderr?.on('data', (data: Buffer) => {
-                    outputChannel.append(data.toString());
-                });
+                    proc.stdout?.on('data', (data: Buffer) => {
+                        const text = data.toString();
+                        outputChannel.append(text);
+                        if (text.includes('gRPC server listening') || text.includes('Starting gRPC')) {
+                            clearTimeout(timeout);
+                            resolveOnce();
+                        }
+                    });
 
-                proc.on('error', (err: Error) => {
-                    clearTimeout(timeout);
-                    outputChannel.appendLine(`[APiX] Process error: ${err.message}`);
-                    if (!resolved) {
-                        resolved = true;
-                        reject(err);
-                    }
-                });
+                    proc.stderr?.on('data', (data: Buffer) => {
+                        outputChannel.append(data.toString());
+                    });
 
-                proc.on('exit', (code: number | null, signal: string | null) => {
-                    clearTimeout(timeout);
-                    if (this.process === proc) {
-                        this.process = null;
-                    }
-                    if (code !== 0 && code !== null) {
-                        const msg = `APiX Engine exited unexpectedly (code ${code}, signal ${signal})`;
-                        outputChannel.appendLine(`[APiX] ${msg}`);
-                        vscode.window.showErrorMessage(msg, 'Restart').then(choice => {
-                            if (choice === 'Restart') { this.start(); }
-                        });
-                    }
-                });
-            } catch (err) {
-                reject(err);
-            }
-        });
+                    proc.on('error', (err: Error) => {
+                        clearTimeout(timeout);
+                        outputChannel.appendLine(`[APiX] Process error: ${err.message}`);
+                        if (!resolved) {
+                            resolved = true;
+                            this.isStarting = false;
+                            reject(err);
+                        }
+                    });
+
+                    proc.on('exit', (code: number | null, signal: string | null) => {
+                        clearTimeout(timeout);
+                        if (this.process === proc) {
+                            this.process = null;
+                        }
+                        if (code !== 0 && code !== null) {
+                            const msg = `APiX Engine exited unexpectedly (code ${code}, signal ${signal})`;
+                            outputChannel.appendLine(`[APiX] ${msg}`);
+                            vscode.window.showErrorMessage(msg, 'Restart').then(choice => {
+                                if (choice === 'Restart') { this.start(); }
+                            });
+                        }
+                    });
+                } catch (err) {
+                    this.isStarting = false;
+                    reject(err);
+                }
+            });
+        } finally {
+            this.isStarting = false;
+        }
     }
 
     /** Stop the engine subprocess gracefully (SIGTERM → wait 3s → SIGKILL). */
