@@ -1,0 +1,81 @@
+# APiX Example Configuration
+# Place at ~/.apix/config.yaml or /etc/apix/config.yaml
+
+# HTTP Proxy Settings
+http_port: "8080"              # Port for HTTP and HTTPS CONNECT proxy
+grpc_port: "9090"              # Port for gRPC API (VS Code extension, CLI)
+
+# Storage
+db_path: "~/.apix/apix.db"     # SQLite database location (auto-created if missing)
+
+# Authentication (remote deployments)
+# IMPORTANT: Use APIX_AUTH_TOKEN environment variable instead of plaintext config!
+# auth_token: "your-secret-token-here"
+
+# TLS/HTTPS Configuration (for remote engines, e.g., vscode.dev)
+tls_enabled: false
+ca_cert_path: "~/.apix/ca.pem"      # Generated automatically if missing
+ca_key_path: "~/.apix/ca-key.pem"   # Generated automatically if missing
+
+# HTTP Transport Tuning
+max_idle_conns_per_host: 10          # Connection pooling per upstream host
+idle_conn_timeout_sec: 90            # Close idle connections after 90s
+dial_timeout_sec: 10                 # Timeout for upstream connections
+
+# Replay Engine
+replay_skip_tls_verify: false        # WARNING: Only enable for development with self-signed certs!
+
+---
+# QUICK START
+
+# 1. Desktop (local development)
+# No config needed; defaults work fine.
+# Just run: apix-engine
+
+# 2. Local network (macOS)
+# Create ~/.apix/config.yaml with this file
+# Set auth token: export APIX_AUTH_TOKEN=your-secret-token
+# Run: apix-engine
+# Access from other machines: http://your-machine:8080
+
+# 3. Production server
+# 1. Create /etc/apix/config.yaml (this file)
+# 2. Create systemd service: sudo cp build/apix.service /etc/systemd/system/
+# 3. Set auth token: sudo systemctl set-environment APIX_AUTH_TOKEN=your-secret-token
+# 4. Start: sudo systemctl enable --now apix
+# 5. Verify: sudo journalctl -u apix
+
+# 4. Docker Compose
+# 1. Copy build/docker-compose.yml to your deployment directory
+# 2. Copy this file to config.yaml
+# 3. Set APIX_AUTH_TOKEN in .env file
+# 4. Run: docker-compose up -d
+
+---
+# SECURITY NOTES
+
+# Authentication:
+# - Use APIX_AUTH_TOKEN environment variable, not config file
+# - Generate a strong token: openssl rand -base64 32
+# - Change default ports if behind a firewall
+
+# TLS (for remote access):
+# - Enable tls_enabled: true for remote deployments
+# - Store certificates in secure location
+# - Use strong auth token with TLS
+
+# Network:
+# - Run behind a reverse proxy (nginx, traefik) for production
+# - Restrict gRPC port (9090) to trusted networks
+# - Use firewall rules to limit proxy access
+
+# Timeouts (optional, advanced):
+# - Add in future: read_timeout_sec, write_timeout_sec
+# - Prevent slowloris attacks
+# - Set reasonable values: 30-60 seconds
+
+---
+# ENVIRONMENT VARIABLES (override config)
+
+# APIX_CONFIG=/path/to/config.yaml   - Config file path
+# APIX_AUTH_TOKEN=secret-token        - Auth token (overrides config)

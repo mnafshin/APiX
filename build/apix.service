@@ -1,0 +1,36 @@
+[Unit]
+Description=APiX - HTTP/HTTPS API Debugger
+Documentation=https://github.com/mnafshin/apix
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=apix
+Group=apix
+WorkingDirectory=/opt/apix
+ExecStart=/usr/local/bin/apix-engine
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=apix
+
+# Security hardening
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/apix
+
+# Resource limits (optional)
+LimitNOFILE=65536
+LimitNPROC=512
+
+# Environment variables
+Environment="APIX_CONFIG=/etc/apix/config.yaml"
+# Note: Set APIX_AUTH_TOKEN via systemctl set-environment or in a separate file
+# EnvironmentFile=/etc/apix/apix.env
+
+[Install]
+WantedBy=multi-user.target

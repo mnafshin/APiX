@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  apix:
+    image: mnafshin/apix:1.0.0
+    container_name: apix-engine
+    ports:
+      - "8080:8080"   # HTTP proxy
+      - "9090:9090"   # gRPC API
+    environment:
+      # Set these securely (via .env file or secrets)
+      APIX_AUTH_TOKEN: ${APIX_AUTH_TOKEN:-change-me}
+      APIX_CONFIG: /etc/apix/config.yaml
+    volumes:
+      # Config file
+      - ./config.yaml:/etc/apix/config.yaml:ro
+      # Data persistence
+      - apix-data:/root/.apix
+      # Optional: Custom CA certs
+      # - ./certs:/etc/apix/certs:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Security: run as non-root (optional)
+    user: "1000:1000"
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  apix-data:
+    driver: local
