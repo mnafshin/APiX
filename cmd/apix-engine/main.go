@@ -100,6 +100,18 @@ func main() {
 	httpProxy.Close()
 	tlsProxy.Close()
 	
-	wg.Wait()
-	log.Println("Goodbye.")
+	// 13. Wait for all goroutines to finish, with a timeout.
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	
+	select {
+	case <-done:
+		log.Println("Goodbye.")
+	case <-time.After(30 * time.Second):
+		log.Println("FATAL: shutdown timeout exceeded (30s), forcing exit")
+		os.Exit(1)
+	}
 }

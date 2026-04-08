@@ -62,8 +62,11 @@ func startStack(t *testing.T) *testStack {
 	}
 	grpcPort := grpcLis.Addr().(*net.TCPAddr).Port
 	cfg := &config.Config{
-		HTTPPort: "0",
-		GRPCPort: fmt.Sprintf("%d", grpcPort),
+		HTTPPort:              "0",
+		GRPCPort:              fmt.Sprintf("%d", grpcPort),
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
 	}
 	grpcSrv := grpc.NewServer()
 	apix.RegisterEngineServer(grpcSrv, server.NewEngineServer(eng, re, cfg))
@@ -78,7 +81,7 @@ func startStack(t *testing.T) *testStack {
 		t.Fatalf("proxy listen: %v", err)
 	}
 	proxyPort := proxyLis.Addr().(*net.TCPAddr).Port
-	httpProxy := iproxy.NewHTTPProxy("", nil, eng, iproxy.TransportOptions{})
+	httpProxy := iproxy.NewHTTPProxy("", nil, eng, iproxy.TransportOptions{}, cfg)
 	httpSrv := &http.Server{Handler: httpProxy}
 	go httpSrv.Serve(proxyLis) //nolint:errcheck
 
