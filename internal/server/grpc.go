@@ -417,7 +417,7 @@ func NewGRPCServer(cfg *config.Config) *grpc.Server {
 
 // StartGRPCServer starts the gRPC server and blocks until ctx is cancelled.
 func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine, cfg *config.Config) {
-	addr := ":" + cfg.GRPCPort
+	addr := cfg.GRPCBindAddress + ":" + cfg.GRPCPort
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("gRPC listen on %s: %v", addr, err)

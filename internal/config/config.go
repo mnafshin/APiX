@@ -11,6 +11,7 @@ import (
 type Config struct {
 	HTTPPort            string `yaml:"http_port"`
 	GRPCPort            string `yaml:"grpc_port"`
+	GRPCBindAddress     string `yaml:"grpc_bind_address"`
 	DBPath              string `yaml:"db_path"`
 	CACertPath          string `yaml:"ca_cert_path"`
 	CAKeyPath           string `yaml:"ca_key_path"`
@@ -61,6 +62,7 @@ func LoadConfig(path string) *Config {
 	cfg := &Config{
 		HTTPPort:            "8080",
 		GRPCPort:            "9090",
+		GRPCBindAddress:     "127.0.0.1",
 		DBPath:              "apix.db",
 		CACertPath:          filepath.Join(home, ".apix", "ca.pem"),
 		CAKeyPath:           filepath.Join(home, ".apix", "ca-key.pem"),
@@ -91,6 +93,11 @@ func LoadConfig(path string) *Config {
 		cfg.AuthToken = envToken
 	} else if tokenFromFile {
 		log.Println("WARNING: auth_token is set in config.yaml. Consider using the APIX_AUTH_TOKEN environment variable instead to avoid storing secrets in plaintext.")
+	}
+
+	// If AuthToken is set (production mode), bind to 0.0.0.0 by default for remote access
+	if cfg.AuthToken != "" && cfg.GRPCBindAddress == "127.0.0.1" {
+		cfg.GRPCBindAddress = "0.0.0.0"
 	}
 
 	return cfg
