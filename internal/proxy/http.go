@@ -255,3 +255,11 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse) {
 func (p *HTTPProxy) SetPlugins(chain PluginChain) {
 	p.plugins = chain
 }
+
+// Close gracefully shuts down the HTTP proxy and closes idle connections.
+func (p *HTTPProxy) Close() {
+	if p.transport != nil {
+		p.transport.CloseIdleConnections()
+	}
+}
+

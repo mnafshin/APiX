@@ -209,9 +209,11 @@ func TestHTTPSProxy_PostBodyStoredAndReplayed(t *testing.T) {
 
 	// Replay the stored request and verify the upstream receives the same body.
 	upstreamReceivedBody = ""
-	replayEng := replayengine.NewEngine(eng.DB(), &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: upstream.Client().Transport.(*http.Transport).TLSClientConfig,
+	replayEng := replayengine.NewEngine(eng.DB(), &replayengine.ClientConfig{
+		Client: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: upstream.Client().Transport.(*http.Transport).TLSClientConfig,
+			},
 		},
 	})
 	replayResp, err := replayEng.ReplayRequest(context.Background(), &replayengine.ReplayRequest{

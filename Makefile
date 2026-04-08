@@ -31,7 +31,9 @@ proto:
 		pkg/api/proto/apix.proto
 
 # Build VS Code extension
-ext-build:
+ext-build: build
+	mkdir -p apix-vscode/bin
+	cp $(ENGINE_BIN) apix-vscode/bin/apix-engine
 	cd apix-vscode && npm install && npm run compile
 
 # Package VS Code extension as .vsix

@@ -27,8 +27,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	// 1. Load config.
-	cfg := config.LoadConfig("internal/config/config.yaml")
+	// 1. Load config from well-known search paths.
+	cfg := config.LoadConfig(config.DefaultPath())
 
 	// 2. Open SQLite database.
 	db, err := storage.Open(cfg.DBPath)
@@ -61,8 +61,10 @@ func main() {
 	// 6. Create Engine.
 	eng := engine.New(db, bpManager, pluginRT)
 
-	// 7. Create replay Engine.
-	replayEng := replay.NewEngine(db, nil)
+	// 7. Create replay Engine with TLS config from settings.
+	replayEng := replay.NewEngine(db, &replay.ClientConfig{
+		SkipTLSVerify: cfg.ReplaySkipTLSVerify,
+	})
 
 	// 8. Create TLS + HTTP proxies.
 	transportOpts := proxy.TransportOptions{
@@ -93,6 +95,11 @@ func main() {
 	<-stop
 	log.Println("Shutting down…")
 	cancel()
+	
+	// 12. Close proxies to release file descriptors.
+	httpProxy.Close()
+	tlsProxy.Close()
+	
 	wg.Wait()
 	log.Println("Goodbye.")
 }

@@ -19,6 +19,35 @@ type Config struct {
 	MaxIdleConnsPerHost int    `yaml:"max_idle_conns_per_host"`
 	IdleConnTimeoutSec  int    `yaml:"idle_conn_timeout_sec"`
 	DialTimeoutSec      int    `yaml:"dial_timeout_sec"`
+	ReplaySkipTLSVerify bool   `yaml:"replay_skip_tls_verify"`
+}
+
+// DefaultPath returns the config file path following these priorities:
+// 1. APIX_CONFIG environment variable
+// 2. ~/.apix/config.yaml
+// 3. /etc/apix/config.yaml
+// 4. ./config.yaml (for portable/dev installs)
+func DefaultPath() string {
+	// 1. Check APIX_CONFIG env var
+	if path := os.Getenv("APIX_CONFIG"); path != "" {
+		return path
+	}
+
+	// 2. Check ~/.apix/config.yaml
+	if home, err := os.UserHomeDir(); err == nil {
+		configPath := filepath.Join(home, ".apix", "config.yaml")
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+
+	// 3. Check /etc/apix/config.yaml
+	if _, err := os.Stat("/etc/apix/config.yaml"); err == nil {
+		return "/etc/apix/config.yaml"
+	}
+
+	// 4. Fall back to ./config.yaml for portable installs
+	return "./config.yaml"
 }
 
 // LoadConfig reads configuration from a YAML file.

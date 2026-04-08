@@ -17,6 +17,7 @@ import (
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/replay"
+	"github.com/mnafshin/apix/pkg/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -54,7 +55,7 @@ func (s *EngineServer) GetStatus(ctx context.Context, _ *apix.StatusRequest) (*a
 	}
 	return &apix.StatusResponse{
 		Status:     "OK",
-		Version:    "1.0.0",
+		Version:    version.Version,
 		ProxyPort:  int32(httpPort),
 		GrpcPort:   int32(grpcPort),
 		TlsEnabled: s.cfg.TLSEnabled,
@@ -424,7 +425,13 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 
 	grpcServer := NewGRPCServer(cfg)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
-	reflection.Register(grpcServer)
+	
+	// Enable reflection only in unauthenticated (local development) mode.
+	// When AuthToken is set for remote/production deployments, reflection
+	// is disabled to prevent API surface enumeration bypass of auth.
+	if cfg.AuthToken == "" {
+		reflection.Register(grpcServer)
+	}
 
 	go func() {
 		<-ctx.Done()

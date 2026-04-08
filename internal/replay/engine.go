@@ -11,6 +11,12 @@ import (
 	"github.com/mnafshin/apix/internal/storage"
 )
 
+// ClientConfig holds options for the replay HTTP client.
+type ClientConfig struct {
+	SkipTLSVerify bool
+	Client        *http.Client
+}
+
 // Engine replays stored or user-supplied HTTP requests against the original
 // (or a configured) upstream host.
 type Engine struct {
@@ -18,17 +24,31 @@ type Engine struct {
 	client *http.Client
 }
 
-// NewEngine creates a replay engine with optional custom http.Client.
-// If client is nil, a default client with TLS verification disabled is used
-// (appropriate for intercepting-proxy use).
-func NewEngine(db *storage.DB, client *http.Client) *Engine {
-	if client == nil {
+// NewEngine creates a replay engine.
+// If cfg is nil, uses system certificate pool (TLS verification enabled).
+// Accepts optional custom http.Client or ClientConfig.SkipTLSVerify to bypass verification.
+func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
+	var client *http.Client
+
+	if cfg != nil && cfg.Client != nil {
+		// Use custom client if provided
+		client = cfg.Client
+	} else if cfg != nil && cfg.SkipTLSVerify {
+		// Create client with InsecureSkipVerify (for self-signed cert scenarios)
 		client = &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
 			},
 		}
+	} else {
+		// Default: use system certificate pool (TLS verification enabled)
+		client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{}, // Uses system root CAs
+			},
+		}
 	}
+
 	return &Engine{db: db, client: client}
 }
 

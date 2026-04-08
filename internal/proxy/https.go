@@ -273,3 +273,10 @@ func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 		log.Printf("tls proxy: write response to client: %v", err)
 	}
 }
+
+// Close gracefully shuts down the TLS proxy and closes idle connections.
+func (p *TLSProxy) Close() {
+	if p.transport != nil {
+		p.transport.CloseIdleConnections()
+	}
+}

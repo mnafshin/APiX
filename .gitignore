@@ -76,6 +76,7 @@ apix-cli
 apix-vscode/out/
 apix-vscode/node_modules/
 apix-vscode/*.vsix
+apix-vscode/bin/
 
 # -----------------------
 # Docker / Containers
