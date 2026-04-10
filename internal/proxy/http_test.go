@@ -47,14 +47,17 @@ func newTestStack(t *testing.T) (*proxy.HTTPProxy, *proxy.TLSProxy, *engine.Engi
 		t.Fatalf("NewCertAuthority: %v", err)
 	}
 
-	tlsP := proxy.NewTLSProxy(ca, eng, proxy.TransportOptions{})
-	tlsP.SetPlugins(rt)
-
 	cfg := &config.Config{
 		HTTPReadHeaderTimeout: 10,
 		HTTPReadTimeout:       30,
 		HTTPWriteTimeout:      120,
+		HTTPIdleTimeout:       120,
+		MaxBodySizeMB:         32,
 	}
+
+	tlsP := proxy.NewTLSProxy(ca, eng, proxy.TransportOptions{}, cfg)
+	tlsP.SetPlugins(rt)
+
 	httpP := proxy.NewHTTPProxy("", tlsP, eng, proxy.TransportOptions{}, cfg)
 	httpP.SetPlugins(rt)
 
