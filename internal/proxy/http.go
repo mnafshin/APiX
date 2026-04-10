@@ -144,7 +144,6 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body.Close()
 	}
 
-	// Convert net/http request to ProxyRequest.
 	proxyReq := &plugins.ProxyRequest{
 		ID:      reqID,
 		Method:  r.Method,
@@ -180,7 +179,15 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// If a plugin set a mocked response, short-circuit.
 	if proxyReq.MockedResponse != nil {
-		writeProxyResponse(w, proxyReq.MockedResponse)
+		var mockedBody []byte
+		if proxyReq.MockedResponse.Body != nil {
+			var err error
+			mockedBody, err = io.ReadAll(proxyReq.MockedResponse.Body)
+			if err != nil {
+				log.Printf("read mocked response body: %v", err)
+			}
+		}
+		writeProxyResponse(w, proxyReq.MockedResponse, mockedBody)
 		return
 	}
 
@@ -204,7 +211,15 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		case ResumeRespond:
 			if tx.Response != nil {
-				writeProxyResponse(w, tx.Response)
+				var respBody []byte
+				if tx.Response.Body != nil {
+					var err error
+					respBody, err = io.ReadAll(tx.Response.Body)
+					if err != nil {
+						log.Printf("read synthetic response body: %v", err)
+					}
+				}
+				writeProxyResponse(w, tx.Response, respBody)
 			} else {
 				http.Error(w, "no synthetic response provided", http.StatusBadGateway)
 			}
@@ -228,21 +243,30 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	defer upResp.Body.Close()
 
 	// Limit response body size to prevent OOM denial of service.
-	limitedBody := io.LimitReader(upResp.Body, maxBodyBytes)
-	respBody, err := io.ReadAll(limitedBody)
+	respBody, err := io.ReadAll(upResp.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("response body read error: %v", err), http.StatusBadGateway)
 		return
 	}
+	
+	// Enforce size limit after reading
+	if int64(len(respBody)) > maxBodyBytes {
+		http.Error(w, fmt.Sprintf("response body too large: %d bytes > %d bytes", len(respBody), maxBodyBytes), http.StatusBadGateway)
+		return
+	}
+	
+	// Create proxyResp without Body initially - keep respBody buffered separately.
+	// After plugins run, we'll use the final body bytes directly in writeProxyResponse.
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
 		Headers:    upResp.Header.Clone(),
-		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Body:       nil,
 		Raw:        upResp,
 	}
 
 	// Run plugin OnResponse chain (with panic recovery).
+	var finalRespBody = respBody
 	if p.plugins != nil {
 		func() {
 			defer func() {
@@ -250,28 +274,25 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 					log.Printf("HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
 				}
 			}()
+			// Give plugins the body they expect
+			proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
 			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
 			if err != nil {
 				log.Printf("plugin OnResponse error: %v", err)
 			} else if modResp != nil {
 				proxyResp = modResp
+				// Extract body from modified response if provided
+				if modResp.Body != nil {
+					limitedBody := io.LimitReader(modResp.Body, maxBodyBytes)
+					var readErr error
+					finalRespBody, readErr = io.ReadAll(limitedBody)
+					if readErr != nil {
+						log.Printf("plugin modified response body read error: %v", readErr)
+						// Keep the original respBody on error
+					}
+				}
 			}
 		}()
-	}
-
-	// Buffer the final response body (plugins may have modified it) so we can
-	// both persist it and still write it to the client.
-	// Apply body size limit here too.
-	var finalRespBody []byte
-	if proxyResp.Body != nil {
-		limitedBody := io.LimitReader(proxyResp.Body, maxBodyBytes)
-		var readErr error
-		finalRespBody, readErr = io.ReadAll(limitedBody)
-		if readErr != nil {
-			http.Error(w, fmt.Sprintf("read response body: %v", readErr), http.StatusBadGateway)
-			return
-		}
-		proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
 	}
 
 	// Store transaction.
@@ -284,23 +305,29 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeProxyResponse(w, proxyResp)
+	writeProxyResponse(w, proxyResp, finalRespBody)
 }
 
 // writeProxyResponse writes a ProxyResponse back to the http.ResponseWriter.
-func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse) {
+func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse, body []byte) {
 	for k, vv := range resp.Headers {
+		// Don't copy Content-Length; we'll set it accurately based on body
+		if k == "Content-Length" {
+			continue
+		}
 		for _, v := range vv {
 			w.Header().Add(k, v)
 		}
 	}
+	
+	if len(body) > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+	} else {
+		w.Header().Set("Content-Length", "0")
+	}
+	
 	w.WriteHeader(resp.StatusCode)
-	if resp.Body != nil {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Printf("proxy: read response body for write: %v", err)
-			return
-		}
+	if len(body) > 0 {
 		if _, err := w.Write(body); err != nil {
 			log.Printf("proxy: write response to client: %v", err)
 		}

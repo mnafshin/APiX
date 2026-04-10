@@ -67,6 +67,7 @@ func startStack(t *testing.T) *testStack {
 		HTTPReadHeaderTimeout: 10,
 		HTTPReadTimeout:       30,
 		HTTPWriteTimeout:      120,
+		MaxBodySizeMB:         32,
 	}
 	grpcSrv := grpc.NewServer()
 	apix.RegisterEngineServer(grpcSrv, server.NewEngineServer(eng, re, cfg))
