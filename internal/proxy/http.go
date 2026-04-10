@@ -44,6 +44,7 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 		ReadHeaderTimeout: time.Duration(p.cfg.HTTPReadHeaderTimeout) * time.Second,
 		ReadTimeout:       time.Duration(p.cfg.HTTPReadTimeout) * time.Second,
 		WriteTimeout:      time.Duration(p.cfg.HTTPWriteTimeout) * time.Second,
+		IdleTimeout:       time.Duration(p.cfg.HTTPIdleTimeout) * time.Second,
 	}
 	go func() {
 		<-ctx.Done()
@@ -53,8 +54,8 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 			log.Printf("http proxy shutdown: %v", err)
 		}
 	}()
-	log.Printf("HTTP proxy listening on %s (timeouts: header=%v, read=%v, write=%v)",
-		p.addr, srv.ReadHeaderTimeout, srv.ReadTimeout, srv.WriteTimeout)
+	log.Printf("HTTP proxy listening on %s (timeouts: header=%v, read=%v, write=%v, idle=%v)",
+		p.addr, srv.ReadHeaderTimeout, srv.ReadTimeout, srv.WriteTimeout, srv.IdleTimeout)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("http proxy: %w", err)
 	}
