@@ -274,7 +274,10 @@ func (s *EngineServer) ReplayRequest(ctx context.Context, req *apix.ReplaySpec) 
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read replay response body: %v", err)
+	}
 	hdrs := make(map[string]string)
 	for k, vv := range resp.Header {
 		if len(vv) > 0 {
