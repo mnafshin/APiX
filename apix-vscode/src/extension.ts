@@ -102,12 +102,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export function deactivate(): void {
+    // Cancel any active streams
     pausedRequestsStream?.cancel();
+    pausedRequestsStream = undefined;
+    
+    // Stop engine process
     processManager?.stop();
+    
+    // Dispose all providers and their EventEmitters
     trafficProvider?.dispose();
     breakpointsProvider?.dispose();
+    
+    // Dispose webview panels
     TrafficPanel.currentPanel?.dispose();
+    
+    // Close gRPC client
     engineClient?.close();
+    
+    // Dispose status bar item
+    statusBarItem?.dispose();
 }
 
 async function startEngine(
