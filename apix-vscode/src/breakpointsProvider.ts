@@ -10,7 +10,7 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
     private _onDidChangeTreeData = new vscode.EventEmitter<BreakpointItem | ErrorItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    constructor(private readonly client: EngineClient) {}
+    constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {}
 
     /** Force a refresh of the tree view. */
     refresh(): void {
@@ -34,7 +34,8 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
             return (list.breakpoints || []).map(rule => new BreakpointItem(rule));
         } catch (err: any) {
             const msg = err?.message || String(err);
-            console.error(`[APiX] Breakpoints view error: ${msg}`);
+            this.output?.appendLine(`[APiX] Breakpoints view error: ${msg}`);
+            vscode.window.showErrorMessage(`APiX: Breakpoints view error — ${msg}`);
             return [new ErrorItem(`Engine unreachable: ${msg}`)];
         }
     }

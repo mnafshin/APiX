@@ -13,6 +13,7 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let pausedRequestsStream: { cancel: () => void } | undefined;
 let trafficProvider: TrafficProvider | undefined;
 let breakpointsProvider: BreakpointsProvider | undefined;
+let outputChannel: vscode.OutputChannel | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('apix');
@@ -30,11 +31,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
+    // Output channel for extension logging and error reporting
+    outputChannel = vscode.window.createOutputChannel('APiX');
+    context.subscriptions.push(outputChannel);
+
     processManager = new EngineProcessManager(context);
     engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken);
 
-    trafficProvider = new TrafficProvider(engineClient);
-    breakpointsProvider = new BreakpointsProvider(engineClient);
+    trafficProvider = new TrafficProvider(engineClient, outputChannel);
+    breakpointsProvider = new BreakpointsProvider(engineClient, outputChannel);
 
     const trafficViewDisposable = vscode.window.registerTreeDataProvider(
         'apix.trafficView',
@@ -121,6 +126,9 @@ export function deactivate(): void {
     
     // Dispose status bar item
     statusBarItem?.dispose();
+
+    // Dispose output channel
+    outputChannel?.dispose();
 }
 
 async function startEngine(
@@ -182,8 +190,8 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
                 RequestEditor.showEditor(context.extensionUri, client, paused);
             },
             (err) => {
-                // Silently ignore — engine may not be running
-                console.warn('[APiX] WatchPausedRequests stream error:', err?.message);
+                // Log to output channel so user can inspect stream errors
+                outputChannel?.appendLine(`[APiX] WatchPausedRequests stream error: ${err?.message || err}`);
             },
             () => {
                 console.log('[APiX] WatchPausedRequests stream ended.');
@@ -191,7 +199,7 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
         );
         pausedRequestsStream = stream;
     } catch (err) {
-        console.warn('[APiX] Could not start WatchPausedRequests:', err);
+        outputChannel?.appendLine(`[APiX] Could not start WatchPausedRequests: ${err}`);
     }
 }
 

@@ -12,7 +12,7 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
 
     private readonly maxItems: number;
 
-    constructor(private readonly client: EngineClient) {
+    constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {
         const config = vscode.workspace.getConfiguration('apix');
         this.maxItems = config.get<number>('traffic.maxItems', 500);
     }
@@ -43,7 +43,8 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
             return txs.map(tx => new TrafficItem(tx));
         } catch (err: any) {
             const msg = err?.message || String(err);
-            console.error(`[APiX] Traffic view error: ${msg}`);
+            this.output?.appendLine(`[APiX] Traffic view error: ${msg}`);
+            vscode.window.showErrorMessage(`APiX: Traffic view error — ${msg}`);
             return [new ErrorItem(`Engine unreachable: ${msg}`)];
         }
     }
