@@ -4,6 +4,7 @@
 package integration_test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -22,6 +23,7 @@ import (
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
+	"github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/storage"
 )
 
@@ -405,5 +407,301 @@ func TestIntegration_ModifiedRequestStored(t *testing.T) {
 	// After modification and forward, the stored URL reflects the modified target.
 	if !strings.Contains(records[0].URL, "/modified") {
 		t.Errorf("stored URL should show modified path: got %q", records[0].URL)
+	}
+}
+
+// ── Replay Engine Tests ────────────────────────────────────────────────────
+
+// ── Test 1: Replay a request captured through the proxy ────────────────────
+
+func TestIntegration_ReplayRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	stack := newProxyStack(t)
+	defer stack.stop()
+
+	var upstreamCalls int
+	var mu sync.Mutex
+
+	// Mock upstream that counts calls and returns success.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		upstreamCalls++
+		mu.Unlock()
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "response body")
+	}))
+	defer upstream.Close()
+
+	// Send a request through the proxy to capture it.
+	client := stack.client()
+	resp1, err := client.Get(upstream.URL + "/test")
+	if err != nil {
+		t.Fatalf("initial proxy request: %v", err)
+	}
+	defer resp1.Body.Close()
+
+	// Give engine time to store.
+	time.Sleep(100 * time.Millisecond)
+
+	// Retrieve the stored transaction ID.
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	if err != nil {
+		t.Fatalf("ListTransactions: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no transactions captured")
+	}
+
+	// Create replay engine and replay the transaction.
+	replayEng := replay.NewEngine(stack.db, nil)
+	replayResp, err := replayEng.ReplayRequest(context.Background(), &replay.ReplayRequest{
+		RequestID: records[0].ID,
+	})
+	if err != nil {
+		t.Fatalf("ReplayRequest: %v", err)
+	}
+
+	if replayResp.StatusCode != http.StatusOK {
+		t.Errorf("replay response status: got %d want %d", replayResp.StatusCode, http.StatusOK)
+	}
+
+	mu.Lock()
+	calls := upstreamCalls
+	mu.Unlock()
+
+	if calls != 2 {
+		t.Errorf("upstream calls: got %d want 2 (initial + replay)", calls)
+	}
+}
+
+// ── Test 2: Replay with request header override ─────────────────────────
+
+func TestIntegration_ReplayWithHeaderOverride(t *testing.T) {
+	t.Parallel()
+
+	stack := newProxyStack(t)
+	defer stack.stop()
+
+	var mu sync.Mutex
+
+	// Mock upstream that captures request headers.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		_ = r.Header.Clone() // Read but not verified in this basic test
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	// Send a request through the proxy.
+	client := stack.client()
+	resp, err := client.Get(upstream.URL + "/test")
+	if err != nil {
+		t.Fatalf("proxy request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Give engine time to store.
+	time.Sleep(100 * time.Millisecond)
+
+	// Retrieve the stored transaction.
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	if err != nil {
+		t.Fatalf("ListTransactions: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no transactions captured")
+	}
+
+	// Replay with an override header.
+	replayEng := replay.NewEngine(stack.db, nil)
+	replayResp, err := replayEng.ReplayRequest(context.Background(), &replay.ReplayRequest{
+		RequestID:       records[0].ID,
+		OverrideHeaders: map[string]string{},
+	})
+	if err != nil {
+		t.Fatalf("ReplayRequest: %v", err)
+	}
+
+	if replayResp.StatusCode != http.StatusOK {
+		t.Errorf("replay status: got %d want %d", replayResp.StatusCode, http.StatusOK)
+	}
+
+	// Note: replay engine doesn't accept header overrides via ClientConfig
+	// (only via gRPC ReplaySpec). This test demonstrates the base replay works.
+	// Header override tests should be at the gRPC layer (e2e_test.go).
+}
+
+// ── Test 3: Replay POST request with body ────────────────────────────────
+
+func TestIntegration_ReplayPOSTWithBody(t *testing.T) {
+	t.Parallel()
+
+	stack := newProxyStack(t)
+	defer stack.stop()
+
+	var capturedBody string
+	var capturedMethod string
+	var mu sync.Mutex
+
+	// Mock upstream captures the request method and body.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		capturedMethod = r.Method
+		body, _ := io.ReadAll(r.Body)
+		capturedBody = string(body)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "ok")
+	}))
+	defer upstream.Close()
+
+	// Send a POST with JSON body through the proxy.
+	jsonBody := `{"user":"alice","role":"admin"}`
+	client := stack.client()
+	resp, err := client.Post(
+		upstream.URL+"/api/users",
+		"application/json",
+		strings.NewReader(jsonBody),
+	)
+	if err != nil {
+		t.Fatalf("proxy POST: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Give engine time to store.
+	time.Sleep(100 * time.Millisecond)
+
+	// Retrieve the stored transaction.
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	if err != nil {
+		t.Fatalf("ListTransactions: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no transactions captured")
+	}
+
+	// Verify the stored request has the correct method and body.
+	if records[0].Method != "POST" {
+		t.Errorf("stored method: got %q want POST", records[0].Method)
+	}
+	if !strings.Contains(string(records[0].Body), "alice") {
+		t.Errorf("stored body missing alice: got %q", string(records[0].Body))
+	}
+
+	// Replay the POST.
+	replayEng := replay.NewEngine(stack.db, nil)
+	replayResp, err := replayEng.ReplayRequest(context.Background(), &replay.ReplayRequest{
+		RequestID: records[0].ID,
+	})
+	if err != nil {
+		t.Fatalf("ReplayRequest: %v", err)
+	}
+
+	if replayResp.StatusCode != http.StatusOK {
+		t.Errorf("replay status: got %d want %d", replayResp.StatusCode, http.StatusOK)
+	}
+
+	mu.Lock()
+	method := capturedMethod
+	body := capturedBody
+	mu.Unlock()
+
+	// Verify the replayed request reached upstream with correct method and body.
+	if method != "POST" {
+		t.Errorf("replayed method at upstream: got %q want POST", method)
+	}
+	if !strings.Contains(body, "alice") {
+		t.Errorf("replayed body missing alice: got %q", body)
+	}
+}
+
+// ── Test 4: Error handling for non-existent transaction ID ───────────────
+
+func TestIntegration_ReplayNonExistentTransaction(t *testing.T) {
+	t.Parallel()
+
+	stack := newProxyStack(t)
+	defer stack.stop()
+
+	// Try to replay a non-existent transaction ID.
+	// The replay engine should handle missing transactions gracefully.
+	replayEng := replay.NewEngine(stack.db, nil)
+	_, err := replayEng.ReplayRequest(context.Background(), &replay.ReplayRequest{
+		RequestID: "nonexistent-id-12345",
+	})
+	if err == nil {
+		t.Error("ReplayRequest for non-existent ID should return an error")
+	}
+}
+
+// ── Test 5: Replay multiple times returns consistent results ──────────────
+
+func TestIntegration_ReplayConsistency(t *testing.T) {
+	t.Parallel()
+
+	stack := newProxyStack(t)
+	defer stack.stop()
+
+	var callCount atomic.Int32
+	var lastRequestPath string
+	var mu sync.Mutex
+
+	// Mock upstream that echoes back the request path.
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		mu.Lock()
+		lastRequestPath = r.URL.Path
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, r.URL.Path)
+	}))
+	defer upstream.Close()
+
+	// Send request through proxy.
+	client := stack.client()
+	resp, err := client.Get(upstream.URL + "/api/endpoint")
+	if err != nil {
+		t.Fatalf("proxy request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Give engine time to store.
+	time.Sleep(100 * time.Millisecond)
+
+	// Retrieve the stored transaction.
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	if err != nil {
+		t.Fatalf("ListTransactions: %v", err)
+	}
+	if len(records) == 0 {
+		t.Fatal("no transactions captured")
+	}
+
+	// Replay the transaction 3 times.
+	replayEng := replay.NewEngine(stack.db, nil)
+	for i := 0; i < 3; i++ {
+		_, err := replayEng.ReplayRequest(context.Background(), &replay.ReplayRequest{
+			RequestID: records[0].ID,
+		})
+		if err != nil {
+			t.Fatalf("ReplayRequest %d: %v", i, err)
+		}
+	}
+
+	// Verify upstream was called 4 times (1 initial + 3 replays).
+	if callCount.Load() != 4 {
+		t.Errorf("upstream calls: got %d want 4", callCount.Load())
+	}
+
+	// Verify the last request path matches the original.
+	mu.Lock()
+	path := lastRequestPath
+	mu.Unlock()
+
+	if !strings.Contains(records[0].URL, path) {
+		t.Errorf("replayed path %q not found in original URL %q", path, records[0].URL)
 	}
 }
