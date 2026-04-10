@@ -32,7 +32,7 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem> {
     async getChildren(element?: TrafficItem): Promise<TrafficItem[]> {
         if (element) { return []; }
         try {
-            const txs = await this.client.getHistory({
+            const [txs, _cancel] = await this.client.getHistory({
                 limit: this.maxItems,
                 offset: 0,
                 urlFilter: '',

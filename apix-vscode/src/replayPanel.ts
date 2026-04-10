@@ -32,7 +32,7 @@ export class ReplayPanel {
         // Fetch transaction from history
         let tx: HttpTransaction | undefined;
         try {
-            const history = await client.getHistory({
+            const [history, _cancel] = await client.getHistory({
                 limit: 500,
                 offset: 0,
                 urlFilter: '',

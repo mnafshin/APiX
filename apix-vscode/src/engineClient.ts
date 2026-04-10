@@ -207,9 +207,9 @@ export class EngineClient {
 
     /**
      * Fetch history from the engine as a server-streaming RPC.
-     * Results are collected and returned as an array.
+     * Returns [results, cancel] where cancel() stops the stream early.
      */
-    async getHistory(query: HistoryQuery): Promise<HttpTransaction[]> {
+    async getHistory(query: HistoryQuery): Promise<[HttpTransaction[], () => void]> {
         this.ensureStub();
         return new Promise((resolve, reject) => {
             const req = {
@@ -222,6 +222,11 @@ export class EngineClient {
             };
             const stream: grpc.ClientReadableStream<any> = this.stub.getHistory(req, this.metadata);
             const results: HttpTransaction[] = [];
+            
+            const cancel = () => {
+                stream.destroy();
+            };
+            
             stream.on('data', (raw: any) => {
                 const tx: HttpTransaction = {
                     id: raw.id || '',
@@ -233,7 +238,7 @@ export class EngineClient {
                 results.push(tx);
             });
             stream.on('error', (err: Error) => reject(err));
-            stream.on('end', () => resolve(results));
+            stream.on('end', () => resolve([results, cancel]));
         });
     }
 
