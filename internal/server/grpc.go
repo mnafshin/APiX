@@ -422,6 +422,7 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 	if err != nil {
 		log.Fatalf("gRPC listen on %s: %v", addr, err)
 	}
+	defer lis.Close()
 
 	grpcServer := NewGRPCServer(cfg)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
