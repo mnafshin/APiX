@@ -133,13 +133,16 @@ Then open VS Code and the APiX extension will automatically start the engine and
 # Build everything (engine + extension)
 make dev
 
-# Run Go tests (with race detector)
+# Run Go tests with race detector
 make test
 
-# Run a single test
-make test-one TEST=TestSaveAndGetRequest PKG=./internal/storage/
+# Run a single test package
+go test ./tests/integration/... -v
 
-# Run tests with coverage
+# Run benchmarks
+go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakpoints
+
+# Run tests with coverage report
 make test-coverage
 
 # Lint
@@ -154,17 +157,38 @@ make build-all
 
 ### Testing
 
-All tests pass with race detector:
+APiX has comprehensive multi-layer test coverage across unit, integration, E2E, contract, fuzz, and benchmark tests:
 
 ```bash
+# All tests
 go test ./... -race
+
+# Integration tests only
+go test ./tests/integration/...
+
+# Run benchmarks
+go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakpoints
 ```
 
-Test results:
-- ✅ 13 Go packages
-- ✅ ~70 integration tests
-- ✅ -race detector: clean
+**Test Coverage:**
+
+| Layer | Coverage | Key Tests |
+|-------|----------|-----------|
+| **Unit Tests** | 13 packages, ~70 tests | Config, plugins, breakpoints, storage, engine |
+| **Integration Tests** | 16 tests across 3 suites | Proxy→Storage pipeline, gRPC auth over TCP, Replay engine |
+| **E2E Tests** | Full-stack scenarios | Breakpoint actions (DROP/RESPOND), plugin mutations, concurrent requests |
+| **Contract Tests** | Proto sync verification | Symlink integrity, generated code freshness |
+| **Fuzz Tests** | 18 seed cases | EnvSubst injection, URL pattern ReDoS, input validation |
+| **Benchmarks** | 5 performance baselines | HTTP proxy (~66µs serial/~42µs parallel), storage (~12µs write/~1ms query), breakpoints (~7µs eval) |
+
+**Results:**
+- ✅ 13 Go packages, 100+ tests
+- ✅ Race detector: clean
 - ✅ TypeScript type checks: passing
+- ✅ Coverage: Security (P0), Business Logic (P1), Error Paths (P2), Completeness (P3)
+- ✅ Performance baselines established for CI regression detection
+
+**See [TESTING.md](docs/TESTING.md) for comprehensive test strategy and how to contribute tests.**
 
 ## gRPC API
 
