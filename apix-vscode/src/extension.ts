@@ -102,7 +102,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     if (autoStart) {
-        await startEngine(context, processManager, engineClient, breakpointsProvider, trafficProvider);
+        // Start engine asynchronously to avoid blocking extension activation.
+        // Errors are logged to the output channel so the user can inspect them.
+        startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
+            .catch(err => outputChannel?.appendLine(`APiX: auto-start failed — ${err?.message || err}`));
     }
 }
 
