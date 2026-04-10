@@ -356,3 +356,56 @@ func FuzzEvaluate(f *testing.F) {
 		_ = m.Evaluate(method, rawURL)
 	})
 }
+
+// ── Benchmark: Breakpoint Pattern Evaluation ──────────────────────────────
+
+func BenchmarkBreakpoints_Evaluate(b *testing.B) {
+m := NewManager()
+
+// Register 10 rules with regex patterns
+patterns := []struct {
+id      string
+pattern string
+}{
+{"rule-1", "GET /api/.*"},
+{"rule-2", "POST /users/.*"},
+{"rule-3", "DELETE /admin/.*"},
+{"rule-4", "GET /health"},
+{"rule-5", "POST /auth/login"},
+{"rule-6", "GET /data/[0-9]+"},
+{"rule-7", "PUT /config/.*"},
+{"rule-8", "GET /status"},
+{"rule-9", "POST /events"},
+{"rule-10", "GET /legacy/.*"},
+}
+
+for _, p := range patterns {
+_, err := m.AddRule(&BreakpointRule{
+ID:         p.id,
+URLPattern: p.pattern,
+Enabled:    true,
+})
+if err != nil {
+b.Fatalf("AddRule: %v", err)
+}
+}
+
+// Test URLs in different methods
+testCases := []struct {
+method string
+url    string
+}{
+{"GET", "http://example.com/api/users"},
+{"POST", "http://example.com/users/create"},
+{"GET", "http://example.com/status"},
+{"GET", "http://example.com/data/123"},
+{"POST", "http://example.com/auth/login"},
+}
+
+b.ResetTimer()
+for i := 0; i < b.N; i++ {
+for _, tc := range testCases {
+_ = m.Evaluate(tc.method, tc.url)
+}
+}
+}

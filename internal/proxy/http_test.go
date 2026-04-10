@@ -753,3 +753,65 @@ func TestHTTPProxy_PluginModifiesBody(t *testing.T) {
 		t.Errorf("upstream body: got %q, want %q", upstreamBody, modified)
 	}
 }
+
+// ── Benchmark: HTTP Proxy Handler Throughput ──────────────────────────────
+
+// BenchmarkHTTPProxy_Serial measures request throughput through the proxy
+// handler (direct invocation, not network I/O).
+// Uses in-memory storage and httptest to avoid network overhead.
+func BenchmarkHTTPProxy_Serial(b *testing.B) {
+// Setup proxy stack
+db, _ := storage.Open(":memory:")
+defer db.Close()
+bpMgr := breakpoints.NewManager()
+rt := pluginrt.NewRuntime()
+eng := engine.New(db, bpMgr, rt)
+cfg := &config.Config{MaxBodySizeMB: 32}
+httpP := proxy.NewHTTPProxy("", nil, eng, proxy.TransportOptions{}, cfg)
+httpP.SetPlugins(rt)
+
+// Mock upstream
+backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+w.WriteHeader(http.StatusOK)
+w.Write([]byte("ok"))
+}))
+defer backend.Close()
+
+b.ResetTimer()
+for i := 0; i < b.N; i++ {
+req, _ := http.NewRequest("GET", backend.URL+"/test", nil)
+w := httptest.NewRecorder()
+httpP.ServeHTTP(w, req)
+}
+}
+
+// BenchmarkHTTPProxy_Parallel measures concurrent request throughput.
+func BenchmarkHTTPProxy_Parallel(b *testing.B) {
+// Setup proxy stack
+db, _ := storage.Open(":memory:")
+defer db.Close()
+bpMgr := breakpoints.NewManager()
+rt := pluginrt.NewRuntime()
+eng := engine.New(db, bpMgr, rt)
+cfg := &config.Config{MaxBodySizeMB: 32}
+httpP := proxy.NewHTTPProxy("", nil, eng, proxy.TransportOptions{}, cfg)
+httpP.SetPlugins(rt)
+
+// Mock upstream
+backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+w.WriteHeader(http.StatusOK)
+w.Write([]byte("ok"))
+}))
+defer backend.Close()
+
+backendURL := backend.URL + "/test"
+
+b.ResetTimer()
+b.RunParallel(func(pb *testing.PB) {
+for pb.Next() {
+req, _ := http.NewRequest("GET", backendURL, nil)
+w := httptest.NewRecorder()
+httpP.ServeHTTP(w, req)
+}
+})
+}

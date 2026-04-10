@@ -532,3 +532,70 @@ func TestListTransactions_MethodFilter(t *testing.T) {
 		}
 	}
 }
+
+// ── Benchmark: Storage Write Rate ─────────────────────────────────────────
+
+func BenchmarkStorage_SaveRequest(b *testing.B) {
+	db, err := Open(":memory:")
+	if err != nil {
+		b.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		reqRecord := &RequestRecord{
+			ID:        fmt.Sprintf("bench-req-%d", i),
+			Method:    "GET",
+			URL:       fmt.Sprintf("http://example.com/bench/%d", i),
+			Headers:   map[string]string{"Content-Type": "application/json"},
+			Body:      []byte("test body"),
+			Timestamp: time.Now(),
+		}
+		if err := db.SaveRequest(reqRecord); err != nil {
+			b.Fatalf("SaveRequest: %v", err)
+		}
+	}
+}
+
+func BenchmarkStorage_ListTransactions(b *testing.B) {
+	db, err := Open(":memory:")
+	if err != nil {
+		b.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	// Seed 1000 rows
+	for i := 0; i < 1000; i++ {
+		reqRecord := &RequestRecord{
+			ID:        fmt.Sprintf("seed-req-%d", i),
+			Method:    "GET",
+			URL:       fmt.Sprintf("http://example.com/bench/%d", i),
+			Headers:   map[string]string{},
+			Body:      []byte("test"),
+			Timestamp: time.Now(),
+		}
+		if err := db.SaveRequest(reqRecord); err != nil {
+			b.Fatalf("SaveRequest: %v", err)
+		}
+
+		respRecord := &ResponseRecord{
+			RequestID:  reqRecord.ID,
+			StatusCode: 200,
+			StatusText: "OK",
+			Headers:    map[string]string{},
+			Body:       []byte("response"),
+		}
+		if err := db.SaveResponse(respRecord); err != nil {
+			b.Fatalf("SaveResponse: %v", err)
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, err := db.ListTransactions(100, 0, "", "", 0)
+		if err != nil {
+			b.Fatalf("ListTransactions: %v", err)
+		}
+	}
+}
