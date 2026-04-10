@@ -23,6 +23,7 @@ type Config struct {
 	HTTPReadHeaderTimeout int    `yaml:"http_read_header_timeout_sec"`
 	HTTPReadTimeout       int    `yaml:"http_read_timeout_sec"`
 	HTTPWriteTimeout      int    `yaml:"http_write_timeout_sec"`
+	MaxBodySizeMB         int    `yaml:"max_body_size_mb"`
 	ReplaySkipTLSVerify   bool   `yaml:"replay_skip_tls_verify"`
 }
 
@@ -76,6 +77,7 @@ func LoadConfig(path string) *Config {
 		HTTPReadHeaderTimeout: 10,
 		HTTPReadTimeout:       30,
 		HTTPWriteTimeout:      120,
+		MaxBodySizeMB:         32,
 	}
 
 	file, err := os.ReadFile(path)

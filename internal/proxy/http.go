@@ -108,12 +108,15 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
 	// Buffer the entire request body so it can be stored and forwarded.
+	// Limit body size to prevent OOM denial of service.
+	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
 	var bodyBytes []byte
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		var err error
 		bodyBytes, err = io.ReadAll(r.Body)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("read request body: %v", err), http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
 			return
 		}
 		r.Body.Close()
@@ -188,10 +191,11 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer upResp.Body.Close()
 
-	// Convert to ProxyResponse.
+	// Apply the same body size limit to response bodies
+	upResp.Body = http.MaxBytesReader(w, upResp.Body, maxBodyBytes)
 	respBody, err := io.ReadAll(upResp.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("read upstream response body: %v", err), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf("response body too large: %v", err), http.StatusRequestEntityTooLarge)
 		return
 	}
 	proxyResp := &plugins.ProxyResponse{

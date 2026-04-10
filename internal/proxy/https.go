@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
@@ -23,15 +24,17 @@ type TLSProxy struct {
 	plugins       PluginChain
 	transport     *http.Transport
 	transportOpts TransportOptions // retained so SetUpstreamTLSConfig can rebuild
+	cfg           *config.Config
 }
 
 // NewTLSProxy creates a MITM TLS proxy using the provided CA.
-func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions) *TLSProxy {
+func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions, cfg *config.Config) *TLSProxy {
 	return &TLSProxy{
 		ca:            ca,
 		engine:        engine,
 		transportOpts: opts,
 		transport:     newTransport(nil, opts),
+		cfg:           cfg,
 	}
 }
 
@@ -108,12 +111,15 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	start := time.Now()
 
 	// Buffer the entire request body so it can be stored and forwarded.
+	// Limit body size to prevent OOM denial of service.
+	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
 	var bodyBytes []byte
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(nil, r.Body, maxBodyBytes)
 		var err error
 		bodyBytes, err = io.ReadAll(r.Body)
 		if err != nil {
-			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read request body: %v", err))
+			writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body too large: %v", err))
 			return
 		}
 		r.Body.Close()
@@ -182,9 +188,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 	defer upResp.Body.Close()
 
+	// Apply the same body size limit to response bodies
+	upResp.Body = http.MaxBytesReader(nil, upResp.Body, maxBodyBytes)
 	respBody, err := io.ReadAll(upResp.Body)
 	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read upstream response body: %v", err))
+		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", err))
 		return
 	}
 	proxyResp := &plugins.ProxyResponse{
