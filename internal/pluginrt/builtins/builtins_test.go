@@ -361,3 +361,57 @@ func TestMockResponse_ResponseHeadersPresent(t *testing.T) {
 		t.Errorf("X-Custom: got %q", result.MockedResponse.Headers.Get("X-Custom"))
 	}
 }
+
+// ---- Fuzz tests ----
+
+// FuzzEnvSubst_Body ensures EnvSubst.OnRequest never panics regardless of the
+// body content it receives. Seed corpus covers normal placeholders, malformed
+// braces, binary data, and very large inputs.
+func FuzzEnvSubst_Body(f *testing.F) {
+	f.Add(`{"key": "{{HOME}}"}`)
+	f.Add(`{{MISSING_VAR}}`)
+	f.Add(`{{`)              // unclosed brace
+	f.Add(`{{}}`)            // empty name
+	f.Add(`{{API_KEY}}`)     // blocked secret — must be left unchanged
+	f.Add(`{{AWS_SECRET}}`)  // blocked secret with prefix
+	f.Add(string([]byte{0x00, 0x01, 0xFF})) // binary data
+	f.Add(``)                               // empty body
+
+	p := &EnvSubst{}
+	f.Fuzz(func(t *testing.T, body string) {
+		req := makeReq("POST", "https://example.com/fuzz", body)
+		result, err := p.OnRequest(context.Background(), req)
+		if err != nil {
+			t.Fatalf("OnRequest returned unexpected error: %v", err)
+		}
+		if result == nil {
+			t.Fatal("OnRequest returned nil result")
+		}
+		// Result body must be readable without panic.
+		if _, err := io.ReadAll(result.Body); err != nil {
+			t.Fatalf("ReadAll on result body failed: %v", err)
+		}
+	})
+}
+
+// FuzzEnvSubst_Headers ensures EnvSubst.OnRequest never panics when header
+// values contain arbitrary content, including placeholder-like patterns.
+func FuzzEnvSubst_Headers(f *testing.F) {
+	f.Add("Authorization", "Bearer {{TOKEN}}")
+	f.Add("X-Custom", "{{API_KEY}}")           // blocked secret
+	f.Add("Content-Type", "application/{{")    // malformed placeholder
+	f.Add("X-Bin", string([]byte{0xFF, 0x00})) // binary header value
+
+	p := &EnvSubst{}
+	f.Fuzz(func(t *testing.T, headerName, headerValue string) {
+		req := makeReq("GET", "https://example.com/fuzz", "")
+		req.Headers[headerName] = []string{headerValue}
+		result, err := p.OnRequest(context.Background(), req)
+		if err != nil {
+			t.Fatalf("OnRequest returned unexpected error: %v", err)
+		}
+		if result == nil {
+			t.Fatal("OnRequest returned nil result")
+		}
+	})
+}

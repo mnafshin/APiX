@@ -320,3 +320,39 @@ func TestResume_UnknownID(t *testing.T) {
 		t.Error("expected error for unknown request ID, got nil")
 	}
 }
+
+// ---- Fuzz tests ----
+
+// FuzzEvaluate ensures Manager.Evaluate never panics regardless of the method
+// and rawURL values it receives. The implementation already guards against
+// ReDoS via a timeout, so this fuzz test focuses on correctness under
+// adversarial input: control characters, binary data, malformed URLs, and
+// extremely long strings.
+func FuzzEvaluate(f *testing.F) {
+	f.Add("GET", "https://example.com/api/users")
+	f.Add("POST", "http://localhost:8080/[invalid")     // malformed URL
+	f.Add("", "")                                        // empty inputs
+	f.Add("DELETE", "https://api.example.com/\x00path") // null byte
+	f.Add("OPTIONS", "not-a-url-at-all")
+	f.Add("GET", "https://"+string(make([]byte, 1024))) // long URL
+
+	m := NewManager()
+	if _, err := m.AddRule(&BreakpointRule{
+		URLPattern: `.*api.*`,
+		Enabled:    true,
+	}); err != nil {
+		f.Fatal("AddRule:", err)
+	}
+	if _, err := m.AddRule(&BreakpointRule{
+		URLPattern: `.*`,
+		Methods:    []string{"POST"},
+		Enabled:    true,
+	}); err != nil {
+		f.Fatal("AddRule:", err)
+	}
+
+	f.Fuzz(func(t *testing.T, method, rawURL string) {
+		// Must not panic regardless of input; return value may be "" or a rule ID.
+		_ = m.Evaluate(method, rawURL)
+	})
+}
