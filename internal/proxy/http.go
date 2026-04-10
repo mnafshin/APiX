@@ -203,6 +203,8 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		modified, action, err := p.engine.PauseRequest(tx)
 		if err != nil {
 			log.Printf("pause request: %v", err)
+			http.Error(w, fmt.Sprintf("pause request: %v", err), http.StatusBadGateway)
+			return
 		}
 		tx = modified
 		switch action {

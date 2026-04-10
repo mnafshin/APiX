@@ -140,7 +140,10 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 		// internal ProxyResponse so the proxy layer can write it to the client.
 		if decision.ModifiedResponse != nil {
 			r := decision.ModifiedResponse
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				return tx, proxy.ResumeRespond, fmt.Errorf("read synthetic response body: %w", err)
+			}
 			tx.Response = &proxy.ProxyResponse{
 				StatusCode: r.StatusCode,
 				Status:     r.Status,
