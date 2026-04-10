@@ -12,13 +12,19 @@ import * as path from 'path';
 export class EngineProcessManager {
     private process: child_process.ChildProcess | null = null;
     private isStarting = false;
+    private startPromise: Promise<void> | null = null;
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
     /** Start the engine subprocess. Resolves when the engine signals readiness. */
     async start(): Promise<void> {
-        // Idempotent: if already running or starting, return immediately
-        if (this.isRunning() || this.isStarting) { return; }
+        // Idempotent: if already running, return immediately
+        if (this.isRunning()) { return; }
+        
+        // If already starting, return the existing promise to prevent race condition
+        if (this.isStarting && this.startPromise) { 
+            return this.startPromise;
+        }
 
         this.isStarting = true;
         try {
@@ -26,7 +32,7 @@ export class EngineProcessManager {
             const outputChannel = vscode.window.createOutputChannel('APiX Engine');
             outputChannel.show(true);
 
-            return new Promise((resolve, reject) => {
+            this.startPromise = new Promise((resolve, reject) => {
                 try {
                     const proc = child_process.spawn(binaryPath, [], {
                         stdio: ['ignore', 'pipe', 'pipe'],
@@ -38,6 +44,7 @@ export class EngineProcessManager {
                         if (!resolved) {
                             resolved = true;
                             this.isStarting = false;
+                            this.startPromise = null;
                             resolve();
                         }
                     };
@@ -66,6 +73,7 @@ export class EngineProcessManager {
                         if (!resolved) {
                             resolved = true;
                             this.isStarting = false;
+                            this.startPromise = null;
                             reject(err);
                         }
                     });
@@ -79,17 +87,26 @@ export class EngineProcessManager {
                             const msg = `APiX Engine exited unexpectedly (code ${code}, signal ${signal})`;
                             outputChannel.appendLine(`[APiX] ${msg}`);
                             vscode.window.showErrorMessage(msg, 'Restart').then(choice => {
-                                if (choice === 'Restart') { this.start(); }
+                                if (choice === 'Restart') { 
+                                    // Don't await — let user see error message first
+                                    void this.start();
+                                }
                             });
                         }
                     });
                 } catch (err) {
                     this.isStarting = false;
+                    this.startPromise = null;
                     reject(err);
                 }
             });
+            
+            await this.startPromise;
         } finally {
-            this.isStarting = false;
+            // Ensure cleanup (though resolveOnce should have already done this)
+            if (this.startPromise === null) {
+                this.isStarting = false;
+            }
         }
     }
 
