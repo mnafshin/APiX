@@ -19,6 +19,12 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("open sqlite %q: %w", path, err)
 	}
 
+	// Configure connection pool to prevent resource exhaustion under load.
+	db.SetMaxOpenConns(25)      // max concurrent connections
+	db.SetMaxIdleConns(5)       // keep 5 idle connections ready
+	db.SetConnMaxLifetime(0)    // connections live indefinitely (rely on manual cleanup)
+	db.SetConnMaxIdleTime(0)    // idle connections never close (keep warm for performance)
+
 	// Enable WAL mode for better concurrent read performance.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		db.Close()
