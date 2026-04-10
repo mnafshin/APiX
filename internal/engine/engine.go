@@ -77,13 +77,15 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Timestamp: time.Now().UnixMilli(),
 		}
 		e.mu.Lock()
-		for _, sub := range e.subscribers {
+		subscribers := make([]chan *apix.HttpRequest, len(e.subscribers))
+		copy(subscribers, e.subscribers)
+		e.mu.Unlock()
+		for _, sub := range subscribers {
 			select {
 			case sub <- protoReq:
 			default:
 			}
 		}
-		e.mu.Unlock()
 	}
 
 	resp := tx.Response
