@@ -199,11 +199,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer upResp.Body.Close()
 
-	// Apply the same body size limit to response bodies
-	upResp.Body = http.MaxBytesReader(w, upResp.Body, maxBodyBytes)
 	respBody, err := io.ReadAll(upResp.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("response body too large: %v", err), http.StatusRequestEntityTooLarge)
+		http.Error(w, fmt.Sprintf("response body read error: %v", err), http.StatusBadGateway)
 		return
 	}
 	proxyResp := &plugins.ProxyResponse{

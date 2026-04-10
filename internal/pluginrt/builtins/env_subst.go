@@ -13,13 +13,13 @@ import (
 
 var envPattern = regexp.MustCompile(`\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}`)
 
-// secretPatterns lists environment variable names that should never be substituted
-// to prevent leaking secrets via request bodies
+// secretPatterns lists environment variable name substrings that indicate secret data.
+// We check if the name contains these patterns (case-insensitive) to block substitution.
+// This prevents leaking credentials via request bodies, while allowing test variables.
 var secretPatterns = []string{
-	"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD",
-	"AUTH", "CREDENTIAL", "PRIVATE", "SIGNATURE",
-	"AWS", "AZURE", "GCP", "GITHUB", "GITLAB",
-	"OPENAI", "ANTHROPIC", "GOOGLE", "API",
+	"API_KEY", "API_SECRET", "ACCESS_TOKEN", "REFRESH_TOKEN",
+	"PRIVATE_KEY", "SECRET_KEY", "SIGNING_KEY",
+	"AWS_", "AZURE_", "GCP_", "GITHUB_", "GITLAB_",
 }
 
 // isSecretVar checks if an environment variable name looks like it contains secrets

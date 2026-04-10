@@ -51,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         breakpointsViewDisposable,
 
         vscode.commands.registerCommand('apix.startEngine', () =>
-            startEngine(context, processManager!, engineClient!, breakpointsProvider, trafficProvider)
+            startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
         ),
         vscode.commands.registerCommand('apix.stopEngine', () =>
             stopEngine(processManager!)
@@ -59,17 +59,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('apix.clearHistory', async () => {
             try {
                 await engineClient?.clearHistory();
-                trafficProvider.refresh();
+                trafficProvider?.refresh();
             } catch (err: any) {
                 vscode.window.showErrorMessage(`APiX: Failed to clear history — ${err?.message || err}`);
             }
         }),
         vscode.commands.registerCommand('apix.addBreakpoint', () =>
-            addBreakpoint(engineClient!, breakpointsProvider)
+            addBreakpoint(engineClient!, breakpointsProvider!)
         ),
         vscode.commands.registerCommand('apix.deleteBreakpoint', (itemOrId: BreakpointItem | string) => {
             const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.rule?.id;
-            if (id) { deleteBreakpoint(engineClient!, breakpointsProvider, id); }
+            if (id) { deleteBreakpoint(engineClient!, breakpointsProvider!, id); }
         }),
         vscode.commands.registerCommand('apix.toggleBreakpoint', async (id: string) => {
             if (!id || !engineClient) { return; }
@@ -78,7 +78,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                 const rule = list.breakpoints?.find(b => b.id === id);
                 if (rule) {
                     await engineClient.setBreakpoint({ ...rule, enabled: !rule.enabled });
-                    breakpointsProvider.refresh();
+                    breakpointsProvider?.refresh();
                 }
             } catch (err: any) {
                 vscode.window.showErrorMessage(`APiX: Toggle failed — ${err?.message || err}`);
@@ -92,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             TrafficPanel.createOrShow(context.extensionUri, engineClient!)
         ),
         vscode.commands.registerCommand('apix.refreshTraffic', () => {
-            trafficProvider.refresh();
+            trafficProvider?.refresh();
         }),
     );
 
