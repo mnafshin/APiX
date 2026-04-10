@@ -199,7 +199,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer upResp.Body.Close()
 
-	respBody, err := io.ReadAll(upResp.Body)
+	// Limit response body size to prevent OOM denial of service.
+	limitedBody := io.LimitReader(upResp.Body, maxBodyBytes)
+	respBody, err := io.ReadAll(limitedBody)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("response body read error: %v", err), http.StatusBadGateway)
 		return
@@ -224,10 +226,12 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Buffer the final response body (plugins may have modified it) so we can
 	// both persist it and still write it to the client.
+	// Apply body size limit here too.
 	var finalRespBody []byte
 	if proxyResp.Body != nil {
+		limitedBody := io.LimitReader(proxyResp.Body, maxBodyBytes)
 		var readErr error
-		finalRespBody, readErr = io.ReadAll(proxyResp.Body)
+		finalRespBody, readErr = io.ReadAll(limitedBody)
 		if readErr != nil {
 			http.Error(w, fmt.Sprintf("read response body: %v", readErr), http.StatusBadGateway)
 			return
