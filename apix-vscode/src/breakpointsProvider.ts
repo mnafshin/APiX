@@ -6,8 +6,8 @@ import { BreakpointRule } from './types';
  * BreakpointsProvider implements TreeDataProvider for the APiX Breakpoints view.
  * Each item represents one BreakpointRule registered in the engine.
  */
-export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<BreakpointItem | undefined | void>();
+export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointItem | ErrorItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<BreakpointItem | ErrorItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     constructor(private readonly client: EngineClient) {}
@@ -21,19 +21,21 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
         this._onDidChangeTreeData.dispose();
     }
 
-    getTreeItem(element: BreakpointItem): vscode.TreeItem {
+    getTreeItem(element: BreakpointItem | ErrorItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: BreakpointItem): Promise<BreakpointItem[]> {
+    async getChildren(element?: BreakpointItem | ErrorItem): Promise<(BreakpointItem | ErrorItem)[]> {
         if (element) {
             return [];
         }
         try {
             const list = await this.client.listBreakpoints();
             return (list.breakpoints || []).map(rule => new BreakpointItem(rule));
-        } catch {
-            return [];
+        } catch (err: any) {
+            const msg = err?.message || String(err);
+            console.error(`[APiX] Breakpoints view error: ${msg}`);
+            return [new ErrorItem(`Engine unreachable: ${msg}`)];
         }
     }
 }
@@ -56,5 +58,14 @@ export class BreakpointItem extends vscode.TreeItem {
             title: 'Toggle',
             arguments: [rule.id],
         };
+    }
+}
+
+/** Error item displayed when the engine is unreachable. */
+export class ErrorItem extends vscode.TreeItem {
+    constructor(message: string) {
+        super(message, vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon('error');
+        this.description = '';
     }
 }

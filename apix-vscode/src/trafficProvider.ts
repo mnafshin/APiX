@@ -6,8 +6,8 @@ import { HttpTransaction } from './types';
  * TrafficProvider implements TreeDataProvider for the APiX Traffic tree view.
  * Shows the most recent N transactions as tree items.
  */
-export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<TrafficItem | undefined | void>();
+export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | ErrorItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<TrafficItem | ErrorItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly maxItems: number;
@@ -25,11 +25,11 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem> {
         this._onDidChangeTreeData.dispose();
     }
 
-    getTreeItem(element: TrafficItem): vscode.TreeItem {
+    getTreeItem(element: TrafficItem | ErrorItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(element?: TrafficItem): Promise<TrafficItem[]> {
+    async getChildren(element?: TrafficItem | ErrorItem): Promise<(TrafficItem | ErrorItem)[]> {
         if (element) { return []; }
         try {
             const [txs, _cancel] = await this.client.getHistory({
@@ -41,8 +41,10 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem> {
                 sinceMs: 0,
             });
             return txs.map(tx => new TrafficItem(tx));
-        } catch {
-            return [];
+        } catch (err: any) {
+            const msg = err?.message || String(err);
+            console.error(`[APiX] Traffic view error: ${msg}`);
+            return [new ErrorItem(`Engine unreachable: ${msg}`)];
         }
     }
 }
@@ -73,5 +75,14 @@ export class TrafficItem extends vscode.TreeItem {
         if (status >= 300) { return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.blue')); }
         if (status >= 200) { return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('charts.green')); }
         return new vscode.ThemeIcon('circle-outline');
+    }
+}
+
+/** Error item displayed when the engine is unreachable. */
+export class ErrorItem extends vscode.TreeItem {
+    constructor(message: string) {
+        super(message, vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon('error');
+        this.description = '';
     }
 }
