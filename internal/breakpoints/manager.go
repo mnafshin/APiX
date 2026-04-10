@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -87,33 +88,49 @@ func (m *Manager) ListRules() []*BreakpointRule {
 }
 
 // Evaluate checks req against all enabled rules. Returns the matching rule ID
-// or empty string if no rule matches.
+// or empty string if no rule matches. Uses a timeout to prevent ReDoS attacks.
 func (m *Manager) Evaluate(method, rawURL string) string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	for id, rule := range m.rules {
-		if !rule.Enabled {
-			continue
-		}
-		// Check method: empty methods list means match all.
-		if len(rule.Methods) > 0 {
-			matched := false
-			for _, m := range rule.Methods {
-				if strings.EqualFold(m, method) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
+	// Create a timeout context to prevent regex from blocking
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	
+	done := make(chan string, 1)
+	go func() {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		for id, rule := range m.rules {
+			if !rule.Enabled {
 				continue
 			}
+			// Check method: empty methods list means match all.
+			if len(rule.Methods) > 0 {
+				matched := false
+				for _, m := range rule.Methods {
+					if strings.EqualFold(m, method) {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					continue
+				}
+			}
+			re := m.compiled[id]
+			if re != nil && re.MatchString(rawURL) {
+				done <- id
+				return
+			}
 		}
-		re := m.compiled[id]
-		if re != nil && re.MatchString(rawURL) {
-			return id
-		}
+		done <- ""
+	}()
+	
+	select {
+	case ruleID := <-done:
+		return ruleID
+	case <-ctx.Done():
+		// Timeout: return empty string (no match) to avoid blocking
+		return ""
 	}
-	return ""
 }
 
 // Pause holds req until resumed, broadcasting to all Watch subscribers.
