@@ -21,6 +21,10 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem> {
         this._onDidChangeTreeData.fire();
     }
 
+    dispose(): void {
+        this._onDidChangeTreeData.dispose();
+    }
+
     getTreeItem(element: TrafficItem): vscode.TreeItem {
         return element;
     }

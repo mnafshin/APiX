@@ -11,6 +11,8 @@ let engineClient: EngineClient | undefined;
 let processManager: EngineProcessManager | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
 let pausedRequestsStream: { cancel: () => void } | undefined;
+let trafficProvider: TrafficProvider | undefined;
+let breakpointsProvider: BreakpointsProvider | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('apix');
@@ -31,8 +33,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     processManager = new EngineProcessManager(context);
     engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken);
 
-    const trafficProvider = new TrafficProvider(engineClient);
-    const breakpointsProvider = new BreakpointsProvider(engineClient);
+    trafficProvider = new TrafficProvider(engineClient);
+    breakpointsProvider = new BreakpointsProvider(engineClient);
 
     const trafficViewDisposable = vscode.window.registerTreeDataProvider(
         'apix.trafficView',
@@ -102,6 +104,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 export function deactivate(): void {
     pausedRequestsStream?.cancel();
     processManager?.stop();
+    trafficProvider?.dispose();
+    breakpointsProvider?.dispose();
+    TrafficPanel.currentPanel?.dispose();
     engineClient?.close();
 }
 

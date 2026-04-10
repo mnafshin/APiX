@@ -17,6 +17,10 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
         this._onDidChangeTreeData.fire();
     }
 
+    dispose(): void {
+        this._onDidChangeTreeData.dispose();
+    }
+
     getTreeItem(element: BreakpointItem): vscode.TreeItem {
         return element;
     }
