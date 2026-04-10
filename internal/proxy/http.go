@@ -64,6 +64,13 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 
 // ServeHTTP handles both plain HTTP and CONNECT (tunnel) requests.
 func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("HTTP proxy panic in ServeHTTP (recovered): %v", rec)
+			http.Error(w, "proxy error", http.StatusBadGateway)
+		}
+	}()
+	
 	if r.Method == http.MethodConnect {
 		p.handleConnect(w, r)
 		return
@@ -73,6 +80,13 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleConnect upgrades the connection for HTTPS tunnelling.
 func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("HTTP proxy panic in handleConnect (recovered): %v", rec)
+			http.Error(w, "proxy error", http.StatusInternalServerError)
+		}
+	}()
+	
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "hijacking not supported", http.StatusInternalServerError)
@@ -140,14 +154,28 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Raw:     r,
 	}
 
-	// Run plugin OnRequest chain.
+	// Run plugin OnRequest chain (with panic recovery).
+	var pluginReqFailed bool
 	if p.plugins != nil {
-		modified, err := p.plugins.RunRequest(ctx, proxyReq)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("plugin error: %v", err), http.StatusBadGateway)
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
+					pluginReqFailed = true
+				}
+			}()
+			modified, err := p.plugins.RunRequest(ctx, proxyReq)
+			if err != nil {
+				log.Printf("plugin OnRequest error: %v", err)
+				pluginReqFailed = true
+				return
+			}
+			proxyReq = modified
+		}()
+		if pluginReqFailed {
+			http.Error(w, "plugin error", http.StatusBadGateway)
 			return
 		}
-		proxyReq = modified
 	}
 
 	// If a plugin set a mocked response, short-circuit.
@@ -214,14 +242,21 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Raw:        upResp,
 	}
 
-	// Run plugin OnResponse chain.
+	// Run plugin OnResponse chain (with panic recovery).
 	if p.plugins != nil {
-		modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
-		if err != nil {
-			log.Printf("plugin OnResponse: %v", err)
-		} else if modResp != nil {
-			proxyResp = modResp
-		}
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
+				}
+			}()
+			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
+			if err != nil {
+				log.Printf("plugin OnResponse error: %v", err)
+			} else if modResp != nil {
+				proxyResp = modResp
+			}
+		}()
 	}
 
 	// Buffer the final response body (plugins may have modified it) so we can
