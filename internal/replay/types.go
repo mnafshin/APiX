@@ -10,5 +10,6 @@ type ReplayRequest struct {
 
 	OverrideHeaders map[string]string
 	OverrideBody    []byte
+	OverrideMethod  string // if non-empty, replaces the request method
 	FollowRedirects bool
 }

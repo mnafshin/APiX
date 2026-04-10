@@ -201,3 +201,163 @@ func TestMockResponseNoMatch(t *testing.T) {
 		t.Error("expected nil (no match), got modified request")
 	}
 }
+
+// ---- EnvSubst secret-blocking tests ----
+
+func TestEnvSubstBlocksSecretVars(t *testing.T) {
+	// Cannot use t.Parallel() here because subtests call t.Setenv
+	secrets := []struct {
+		name  string
+		value string
+	}{
+		{"API_KEY", "leaked-api-key"},
+		{"MY_API_SECRET", "leaked-api-secret"},
+		{"ACCESS_TOKEN", "leaked-access-token"},
+		{"REFRESH_TOKEN", "leaked-refresh-token"},
+		{"PRIVATE_KEY", "leaked-private-key"},
+		{"SECRET_KEY", "leaked-secret"},
+		{"AWS_SECRET_ACCESS_KEY", "leaked-aws-key"},
+		{"GITHUB_TOKEN", "leaked-github-token"},
+		{"GITLAB_TOKEN", "leaked-gitlab-token"},
+	}
+
+	for _, s := range secrets {
+		t.Run(s.name, func(t *testing.T) {
+			t.Setenv(s.name, s.value)
+
+			p := &EnvSubst{}
+			body := "credential is {{" + s.name + "}}"
+			req := makeReq("POST", "https://api.example.com", body)
+
+			result, err := p.OnRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("OnRequest: %v", err)
+			}
+
+			got, _ := io.ReadAll(result.Body)
+			if string(got) != body {
+				t.Errorf("secret var %s should NOT be substituted: got %q", s.name, string(got))
+			}
+			// Also check headers are not substituted.
+			req2 := makeReq("GET", "https://example.com", "")
+			req2.Headers.Set("X-Cred", "Bearer {{"+s.name+"}}")
+			result2, _ := p.OnRequest(context.Background(), req2)
+			if got := result2.Headers.Get("X-Cred"); got != "Bearer {{"+s.name+"}}" {
+				t.Errorf("secret var %s should NOT be substituted in headers: got %q", s.name, got)
+			}
+		})
+	}
+}
+
+func TestEnvSubstAllowsNonSecretVars(t *testing.T) {
+	// Cannot use t.Parallel() here because subtests call t.Setenv
+	allowed := []struct {
+		name  string
+		value string
+	}{
+		{"BASE_URL", "https://staging.example.com"},
+		{"APP_ENV", "staging"},
+		{"REGION", "us-east-1"},
+		{"TIMEOUT_MS", "5000"},
+	}
+
+	for _, v := range allowed {
+		t.Run(v.name, func(t *testing.T) {
+			t.Setenv(v.name, v.value)
+
+			p := &EnvSubst{}
+			req := makeReq("POST", "https://api.example.com", "value={{"+v.name+"}}")
+
+			result, err := p.OnRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("OnRequest: %v", err)
+			}
+
+			got, _ := io.ReadAll(result.Body)
+			want := "value=" + v.value
+			if string(got) != want {
+				t.Errorf("non-secret var %s should be substituted: got %q want %q", v.name, string(got), want)
+			}
+		})
+	}
+}
+
+func TestEnvSubstMalformedSyntax(t *testing.T) {
+	t.Parallel()
+	// Unclosed braces, partial syntax — should be left as-is, no panic.
+	cases := []string{
+		"{{UNCLOSED",
+		"{{",
+		"{{}}",
+		"{NODOUBRACES}",
+	}
+
+	p := &EnvSubst{}
+	for _, body := range cases {
+		t.Run(body, func(t *testing.T) {
+			req := makeReq("POST", "https://example.com", body)
+			result, err := p.OnRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("OnRequest should not return error for %q: %v", body, err)
+			}
+			if result == nil {
+				t.Fatalf("expected non-nil result for %q", body)
+			}
+			got, _ := io.ReadAll(result.Body)
+			if string(got) != body {
+				t.Errorf("body %q: expected unchanged, got %q", body, string(got))
+			}
+		})
+	}
+}
+
+// ---- MockResponse custom status code / header tests ----
+
+func TestMockResponse_CustomStatusCodes(t *testing.T) {
+	t.Parallel()
+	cases := []int{201, 204, 400, 404, 500, 503}
+
+	for _, code := range cases {
+		code := code
+		t.Run(string(rune('0'+code/100))+"xx", func(t *testing.T) {
+			t.Parallel()
+			p := &MockResponse{
+				URLPattern: `.*`,
+				StatusCode: code,
+			}
+			req := makeReq("GET", "https://example.com/anything", "")
+			result, err := p.OnRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("OnRequest: %v", err)
+			}
+			if result == nil || result.MockedResponse == nil {
+				t.Fatalf("expected MockedResponse for status %d", code)
+			}
+			if result.MockedResponse.StatusCode != code {
+				t.Errorf("StatusCode: got %d want %d", result.MockedResponse.StatusCode, code)
+			}
+		})
+	}
+}
+
+func TestMockResponse_ResponseHeadersPresent(t *testing.T) {
+	t.Parallel()
+	p := &MockResponse{
+		URLPattern: `.*`,
+		StatusCode: 200,
+		Headers:    map[string]string{"Content-Type": "application/json", "X-Custom": "value"},
+		Body:       []byte(`{}`),
+	}
+
+	req := makeReq("GET", "https://api.example.com/data", "")
+	result, err := p.OnRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("OnRequest: %v", err)
+	}
+	if result.MockedResponse.Headers.Get("Content-Type") != "application/json" {
+		t.Errorf("Content-Type: got %q", result.MockedResponse.Headers.Get("Content-Type"))
+	}
+	if result.MockedResponse.Headers.Get("X-Custom") != "value" {
+		t.Errorf("X-Custom: got %q", result.MockedResponse.Headers.Get("X-Custom"))
+	}
+}

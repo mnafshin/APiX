@@ -150,9 +150,13 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 		}
 		return tx, proxy.ResumeRespond, nil
 	default:
-		// ActionForward — apply modified request if provided.
-		if decision.ModifiedRequest != nil {
-			tx.Request.Raw = decision.ModifiedRequest
+		// ActionForward — apply modified request fields if provided.
+		if mr := decision.ModifiedRequest; mr != nil {
+			tx.Request.Raw = mr
+			tx.Request.Method = mr.Method
+			tx.Request.URL = mr.URL
+			tx.Request.Headers = mr.Header.Clone()
+			tx.Request.Body = mr.Body
 		}
 		return tx, proxy.ResumeForward, nil
 	}

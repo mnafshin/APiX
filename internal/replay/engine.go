@@ -109,6 +109,11 @@ func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.R
 		httpReq.Header.Set(k, v)
 	}
 
+	// Apply method override.
+	if req.OverrideMethod != "" {
+		httpReq.Method = req.OverrideMethod
+	}
+
 	// Handle redirect policy.
 	client := e.client
 	if !req.FollowRedirects {
