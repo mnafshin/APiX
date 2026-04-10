@@ -37,6 +37,11 @@ var validHTTPMethods = map[string]bool{
 	"DELETE": true, "HEAD": true, "OPTIONS": true, "CONNECT": true, "TRACE": true,
 }
 
+// regexEvalSem limits concurrent regexp evaluations to avoid DoS via too many
+// simultaneous / expensive matches. Choosing a modest default keeps memory and
+// CPU bounded under load while still allowing parallel checks.
+var regexEvalSem = make(chan struct{}, 32)
+
 // AddRule registers a new breakpoint rule. Assigns a UUID if rule.ID is empty.
 func (m *Manager) AddRule(rule *BreakpointRule) (*BreakpointRule, error) {
 	if rule.URLPattern == "" {
@@ -90,23 +95,35 @@ func (m *Manager) ListRules() []*BreakpointRule {
 // Evaluate checks req against all enabled rules. Returns the matching rule ID
 // or empty string if no rule matches. Uses a timeout to prevent ReDoS attacks.
 func (m *Manager) Evaluate(method, rawURL string) string {
-	// Create a timeout context to prevent regex from blocking
+	// Timeout to avoid long-running regex matches (protect against ReDoS).
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	
+
+	// Snapshot rules and compiled regexes while holding the read lock so we
+	// don't hold the lock during potentially expensive MatchString calls.
+	m.mu.RLock()
+	type entry struct {
+		id   string
+		rule *BreakpointRule
+		re  *regexp.Regexp
+	}
+	entries := make([]entry, 0, len(m.rules))
+	for id, r := range m.rules {
+		entries = append(entries, entry{id: id, rule: r, re: m.compiled[id]})
+	}
+	m.mu.RUnlock()
+
 	done := make(chan string, 1)
 	go func() {
-		m.mu.RLock()
-		defer m.mu.RUnlock()
-		for id, rule := range m.rules {
-			if !rule.Enabled {
+		for _, e := range entries {
+			if e.rule == nil || !e.rule.Enabled {
 				continue
 			}
 			// Check method: empty methods list means match all.
-			if len(rule.Methods) > 0 {
+			if len(e.rule.Methods) > 0 {
 				matched := false
-				for _, m := range rule.Methods {
-					if strings.EqualFold(m, method) {
+				for _, mm := range e.rule.Methods {
+					if strings.EqualFold(mm, method) {
 						matched = true
 						break
 					}
@@ -115,20 +132,45 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 					continue
 				}
 			}
-			re := m.compiled[id]
-			if re != nil && re.MatchString(rawURL) {
-				done <- id
+
+			re := e.re
+			if re == nil {
+				continue
+			}
+
+			// Acquire a slot for regex evaluation, respecting the overall ctx timeout.
+			select {
+			case regexEvalSem <- struct{}{}:
+				// acquired
+			case <-ctx.Done():
+				done <- ""
+				return
+			}
+
+			// Perform match in a small critical section so we can release the
+			// semaphore promptly. If MatchString blocks, the goroutine will run
+			// until completion but the semaphore prevents unbounded parallelism.
+			matched := false
+			func() {
+				defer func() { <-regexEvalSem }()
+				if re.MatchString(rawURL) {
+					matched = true
+				}
+			}()
+
+			if matched {
+				done <- e.id
 				return
 			}
 		}
 		done <- ""
 	}()
-	
+
 	select {
 	case ruleID := <-done:
 		return ruleID
 	case <-ctx.Done():
-		// Timeout: return empty string (no match) to avoid blocking
+		// Timeout or context cancelled: return no match to avoid blocking.
 		return ""
 	}
 }
