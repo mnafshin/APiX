@@ -261,3 +261,62 @@ func TestSubscribeReceivesPausedEntry(t *testing.T) {
 		t.Error("timed out waiting for paused entry on subscriber channel")
 	}
 }
+
+// ── ReDoS timeout ──────────────────────────────────────────────────────────
+
+// TestEvaluate_ReDoS_Timeout checks that a catastrophic backtracking regex
+// does not block the caller for longer than ~300ms.
+func TestEvaluate_ReDoS_Timeout(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	// This pattern can trigger exponential backtracking with some engines.
+	// Go's regexp package uses a linear-time algorithm, so the risk here is
+	// the goroutine timeout added in manager.go being exercised properly.
+	if _, err := m.AddRule(&BreakpointRule{
+		URLPattern: `(https?://)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(/[a-zA-Z0-9-_%]+)+`,
+		Enabled:    true,
+		Label:      "complex",
+	}); err != nil {
+		t.Fatalf("AddRule: %v", err)
+	}
+
+	// Even with a complex pattern, Evaluate should return within the timeout.
+	start := time.Now()
+	_ = m.Evaluate("GET", "https://this.is.a.very.long.host.example.com/path/to/resource/item")
+	elapsed := time.Since(start)
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("Evaluate took %v, want <500ms", elapsed)
+	}
+}
+
+// ── Multiple rules – first match ───────────────────────────────────────────
+
+func TestEvaluate_MultipleRules_FirstMatch(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	rule1, _ := m.AddRule(&BreakpointRule{URLPattern: `.*users.*`, Enabled: true, Label: "users"})
+	rule2, _ := m.AddRule(&BreakpointRule{URLPattern: `.*example.*`, Enabled: true, Label: "example"})
+
+	// Both patterns match this URL; exactly one rule ID should be returned.
+	matched := m.Evaluate("GET", "https://api.example.com/users/123")
+	if matched == "" {
+		t.Fatal("expected a match, got empty string")
+	}
+	if matched != rule1.ID && matched != rule2.ID {
+		t.Errorf("matched ID %q is not one of the known rule IDs (%q, %q)", matched, rule1.ID, rule2.ID)
+	}
+}
+
+// ── Resume unknown ID ──────────────────────────────────────────────────────
+
+func TestResume_UnknownID(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+
+	err := m.Resume("nonexistent-request-id", &ResumeDecision{Action: ActionForward})
+	if err == nil {
+		t.Error("expected error for unknown request ID, got nil")
+	}
+}

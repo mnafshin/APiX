@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -609,4 +610,220 @@ func drainHistory(t *testing.T, stream grpc.ServerStreamingClient[apix.HttpTrans
 		count++
 	}
 	return count
+}
+
+// seedRequests inserts n request records into the fixture DB with sequential IDs.
+func seedRequests(t *testing.T, f *fixture, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		rec := &storage.RequestRecord{
+			ID:        fmt.Sprintf("req-%03d", i),
+			Method:    "GET",
+			URL:       "https://example.com/page",
+			Headers:   map[string]string{},
+			Timestamp: time.Now(),
+		}
+		if err := f.db.SaveRequest(rec); err != nil {
+			t.Fatalf("SaveRequest %s: %v", rec.ID, err)
+		}
+	}
+}
+
+// ── GetHistory – pagination & filters ──────────────────────────────────────
+
+func TestGetHistory_Pagination(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	seedRequests(t, f, 25)
+
+	ctx := context.Background()
+
+	// First page: limit=10, offset=0 → expect 10 items.
+	stream, err := f.client.GetHistory(ctx, &apix.HistoryQuery{Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatalf("GetHistory page 1: %v", err)
+	}
+	page1 := drainHistory(t, stream)
+	if page1 != 10 {
+		t.Errorf("page 1: got %d want 10", page1)
+	}
+
+	// Second page: limit=10, offset=10 → expect 10 items.
+	stream2, err := f.client.GetHistory(ctx, &apix.HistoryQuery{Limit: 10, Offset: 10})
+	if err != nil {
+		t.Fatalf("GetHistory page 2: %v", err)
+	}
+	page2 := drainHistory(t, stream2)
+	if page2 != 10 {
+		t.Errorf("page 2: got %d want 10", page2)
+	}
+
+	// Third page: limit=10, offset=20 → expect 5 items (the last 5).
+	stream3, err := f.client.GetHistory(ctx, &apix.HistoryQuery{Limit: 10, Offset: 20})
+	if err != nil {
+		t.Fatalf("GetHistory page 3: %v", err)
+	}
+	page3 := drainHistory(t, stream3)
+	if page3 != 5 {
+		t.Errorf("page 3: got %d want 5", page3)
+	}
+}
+
+func TestGetHistory_URLFilter(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	for _, rec := range []*storage.RequestRecord{
+		{ID: "url-a", Method: "GET", URL: "https://api.example.com/users", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "url-b", Method: "GET", URL: "https://api.example.com/orders", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "url-c", Method: "GET", URL: "https://other.example.com/users", Headers: map[string]string{}, Timestamp: time.Now()},
+	} {
+		if err := f.db.SaveRequest(rec); err != nil {
+			t.Fatalf("SaveRequest: %v", err)
+		}
+	}
+
+	stream, err := f.client.GetHistory(context.Background(), &apix.HistoryQuery{
+		Limit:     10,
+		UrlFilter: "api.example.com",
+	})
+	if err != nil {
+		t.Fatalf("GetHistory with URL filter: %v", err)
+	}
+	count := drainHistory(t, stream)
+	if count != 2 {
+		t.Errorf("URL filter: got %d want 2 (api.example.com)", count)
+	}
+}
+
+func TestGetHistory_MethodFilter(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	for _, rec := range []*storage.RequestRecord{
+		{ID: "mf-get", Method: "GET", URL: "https://example.com/", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "mf-post", Method: "POST", URL: "https://example.com/create", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "mf-put", Method: "PUT", URL: "https://example.com/update", Headers: map[string]string{}, Timestamp: time.Now()},
+	} {
+		if err := f.db.SaveRequest(rec); err != nil {
+			t.Fatalf("SaveRequest: %v", err)
+		}
+	}
+
+	stream, err := f.client.GetHistory(context.Background(), &apix.HistoryQuery{
+		Limit:        10,
+		MethodFilter: "POST",
+	})
+	if err != nil {
+		t.Fatalf("GetHistory with method filter: %v", err)
+	}
+	count := drainHistory(t, stream)
+	if count != 1 {
+		t.Errorf("method filter: got %d want 1 (POST only)", count)
+	}
+}
+
+// ── ResumeRequest – modified request & response ────────────────────────────
+
+func TestResumeRequest_WithModifiedRequest(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Pause a request via the breakpoints manager directly.
+	targetURL, _ := url.Parse("http://example.com/original")
+	rawReq, _ := http.NewRequestWithContext(ctx, "GET", targetURL.String(), nil)
+	entry := breakpoints.NewPausedEntry("mod-req-1", "bp-1", rawReq)
+
+	resumeDecision := make(chan struct{})
+	go func() {
+		defer close(resumeDecision)
+		_, _ = f.bpm.Pause(ctx, entry)
+	}()
+
+	// Give the pause goroutine time to register.
+	time.Sleep(20 * time.Millisecond)
+
+	// Resume via gRPC with a modified URL — should succeed without error.
+	_, err := f.client.ResumeRequest(ctx, &apix.ResumeAction{
+		RequestId: "mod-req-1",
+		Action:    apix.ResumeAction_FORWARD,
+		ModifiedRequest: &apix.HttpRequest{
+			Method: "GET",
+			Url:    "http://example.com/modified",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResumeRequest with modified request: %v", err)
+	}
+
+	// Verify the pause goroutine unblocks.
+	select {
+	case <-resumeDecision:
+	case <-time.After(3 * time.Second):
+		t.Fatal("paused request never unblocked after ResumeRequest")
+	}
+}
+
+// ── CaptureTraffic – multiple subscribers ──────────────────────────────────
+
+func TestCaptureTraffic_MultipleSubscribers(t *testing.T) {
+	f := newFixture(t)
+	defer f.stop()
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel1()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel2()
+
+	stream1, err := f.client.CaptureTraffic(ctx1, &apix.CaptureRequest{})
+	if err != nil {
+		t.Fatalf("CaptureTraffic subscriber 1: %v", err)
+	}
+	stream2, err := f.client.CaptureTraffic(ctx2, &apix.CaptureRequest{})
+	if err != nil {
+		t.Fatalf("CaptureTraffic subscriber 2: %v", err)
+	}
+
+	// Let both server goroutines register before publishing.
+	time.Sleep(30 * time.Millisecond)
+
+	txURL, _ := url.Parse("https://multi.example.com/event")
+	if err := f.eng.StoreTransaction(&proxy.Transaction{
+		ID: "multi-cap-1",
+		Request: &proxy.ProxyRequest{
+			ID:      "multi-cap-1",
+			Method:  "GET",
+			URL:     txURL,
+			Headers: http.Header{},
+			Raw:     &http.Request{Method: "GET", URL: txURL, Header: http.Header{}},
+		},
+	}); err != nil {
+		t.Fatalf("StoreTransaction: %v", err)
+	}
+
+	msg1, err := stream1.Recv()
+	if err != nil {
+		t.Fatalf("subscriber 1 Recv: %v", err)
+	}
+	msg2, err := stream2.Recv()
+	if err != nil {
+		t.Fatalf("subscriber 2 Recv: %v", err)
+	}
+
+	for i, msg := range []*apix.HttpRequest{msg1, msg2} {
+		if msg.Id != "multi-cap-1" {
+			t.Errorf("subscriber %d: ID got %q want multi-cap-1", i+1, msg.Id)
+		}
+	}
+
+	cancel1()
+	cancel2()
 }

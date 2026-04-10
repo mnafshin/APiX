@@ -346,3 +346,208 @@ func TestE2E_ReplayRequest(t *testing.T) {
 		t.Error("upstream did not receive X-Replayed: true on the replayed request")
 	}
 }
+
+// ── Test 4: Breakpoint DROP returns 502 to client, upstream not called ──────
+
+func TestE2E_BreakpointDrop(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stack := startStack(t)
+	t.Cleanup(stack.stop)
+
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	_, err := stack.client.SetBreakpoint(ctx, &apix.BreakpointRule{
+		UrlPattern: `.*drop.*`,
+		Enabled:    true,
+		Label:      "e2e-drop",
+	})
+	if err != nil {
+		t.Fatalf("SetBreakpoint: %v", err)
+	}
+
+	watchStream, err := stack.client.WatchPausedRequests(ctx, &apix.Empty{})
+	if err != nil {
+		t.Fatalf("WatchPausedRequests: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	type result struct {
+		status int
+		err    error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		c := proxyHTTPClient(stack.proxyURL)
+		r, err := c.Get(upstream.URL + "/drop")
+		if err != nil {
+			resultCh <- result{err: err}
+			return
+		}
+		r.Body.Close()
+		resultCh <- result{status: r.StatusCode}
+	}()
+
+	paused, err := watchStream.Recv()
+	if err != nil {
+		t.Fatalf("WatchPausedRequests.Recv: %v", err)
+	}
+
+	_, err = stack.client.ResumeRequest(ctx, &apix.ResumeAction{
+		RequestId: paused.RequestId,
+		Action:    apix.ResumeAction_DROP,
+	})
+	if err != nil {
+		t.Fatalf("ResumeRequest DROP: %v", err)
+	}
+
+	var res result
+	select {
+	case res = <-resultCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for proxy response")
+	}
+	if res.err != nil {
+		t.Fatalf("proxy GET: %v", res.err)
+	}
+	if res.status != http.StatusBadGateway {
+		t.Errorf("status: got %d want 502 (dropped)", res.status)
+	}
+	if upstreamCalled {
+		t.Error("upstream should NOT have been called for a dropped request")
+	}
+}
+
+// ── Test 5: Breakpoint RESPOND delivers synthetic response; upstream not called
+
+func TestE2E_BreakpointRespond(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stack := startStack(t)
+	t.Cleanup(stack.stop)
+
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	_, err := stack.client.SetBreakpoint(ctx, &apix.BreakpointRule{
+		UrlPattern: `.*respond.*`,
+		Enabled:    true,
+		Label:      "e2e-respond",
+	})
+	if err != nil {
+		t.Fatalf("SetBreakpoint: %v", err)
+	}
+
+	watchStream, err := stack.client.WatchPausedRequests(ctx, &apix.Empty{})
+	if err != nil {
+		t.Fatalf("WatchPausedRequests: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	type result struct {
+		status int
+		body   string
+		err    error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		c := proxyHTTPClient(stack.proxyURL)
+		r, err := c.Get(upstream.URL + "/respond")
+		if err != nil {
+			resultCh <- result{err: err}
+			return
+		}
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		resultCh <- result{status: r.StatusCode, body: string(b)}
+	}()
+
+	paused, err := watchStream.Recv()
+	if err != nil {
+		t.Fatalf("WatchPausedRequests.Recv: %v", err)
+	}
+
+	_, err = stack.client.ResumeRequest(ctx, &apix.ResumeAction{
+		RequestId: paused.RequestId,
+		Action:    apix.ResumeAction_RESPOND,
+		ModifiedResponse: &apix.HttpResponse{
+			StatusCode: http.StatusTeapot,
+			StatusText: "418 I'm a teapot",
+			Body:       []byte(`{"synthetic":true}`),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResumeRequest RESPOND: %v", err)
+	}
+
+	var res result
+	select {
+	case res = <-resultCh:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for proxy response")
+	}
+	if res.err != nil {
+		t.Fatalf("proxy GET: %v", res.err)
+	}
+	if res.status != http.StatusTeapot {
+		t.Errorf("status: got %d want 418", res.status)
+	}
+	if !strings.Contains(res.body, "synthetic") {
+		t.Errorf("body: got %q want synthetic content", res.body)
+	}
+	if upstreamCalled {
+		t.Error("upstream should NOT have been called for a responded request")
+	}
+}
+
+// ── Test 6: Concurrent requests all captured in history ────────────────────
+
+func TestE2E_ConcurrentRequests(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	stack := startStack(t)
+	t.Cleanup(stack.stop)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	const n = 10
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			c := proxyHTTPClient(stack.proxyURL)
+			r, err := c.Get(upstream.URL + "/concurrent")
+			if err == nil {
+				r.Body.Close()
+			}
+		}()
+	}
+	wg.Wait()
+
+	time.Sleep(100 * time.Millisecond)
+
+	stream, err := stack.client.GetHistory(ctx, &apix.HistoryQuery{Limit: int32(n * 2)})
+	if err != nil {
+		t.Fatalf("GetHistory: %v", err)
+	}
+	txs := drainHistory(t, stream)
+	if len(txs) < n {
+		t.Errorf("expected at least %d transactions after %d concurrent requests, got %d", n, n, len(txs))
+	}
+}

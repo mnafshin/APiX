@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -365,5 +366,169 @@ func TestForeignKeyCascade(t *testing.T) {
 	}
 	if gotReq != nil || gotResp != nil {
 		t.Error("expected both request and response to be deleted (cascade)")
+	}
+}
+
+// ── Pagination ──────────────────────────────────────────────────────────────
+
+func TestListTransactions_Pagination(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	// Seed 15 requests with distinct timestamps so ordering is deterministic.
+	base := time.Now().Add(-15 * time.Second)
+	for i := 0; i < 15; i++ {
+		if err := db.SaveRequest(&RequestRecord{
+			ID:        fmt.Sprintf("pag-%02d", i),
+			Method:    "GET",
+			URL:       "https://example.com/",
+			Headers:   map[string]string{},
+			Timestamp: base.Add(time.Duration(i) * time.Second),
+		}); err != nil {
+			t.Fatalf("SaveRequest: %v", err)
+		}
+	}
+
+	// Page 1: limit=5, offset=0 → 5 records.
+	page1, _, err := db.ListTransactions(5, 0, "", "", 0)
+	if err != nil {
+		t.Fatalf("page 1: %v", err)
+	}
+	if len(page1) != 5 {
+		t.Errorf("page 1: got %d want 5", len(page1))
+	}
+
+	// Page 2: limit=5, offset=5 → 5 records.
+	page2, _, err := db.ListTransactions(5, 5, "", "", 0)
+	if err != nil {
+		t.Fatalf("page 2: %v", err)
+	}
+	if len(page2) != 5 {
+		t.Errorf("page 2: got %d want 5", len(page2))
+	}
+
+	// Pages must not overlap.
+	ids1 := make(map[string]struct{})
+	for _, r := range page1 {
+		ids1[r.ID] = struct{}{}
+	}
+	for _, r := range page2 {
+		if _, dup := ids1[r.ID]; dup {
+			t.Errorf("pages overlap at ID %q", r.ID)
+		}
+	}
+
+	// Page 3: limit=5, offset=10 → remaining 5.
+	page3, _, err := db.ListTransactions(5, 10, "", "", 0)
+	if err != nil {
+		t.Fatalf("page 3: %v", err)
+	}
+	if len(page3) != 5 {
+		t.Errorf("page 3: got %d want 5", len(page3))
+	}
+}
+
+// ── Duplicate ID ────────────────────────────────────────────────────────────
+
+func TestSaveRequest_DuplicateID(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	rec := &RequestRecord{
+		ID:        "dup-id",
+		Method:    "GET",
+		URL:       "https://example.com/",
+		Headers:   map[string]string{},
+		Timestamp: time.Now(),
+	}
+	if err := db.SaveRequest(rec); err != nil {
+		t.Fatalf("first SaveRequest: %v", err)
+	}
+
+	// SaveRequest uses INSERT OR REPLACE (upsert), so a duplicate should update
+	// the record, not return an error.
+	rec.Method = "POST"
+	rec.URL = "https://example.com/updated"
+	if err := db.SaveRequest(rec); err != nil {
+		t.Fatalf("upsert SaveRequest: %v", err)
+	}
+
+	got, _, err := db.GetTransaction("dup-id")
+	if err != nil {
+		t.Fatalf("GetTransaction: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected record, got nil")
+	}
+	if got.Method != "POST" || got.URL != "https://example.com/updated" {
+		t.Errorf("after upsert: method=%q url=%q", got.Method, got.URL)
+	}
+}
+
+// ── SaveBreakpoint – upsert ─────────────────────────────────────────────────
+
+func TestSaveBreakpoint_UpdateExisting(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	const id = "bp-upsert"
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, true, "original"); err != nil {
+		t.Fatalf("first SaveBreakpoint: %v", err)
+	}
+
+	// Update the same ID with a different label and disabled state.
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, false, "updated"); err != nil {
+		t.Fatalf("upsert SaveBreakpoint: %v", err)
+	}
+
+	bps, err := db.ListBreakpoints()
+	if err != nil {
+		t.Fatalf("ListBreakpoints: %v", err)
+	}
+	var found *BreakpointRecord
+	for _, bp := range bps {
+		if bp.ID == id {
+			found = bp
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("breakpoint %q not found after upsert", id)
+	}
+	if found.Enabled {
+		t.Error("Enabled: expected false after upsert")
+	}
+	if found.Label != "updated" {
+		t.Errorf("Label: got %q want updated", found.Label)
+	}
+}
+
+// ── ListTransactions – filter combinations ──────────────────────────────────
+
+func TestListTransactions_MethodFilter(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	for _, rec := range []*RequestRecord{
+		{ID: "get-1", Method: "GET", URL: "https://a.com/", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "post-1", Method: "POST", URL: "https://a.com/create", Headers: map[string]string{}, Timestamp: time.Now()},
+		{ID: "post-2", Method: "POST", URL: "https://b.com/submit", Headers: map[string]string{}, Timestamp: time.Now()},
+	} {
+		if err := db.SaveRequest(rec); err != nil {
+			t.Fatalf("SaveRequest: %v", err)
+		}
+	}
+
+	results, _, err := db.ListTransactions(10, 0, "", "POST", 0)
+	if err != nil {
+		t.Fatalf("ListTransactions: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("method filter POST: got %d want 2", len(results))
+	}
+	for _, r := range results {
+		if r.Method != "POST" {
+			t.Errorf("expected only POST, got %q (ID=%s)", r.Method, r.ID)
+		}
 	}
 }
