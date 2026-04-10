@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -48,8 +49,19 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 
 	req := tx.Request
 	if req != nil {
+		// Prefer storing the original headers captured before plugins modified them.
+		var hdrSrc http.Header
+		if tx.OriginalRequestHeaders != nil && len(tx.OriginalRequestHeaders) > 0 {
+			hdrSrc = tx.OriginalRequestHeaders
+		} else if req.Raw != nil {
+			hdrSrc = req.Raw.Header
+		} else if req.Headers != nil {
+			hdrSrc = req.Headers
+		} else {
+			hdrSrc = http.Header{}
+		}
 		hdrs := make(map[string]string)
-		for k, vv := range req.Headers {
+		for k, vv := range hdrSrc {
 			if len(vv) > 0 {
 				hdrs[k] = vv[0]
 			}

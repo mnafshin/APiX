@@ -144,6 +144,8 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body.Close()
 	}
 
+	origHeaders := r.Header.Clone()
+
 	proxyReq := &plugins.ProxyRequest{
 		ID:      reqID,
 		Method:  r.Method,
@@ -196,6 +198,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		ID:          reqID,
 		Request:     proxyReq,
 		RequestBody: bodyBytes,
+		OriginalRequestHeaders: origHeaders,
 	}
 	if p.engine != nil {
 		bpID := "" // The engine handles evaluation internally via PauseRequest.
