@@ -419,7 +419,7 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 
 Found a bug? Have a feature request? Open a [GitHub Issue](https://github.com/mnafshin/APiX/issues).
 
-For security vulnerabilities, please email security@apix.dev (or open a private security advisory).
+For security vulnerabilities, please open a private security advisory on GitHub.
 
 ## Contributing
 
