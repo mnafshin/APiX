@@ -103,9 +103,12 @@ func LoadConfig(path string) *Config {
 		log.Println("WARNING: auth_token is set in config.yaml. Consider using the APIX_AUTH_TOKEN environment variable instead to avoid storing secrets in plaintext.")
 	}
 
-	// If AuthToken is set (production mode), bind to 0.0.0.0 by default for remote access
-	if cfg.AuthToken != "" && cfg.GRPCBindAddress == "127.0.0.1" {
-		cfg.GRPCBindAddress = "0.0.0.0"
+	// Default to loopback only for security. Only allow 0.0.0.0 when TLS + auth are both configured for remote access
+	if cfg.GRPCBindAddress == "" {
+		cfg.GRPCBindAddress = "127.0.0.1"
+		if cfg.TLSEnabled && cfg.AuthToken != "" {
+			cfg.GRPCBindAddress = "0.0.0.0"
+		}
 	}
 
 	return cfg
