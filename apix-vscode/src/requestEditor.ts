@@ -112,11 +112,12 @@ export class RequestEditor {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <title>Edit Request</title>
-  <style>
+  <style nonce="${nonce}">
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px; }
     h2 { margin-top: 0; font-size: 16px; }
+    h3 { font-size: 14px; margin: 0 0 8px; }
     label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 2px; margin-top: 12px; }
     input, select, textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 5px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
     input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); }
@@ -129,6 +130,7 @@ export class RequestEditor {
     .btn:hover { background: var(--vscode-button-hoverBackground); }
     .btn-danger { background: var(--vscode-inputValidation-errorBackground, #5a1d1d); }
     .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+    .hidden { display: none; }
     #respond-section { display: none; border-top: 1px solid var(--vscode-panel-border); margin-top: 16px; padding-top: 16px; }
     #respond-section.visible { display: block; }
     .badge { font-size: 11px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); padding: 2px 6px; border-radius: 3px; margin-left: 8px; }
@@ -149,7 +151,7 @@ export class RequestEditor {
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
 
   <div id="respond-section">
-    <h3 style="font-size:14px;margin:0 0 8px">Synthetic Response</h3>
+    <h3>Synthetic Response</h3>
     <label>Status Code</label>
     <input type="number" id="resp-status" value="200" />
     <label>Status Text</label>
@@ -164,7 +166,7 @@ export class RequestEditor {
     <button class="btn" onclick="forward()">▶ Forward</button>
     <button class="btn btn-danger" onclick="drop()">✕ Drop</button>
     <button class="btn btn-secondary" onclick="toggleRespond()">↩ Respond with...</button>
-    <button class="btn" id="send-respond" style="display:none" onclick="sendRespond()">Send Response</button>
+    <button class="btn hidden" id="send-respond" onclick="sendRespond()">Send Response</button>
   </div>
 
   <script nonce="${nonce}">
