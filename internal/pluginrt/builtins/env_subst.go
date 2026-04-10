@@ -6,19 +6,41 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
 var envPattern = regexp.MustCompile(`\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}`)
 
+// secretPatterns lists environment variable names that should never be substituted
+// to prevent leaking secrets via request bodies
+var secretPatterns = []string{
+	"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD",
+	"AUTH", "CREDENTIAL", "PRIVATE", "SIGNATURE",
+	"AWS", "AZURE", "GCP", "GITHUB", "GITLAB",
+	"OPENAI", "ANTHROPIC", "GOOGLE", "API",
+}
+
+// isSecretVar checks if an environment variable name looks like it contains secrets
+func isSecretVar(name string) bool {
+	upper := strings.ToUpper(name)
+	for _, pattern := range secretPatterns {
+		if strings.Contains(upper, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // EnvSubst replaces {{ENV_VAR}} placeholders in request headers and body with
-// the values of the corresponding environment variables.
+// the values of the corresponding environment variables, but blocks access to
+// secret-like environment variables to prevent credential leakage.
 type EnvSubst struct{}
 
 func (p *EnvSubst) Name() string        { return "env-subst" }
 func (p *EnvSubst) Version() string     { return "1.0.0" }
-func (p *EnvSubst) Description() string { return "Replace {{ENV_VAR}} placeholders with env values." }
+func (p *EnvSubst) Description() string { return "Replace {{ENV_VAR}} placeholders with env values (blocking secret vars)." }
 
 func (p *EnvSubst) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
 	// Read body bytes.
@@ -30,6 +52,10 @@ func (p *EnvSubst) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*p
 	// Substitute in body.
 	newBody := envPattern.ReplaceAllFunc(bodyBytes, func(match []byte) []byte {
 		varName := string(match[2 : len(match)-2]) // strip {{ }}
+		// Block secret-like variable names to prevent credential leakage
+		if isSecretVar(varName) {
+			return match
+		}
 		if val, ok := os.LookupEnv(varName); ok {
 			return []byte(val)
 		}
@@ -43,6 +69,10 @@ func (p *EnvSubst) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*p
 		for i, v := range vals {
 			vals[i] = envPattern.ReplaceAllStringFunc(v, func(match string) string {
 				varName := match[2 : len(match)-2]
+				// Block secret-like variable names to prevent credential leakage
+				if isSecretVar(varName) {
+					return match
+				}
 				if val, ok := os.LookupEnv(varName); ok {
 					return val
 				}
