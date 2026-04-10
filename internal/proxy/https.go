@@ -107,6 +107,13 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 }
 
 func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Request, host string) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("TLS proxy panic (recovered): %v", rec)
+			writeHTTPError(conn, http.StatusBadGateway, "proxy error")
+		}
+	}()
+
 	reqID := uuid.NewString()
 	start := time.Now()
 

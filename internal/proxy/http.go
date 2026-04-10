@@ -104,6 +104,13 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 // handleHTTP proxies a plain HTTP request, runs plugin chain, stores traffic.
 func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("HTTP proxy panic (recovered): %v", rec)
+			http.Error(w, "proxy error", http.StatusBadGateway)
+		}
+	}()
+
 	ctx := r.Context()
 	reqID := uuid.NewString()
 	start := time.Now()
