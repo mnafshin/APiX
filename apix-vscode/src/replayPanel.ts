@@ -102,6 +102,7 @@ export class ReplayPanel {
 
     private static _getHtml(webview: vscode.Webview, tx: HttpTransaction | undefined): string {
         const nonce = ReplayPanel._getNonce();
+        const csp = webview.cspSource;
         const req = tx?.request;
         const escAttr = (s: string) => s.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const headersJson = JSON.stringify(req?.headers || {}, null, 2);
@@ -111,7 +112,7 @@ export class ReplayPanel {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}' ${csp}; connect-src ${csp}; img-src ${csp} data:; font-src ${csp} data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none';">
   <title>Replay Request</title>
   <style nonce="${nonce}">
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px; }
