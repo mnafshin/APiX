@@ -325,17 +325,26 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 ### v1.1 (Minor - ~4-6 weeks)
 - [ ] Contract-first CLI foundation (`cmd/apix-cli`, shared transport/auth config, stable flags)
 - [ ] AI-ready output contracts (`--output json`, NDJSON streams, stable exit codes)
-- [ ] Core CLI read flows (`status`, `plugins`, `history`, `watch`)
-- [ ] WebSocket traffic inspection
-- [ ] HAR export/import (session persistence)
-- [ ] Breakpoint conditions (match on headers, body, status code)
-- [ ] Response mocking UI
-- [ ] Request composition/templating
+- [ ] Initial CLI read flows (`version`, `status`, `plugins`)
 
 ### v1.2 (Minor - ~6-8 weeks)
-- [ ] Core CLI write flows (breakpoint CRUD, paused request actions, replay/send)
+- [ ] Core CLI terminal workflows (`history`, `watch`, breakpoints, paused request actions, replay/send)
 - [ ] CLI operator tooling (`doctor`, certificate status/help, shell completion)
-- [ ] HTTP/2 and HTTP/3 support
+- [ ] History management and export/import foundations
+- [ ] Breakpoint conditions (match on headers, body, status code)
+- [ ] HAR export/import (session persistence)
+- [ ] Response mocking UI
+
+### v1.3 (Minor)
+- [ ] Declarative rewrite rules and repeatable mocking workflows
+- [ ] Request composition/templating
+- [ ] MCP integration and AI-facing automation surfaces
+- [ ] Map Local and cURL/HAR portability improvements
+
+### v1.4+ (Protocol Expansion)
+- [ ] WebSocket traffic inspection
+- [ ] gRPC-over-HTTP/2 inspection
+- [ ] HTTP/2 and staged HTTP/3 support
 - [ ] API authentication/authorization testing
 - [ ] Performance profiling
 - [ ] Distributed tracing support (OpenTelemetry)
@@ -362,6 +371,17 @@ The CLI will add a separate **user contract**, not a separate backend protocol. 
 - **AI-ready**: machine-readable JSON and NDJSON output modes with stable field names and no need to scrape prose
 
 If browser-native or third-party HTTP integrations become a primary requirement later, APiX can add a thin gateway on top of gRPC. That should be a later compatibility layer, not a replacement for the engine API.
+
+### Suggested Rollout Plan
+
+APiX's recommended rollout sequence is:
+
+1. **CLI foundation** — build `cmd/apix-cli`, shared transport/auth config, JSON output, NDJSON streams, and stable exit codes
+2. **Core terminal workflows** — add `history`, `watch`, breakpoint management, paused request actions, `replay`, `send`, and operator tooling
+3. **Agent-ready workflows** — add declarative rules, request composition, import/export portability, and MCP integration
+4. **Protocol expansion** — add WebSocket, broader HTTP/2 visibility, and staged HTTP/3 support
+
+This ordering is intentional: first make the CLI contract solid, then make it useful without the extension, then make it automatable for agents, and only then broaden protocol coverage.
 
 ## Supported Versions
 
