@@ -17,6 +17,7 @@ import (
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/replay"
+		httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -212,7 +213,15 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 			io.NopCloser(bytes.NewReader(mr.Body)))
 		if err == nil {
 			for k, v := range mr.Headers {
-				httpReq.Header.Set(k, v)
+				if cn, ok := httputil.CanonicalHeader(k); ok {
+					if httputil.IsValidHeaderValue(v) {
+						httpReq.Header.Set(cn, v)
+					} else {
+						log.Printf("grpc: skipped invalid header value for %q", k)
+					}
+				} else {
+					log.Printf("grpc: skipped invalid header name %q", k)
+				}
 			}
 			decision.ModifiedRequest = httpReq
 		} else {
@@ -226,7 +235,15 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 		mr := req.ModifiedResponse
 		hdrs := make(http.Header)
 		for k, v := range mr.Headers {
-			hdrs.Set(k, v)
+			if cn, ok := httputil.CanonicalHeader(k); ok {
+				if httputil.IsValidHeaderValue(v) {
+					hdrs.Set(cn, v)
+				} else {
+					log.Printf("grpc: skipped invalid response header value for %q", k)
+				}
+			} else {
+				log.Printf("grpc: skipped invalid response header name %q", k)
+			}
 		}
 		decision.ModifiedResponse = &http.Response{
 			StatusCode: int(mr.StatusCode),
