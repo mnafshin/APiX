@@ -105,7 +105,7 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 	type entry struct {
 		id   string
 		rule *BreakpointRule
-		re  *regexp.Regexp
+		re   *regexp.Regexp
 	}
 	entries := make([]entry, 0, len(m.rules))
 	for id, r := range m.rules {

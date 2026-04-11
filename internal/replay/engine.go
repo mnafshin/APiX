@@ -5,28 +5,28 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
 	"net"
 	"net/http"
 	"time"
 
+	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/internal/storage"
-		httputil "github.com/mnafshin/apix/internal/http"
 )
 
 // ClientConfig holds options for the replay HTTP client.
 // It exposes fine-grained upstream timeouts so the replay engine can be
 // configured to fail-fast against slow or unresponsive upstreams.
 type ClientConfig struct {
-	SkipTLSVerify          bool
-	Client                 *http.Client
-	DialTimeout            time.Duration
-	TLSHandshakeTimeout    time.Duration
-	ResponseHeaderTimeout  time.Duration
-	IdleConnTimeout        time.Duration
-	ExpectContinueTimeout  time.Duration
-	MaxIdleConnsPerHost    int
+	SkipTLSVerify         bool
+	Client                *http.Client
+	DialTimeout           time.Duration
+	TLSHandshakeTimeout   time.Duration
+	ResponseHeaderTimeout time.Duration
+	IdleConnTimeout       time.Duration
+	ExpectContinueTimeout time.Duration
+	MaxIdleConnsPerHost   int
 }
 
 // Engine replays stored or user-supplied HTTP requests against the original
@@ -126,10 +126,10 @@ func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.R
 					httpReq.Header.Set(cn, v)
 				} else {
 					// Skip invalid header values copied from storage; log for debugging.
-					log.Printf("replay: skipped invalid stored header value for %q", k)
+					logging.Warnf(ctx, "replay: skipped invalid stored header value for %q", k)
 				}
 			} else {
-				log.Printf("replay: skipped invalid stored header name %q", k)
+				logging.Warnf(ctx, "replay: skipped invalid stored header name %q", k)
 			}
 		}
 
@@ -162,10 +162,10 @@ func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.R
 			if httputil.IsValidHeaderValue(v) {
 				httpReq.Header.Set(cn, v)
 			} else {
-				log.Printf("replay: skipped invalid override header value for %q", k)
+				logging.Warnf(ctx, "replay: skipped invalid override header value for %q", k)
 			}
 		} else {
-			log.Printf("replay: skipped invalid override header name %q", k)
+			logging.Warnf(ctx, "replay: skipped invalid override header name %q", k)
 		}
 	}
 

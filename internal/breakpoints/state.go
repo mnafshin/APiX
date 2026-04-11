@@ -37,8 +37,8 @@ type PausedEntry struct {
 	Request      *http.Request // snapshot of the original request
 	PausedAt     time.Time
 	State        BreakpointState
-	done         chan struct{}      // closed when a decision is made
-	decision     *ResumeDecision   // set before closing done
+	done         chan struct{}   // closed when a decision is made
+	decision     *ResumeDecision // set before closing done
 }
 
 // ResumeDecision carries the action and optional modifications chosen by the user.
@@ -52,9 +52,9 @@ type ResumeDecision struct {
 type ResumeAction int
 
 const (
-	ActionForward  ResumeAction = iota // forward (optionally with modifications)
-	ActionDrop                         // drop; return 502 to client
-	ActionRespond                      // return synthetic response to client
+	ActionForward ResumeAction = iota // forward (optionally with modifications)
+	ActionDrop                        // drop; return 502 to client
+	ActionRespond                     // return synthetic response to client
 )
 
 // NewPausedEntry initialises a PausedEntry for requestID matching breakpointID.

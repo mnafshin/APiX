@@ -370,10 +370,10 @@ func TestMockResponse_ResponseHeadersPresent(t *testing.T) {
 func FuzzEnvSubst_Body(f *testing.F) {
 	f.Add(`{"key": "{{HOME}}"}`)
 	f.Add(`{{MISSING_VAR}}`)
-	f.Add(`{{`)              // unclosed brace
-	f.Add(`{{}}`)            // empty name
-	f.Add(`{{API_KEY}}`)     // blocked secret — must be left unchanged
-	f.Add(`{{AWS_SECRET}}`)  // blocked secret with prefix
+	f.Add(`{{`)                             // unclosed brace
+	f.Add(`{{}}`)                           // empty name
+	f.Add(`{{API_KEY}}`)                    // blocked secret — must be left unchanged
+	f.Add(`{{AWS_SECRET}}`)                 // blocked secret with prefix
 	f.Add(string([]byte{0x00, 0x01, 0xFF})) // binary data
 	f.Add(``)                               // empty body
 

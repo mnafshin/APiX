@@ -2,19 +2,20 @@ package engine
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
-	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/storage"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 )
 
 // Engine is the central coordinator for APiX. It implements proxy.TrafficEngine
@@ -77,7 +78,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			DurationMs: tx.DurationMs,
 		}
 		if err := e.db.SaveRequest(rec); err != nil {
-			log.Printf("engine: save request: %v", err)
+			logging.Errorf(context.Background(), "engine: save request: %v", err)
 		}
 
 		// Publish to capture subscribers.
@@ -116,7 +117,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Body:       tx.ResponseBody,
 		}
 		if err := e.db.SaveResponse(rec); err != nil {
-			log.Printf("engine: save response: %v", err)
+			logging.Errorf(context.Background(), "engine: save response: %v", err)
 		}
 	}
 	return nil

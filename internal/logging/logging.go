@@ -91,13 +91,21 @@ func logWithLevel(ctx context.Context, level string, format string, args ...inte
 }
 
 // Infof logs an info-level message.
-func Infof(ctx context.Context, format string, args ...interface{}) { logWithLevel(ctx, "info", format, args...) }
+func Infof(ctx context.Context, format string, args ...interface{}) {
+	logWithLevel(ctx, "info", format, args...)
+}
 
 // Warnf logs a warning-level message.
-func Warnf(ctx context.Context, format string, args ...interface{}) { logWithLevel(ctx, "warn", format, args...) }
+func Warnf(ctx context.Context, format string, args ...interface{}) {
+	logWithLevel(ctx, "warn", format, args...)
+}
 
 // Errorf logs an error-level message.
-func Errorf(ctx context.Context, format string, args ...interface{}) { logWithLevel(ctx, "error", format, args...) }
+func Errorf(ctx context.Context, format string, args ...interface{}) {
+	logWithLevel(ctx, "error", format, args...)
+}
 
 // Fatalf logs a fatal message and exits the process.
-func Fatalf(ctx context.Context, format string, args ...interface{}) { logWithLevel(ctx, "fatal", format, args...) }
+func Fatalf(ctx context.Context, format string, args ...interface{}) {
+	logWithLevel(ctx, "fatal", format, args...)
+}

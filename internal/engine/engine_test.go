@@ -471,9 +471,9 @@ func TestPauseRequestNilRequest(t *testing.T) {
 
 // headerPlugin is a test plugin that injects a header into every request.
 type headerPlugin struct {
-	name   string
-	key    string
-	value  string
+	name  string
+	key   string
+	value string
 }
 
 func (p *headerPlugin) Name() string        { return p.name }

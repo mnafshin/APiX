@@ -50,7 +50,7 @@ type ProxyResponse struct {
 	Headers    http.Header
 	Body       io.ReadCloser
 	// Raw stores the original unmodified response for reference.
-	Raw        *http.Response
+	Raw *http.Response
 }
 
 // Clone returns a shallow copy of the ProxyRequest with a new body reader.

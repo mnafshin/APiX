@@ -16,9 +16,11 @@ type HeaderEditor struct {
 	ResponseHeaders map[string]string
 }
 
-func (p *HeaderEditor) Name() string        { return "header-editor" }
-func (p *HeaderEditor) Version() string     { return "1.0.0" }
-func (p *HeaderEditor) Description() string { return "Add, remove, or replace request/response headers." }
+func (p *HeaderEditor) Name() string    { return "header-editor" }
+func (p *HeaderEditor) Version() string { return "1.0.0" }
+func (p *HeaderEditor) Description() string {
+	return "Add, remove, or replace request/response headers."
+}
 
 func (p *HeaderEditor) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
 	if len(p.RequestHeaders) == 0 {

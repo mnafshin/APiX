@@ -29,15 +29,15 @@ import (
 
 // proxyStack bundles a proxy + engine + storage for integration testing.
 type proxyStack struct {
-	proxy     *proxy.HTTPProxy
-	engine    *engine.Engine
-	db        *storage.DB
-	bpMgr     *breakpoints.Manager
-	proxyURL  string
-	proxyLis  net.Listener
-	httpSrv   *http.Server
-	stopCh    chan struct{}
-	stopOnce  sync.Once
+	proxy    *proxy.HTTPProxy
+	engine   *engine.Engine
+	db       *storage.DB
+	bpMgr    *breakpoints.Manager
+	proxyURL string
+	proxyLis net.Listener
+	httpSrv  *http.Server
+	stopCh   chan struct{}
+	stopOnce sync.Once
 }
 
 // newProxyStack starts a real HTTP proxy on a random port wired to an
@@ -375,8 +375,8 @@ func TestIntegration_ModifiedRequestStored(t *testing.T) {
 			modURL, _ := url.Parse(upstream.URL + "/modified")
 			entry.Request.URL = modURL
 			_ = stack.bpMgr.Resume(entry.RequestID, &breakpoints.ResumeDecision{
-				Action:            breakpoints.ActionForward,
-				ModifiedRequest:   entry.Request,
+				Action:          breakpoints.ActionForward,
+				ModifiedRequest: entry.Request,
 			})
 		}
 	}()

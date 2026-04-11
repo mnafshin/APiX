@@ -6,8 +6,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -68,7 +68,7 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 
 	cert, err := p.ca.CertForHost(hostname)
 	if err != nil {
-		log.Printf("tls proxy: cert for %s: %v", hostname, err)
+		logging.Errorf(ctx, "tls proxy: cert for %s: %v", hostname, err)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 	}
 	tlsConn := tls.Server(conn, tlsCfg)
 	if err := tlsConn.Handshake(); err != nil {
-		log.Printf("tls proxy: handshake for %s: %v", hostname, err)
+		logging.Errorf(ctx, "tls proxy: handshake for %s: %v", hostname, err)
 		return
 	}
 	defer tlsConn.Close()
@@ -89,7 +89,7 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 		req, err := http.ReadRequest(br)
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("tls proxy: read request from %s: %v", hostname, err)
+				logging.Errorf(ctx, "tls proxy: read request from %s: %v", hostname, err)
 			}
 			return
 		}
@@ -109,7 +109,7 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Request, host string) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("TLS proxy panic (recovered): %v", rec)
+			logging.Errorf(ctx, "TLS proxy panic (recovered): %v", rec)
 			writeHTTPError(conn, http.StatusBadGateway, "proxy error")
 		}
 	}()
@@ -163,7 +163,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	if p.engine != nil {
 		modified, action, err := p.engine.PauseRequest(tx)
 		if err != nil {
-			log.Printf("tls proxy: pause request: %v", err)
+			logging.Errorf(ctx, "tls proxy: pause request: %v", err)
 		}
 		tx = modified
 		switch action {
@@ -214,7 +214,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	if p.plugins != nil {
 		modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
 		if err != nil {
-			log.Printf("tls proxy: plugin OnResponse: %v", err)
+			logging.Errorf(ctx, "tls proxy: plugin OnResponse: %v", err)
 		} else if modResp != nil {
 			proxyResp = modResp
 		}
@@ -239,7 +239,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		tx.ResponseBody = finalRespBody
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
-			log.Printf("tls proxy: store transaction: %v", err)
+			logging.Errorf(ctx, "tls proxy: store transaction: %v", err)
 		}
 	}
 
@@ -259,7 +259,7 @@ func writeHTTPError(conn net.Conn, code int, msg string) {
 	}
 	resp.ContentLength = int64(len(msg))
 	if err := resp.Write(conn); err != nil {
-		log.Printf("tls proxy: write error response to client: %v", err)
+		logging.Errorf(context.Background(), "tls proxy: write error response to client: %v", err)
 	}
 }
 
@@ -270,7 +270,7 @@ func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 		var err error
 		body, err = io.ReadAll(resp.Body)
 		if err != nil {
-			log.Printf("tls proxy: read response body for write: %v", err)
+			logging.Errorf(context.Background(), "tls proxy: read response body for write: %v", err)
 			return
 		}
 	}
@@ -285,7 +285,7 @@ func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 		ContentLength: int64(len(body)),
 	}
 	if err := httpResp.Write(conn); err != nil {
-		log.Printf("tls proxy: write response to client: %v", err)
+		logging.Errorf(context.Background(), "tls proxy: write response to client: %v", err)
 	}
 }
 

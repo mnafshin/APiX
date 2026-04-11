@@ -229,4 +229,3 @@ func TestHTTPSProxy_PostBodyStoredAndReplayed(t *testing.T) {
 		t.Errorf("upstream received body during HTTPS replay: got %q, want %q", upstreamReceivedBody, wantBody)
 	}
 }
-

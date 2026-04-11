@@ -4,9 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
-	"strings"
 )
 
 // TestReplayResponseHeaderTimeout ensures the client times out if the upstream

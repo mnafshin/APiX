@@ -44,11 +44,11 @@ const (
 
 // Transaction groups a request and its (eventual) response.
 type Transaction struct {
-	ID                       string
-	Request                  *ProxyRequest
-	RequestBody              []byte // buffered body bytes captured before forwarding
-	OriginalRequestHeaders   http.Header // original headers before plugins modified them
-	Response                 *ProxyResponse
-	ResponseBody             []byte // buffered response body bytes captured after forwarding
-	DurationMs               int64
+	ID                     string
+	Request                *ProxyRequest
+	RequestBody            []byte      // buffered body bytes captured before forwarding
+	OriginalRequestHeaders http.Header // original headers before plugins modified them
+	Response               *ProxyResponse
+	ResponseBody           []byte // buffered response body bytes captured after forwarding
+	DurationMs             int64
 }

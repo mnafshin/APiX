@@ -38,9 +38,11 @@ func isSecretVar(name string) bool {
 // secret-like environment variables to prevent credential leakage.
 type EnvSubst struct{}
 
-func (p *EnvSubst) Name() string        { return "env-subst" }
-func (p *EnvSubst) Version() string     { return "1.0.0" }
-func (p *EnvSubst) Description() string { return "Replace {{ENV_VAR}} placeholders with env values (blocking secret vars)." }
+func (p *EnvSubst) Name() string    { return "env-subst" }
+func (p *EnvSubst) Version() string { return "1.0.0" }
+func (p *EnvSubst) Description() string {
+	return "Replace {{ENV_VAR}} placeholders with env values (blocking secret vars)."
+}
 
 func (p *EnvSubst) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
 	// Read body bytes.

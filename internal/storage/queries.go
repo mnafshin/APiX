@@ -1,10 +1,11 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"strings"
 	"time"
 )
@@ -164,7 +165,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 			DurationMs: durMs,
 		}
 		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
-			log.Printf("warning: failed to unmarshal request headers for request %s: %v", reqID, err)
+			logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", reqID, err)
 			req.Headers = make(map[string]string)
 		}
 		reqs = append(reqs, req)
@@ -178,7 +179,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 			}
 			if respHeaders.Valid {
 				if err := json.Unmarshal([]byte(respHeaders.String), &resp.Headers); err != nil {
-					log.Printf("warning: failed to unmarshal response headers for request %s: %v", respReqID.String, err)
+					logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", respReqID.String, err)
 					resp.Headers = make(map[string]string)
 				}
 			}
@@ -248,7 +249,7 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 			CreatedAt:  time.UnixMilli(createdAtMs),
 		}
 		if err := json.Unmarshal([]byte(methodsJSON), &bp.Methods); err != nil {
-			log.Printf("warning: failed to unmarshal methods for breakpoint %s: %v", id, err)
+			logging.Warnf(context.Background(), "failed to unmarshal methods for breakpoint %s: %v", id, err)
 			bp.Methods = nil
 		}
 		bps = append(bps, bp)
@@ -275,7 +276,7 @@ func (d *DB) scanRequest(row *sql.Row) (*RequestRecord, error) {
 		DurationMs: durMs,
 	}
 	if err := json.Unmarshal([]byte(hdrs), &req.Headers); err != nil {
-		log.Printf("warning: failed to unmarshal request headers for request %s: %v", id, err)
+		logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", id, err)
 		req.Headers = make(map[string]string)
 	}
 	return req, nil
@@ -298,7 +299,7 @@ func (d *DB) scanResponse(row *sql.Row) (*ResponseRecord, error) {
 		Body:       body,
 	}
 	if err := json.Unmarshal([]byte(hdrs), &resp.Headers); err != nil {
-		log.Printf("warning: failed to unmarshal response headers for request %s: %v", reqID, err)
+		logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", reqID, err)
 		resp.Headers = make(map[string]string)
 	}
 	return resp, nil

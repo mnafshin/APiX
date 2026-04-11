@@ -22,7 +22,6 @@ import (
 	usermsg "github.com/mnafshin/apix/internal/usermsg"
 )
 
-
 func main() {
 	configCheck := flag.Bool("config-check", false, "Validate config and exit")
 	flag.Parse()
@@ -125,18 +124,18 @@ func main() {
 	<-stop
 	logging.Infof(ctx, "Shutting down…")
 	cancel()
-	
+
 	// 12. Close proxies to release file descriptors.
 	httpProxy.Close()
 	tlsProxy.Close()
-	
+
 	// 13. Wait for all goroutines to finish, with a 15-second timeout.
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		logging.Infof(ctx, "Goodbye.")

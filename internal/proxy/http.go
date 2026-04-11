@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	logging "github.com/mnafshin/apix/internal/logging"
+	"io"
 	"net/http"
 	"time"
 
@@ -70,7 +70,7 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "proxy error", http.StatusBadGateway)
 		}
 	}()
-	
+
 	if r.Method == http.MethodConnect {
 		p.handleConnect(w, r)
 		return
@@ -87,7 +87,7 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "proxy error", http.StatusInternalServerError)
 		}
 	}()
-	
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "hijacking not supported", http.StatusInternalServerError)
@@ -197,9 +197,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Check breakpoints.
 	tx := &Transaction{
-		ID:          reqID,
-		Request:     proxyReq,
-		RequestBody: bodyBytes,
+		ID:                     reqID,
+		Request:                proxyReq,
+		RequestBody:            bodyBytes,
 		OriginalRequestHeaders: origHeaders,
 	}
 	if p.engine != nil {
@@ -255,13 +255,13 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("response body read error: %v", err), http.StatusBadGateway)
 		return
 	}
-	
+
 	// Enforce size limit after reading
 	if int64(len(respBody)) > maxBodyBytes {
 		http.Error(w, fmt.Sprintf("response body too large: %d bytes > %d bytes", len(respBody), maxBodyBytes), http.StatusBadGateway)
 		return
 	}
-	
+
 	// Create proxyResp without Body initially - keep respBody buffered separately.
 	// After plugins run, we'll use the final body bytes directly in writeProxyResponse.
 	proxyResp := &plugins.ProxyResponse{
@@ -326,13 +326,13 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse, body
 			w.Header().Add(k, v)
 		}
 	}
-	
+
 	if len(body) > 0 {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
 	} else {
 		w.Header().Set("Content-Length", "0")
 	}
-	
+
 	w.WriteHeader(resp.StatusCode)
 	if len(body) > 0 {
 		if _, err := w.Write(body); err != nil {
@@ -357,4 +357,3 @@ func (p *HTTPProxy) Close() {
 		p.transport.CloseIdleConnections()
 	}
 }
-

@@ -30,8 +30,8 @@ func Open(path string) (*DB, error) {
 		// Reasonable defaults for file-backed DB: keep some idle and allow multiple
 		// concurrent connections for read-heavy workloads. These can be tuned later
 		// or made configurable via a future config option.
-		db.SetMaxOpenConns(25)     // max concurrent connections
-		db.SetMaxIdleConns(5)      // keep 5 idle connections ready
+		db.SetMaxOpenConns(25) // max concurrent connections
+		db.SetMaxIdleConns(5)  // keep 5 idle connections ready
 	}
 
 	// Lifetime and idle times help recycle connections and avoid long-lived

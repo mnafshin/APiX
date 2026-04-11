@@ -249,8 +249,8 @@ func TestSaveAndListBreakpoints(t *testing.T) {
 
 	bps := []struct {
 		id, pattern, label string
-		methods             []string
-		enabled             bool
+		methods            []string
+		enabled            bool
 	}{
 		{"bp-1", ".*example\\.com.*", "Test BP 1", []string{"GET", "POST"}, true},
 		{"bp-2", ".*api\\..*", "Test BP 2", []string{"DELETE"}, false},

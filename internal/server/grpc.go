@@ -4,20 +4,20 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
-	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
+	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/internal/replay"
-		httputil "github.com/mnafshin/apix/internal/http"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/pkg/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -119,7 +119,7 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 	}
 	// Persist to storage.
 	if err := s.engine.DB().SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label); err != nil {
-		log.Printf("grpc: save breakpoint: %v", err)
+		logging.Errorf(ctx, "grpc: save breakpoint: %v", err)
 	}
 	return &apix.BreakpointResponse{
 		Breakpoint: &apix.BreakpointRule{
@@ -137,7 +137,7 @@ func (s *EngineServer) DeleteBreakpoint(ctx context.Context, req *apix.Breakpoin
 		return nil, status.Errorf(codes.NotFound, "breakpoint not found: %v", err)
 	}
 	if err := s.engine.DB().DeleteBreakpoint(req.Id); err != nil {
-		log.Printf("grpc: delete breakpoint from storage: %v", err)
+		logging.Errorf(ctx, "grpc: delete breakpoint from storage: %v", err)
 	}
 	return &apix.Empty{}, nil
 }
@@ -217,15 +217,15 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 					if httputil.IsValidHeaderValue(v) {
 						httpReq.Header.Set(cn, v)
 					} else {
-						log.Printf("grpc: skipped invalid header value for %q", k)
+						logging.Warnf(ctx, "grpc: skipped invalid header value for %q", k)
 					}
 				} else {
-					log.Printf("grpc: skipped invalid header name %q", k)
+					logging.Warnf(ctx, "grpc: skipped invalid header name %q", k)
 				}
 			}
 			decision.ModifiedRequest = httpReq
 		} else {
-			log.Printf("grpc: build modified request: %v", err)
+			logging.Errorf(ctx, "grpc: build modified request: %v", err)
 		}
 	}
 
@@ -239,10 +239,10 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 				if httputil.IsValidHeaderValue(v) {
 					hdrs.Set(cn, v)
 				} else {
-					log.Printf("grpc: skipped invalid response header value for %q", k)
+					logging.Warnf(ctx, "grpc: skipped invalid response header value for %q", k)
 				}
 			} else {
-				log.Printf("grpc: skipped invalid response header name %q", k)
+				logging.Warnf(ctx, "grpc: skipped invalid response header name %q", k)
 			}
 		}
 		decision.ModifiedResponse = &http.Response{
@@ -336,8 +336,8 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 		}
 
 		tx := &apix.HttpTransaction{
-			Id:        r.ID,
-			Timestamp: r.Timestamp.UnixMilli(),
+			Id:         r.ID,
+			Timestamp:  r.Timestamp.UnixMilli(),
 			DurationMs: r.DurationMs,
 			Request: &apix.HttpRequest{
 				Id:        r.ID,
@@ -430,8 +430,8 @@ func authStreamInterceptor(token string) grpc.StreamServerInterceptor {
 // without credentials (local desktop mode).
 func NewGRPCServer(cfg *config.Config) *grpc.Server {
 	return grpc.NewServer(
-		grpc.UnaryInterceptor(authUnaryInterceptor(cfg.AuthToken)),
-		grpc.StreamInterceptor(authStreamInterceptor(cfg.AuthToken)),
+		grpc.ChainUnaryInterceptor(logging.UnaryServerInterceptor(), authUnaryInterceptor(cfg.AuthToken)),
+		grpc.ChainStreamInterceptor(logging.StreamServerInterceptor(), authStreamInterceptor(cfg.AuthToken)),
 	)
 }
 
@@ -440,13 +440,13 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 	addr := cfg.GRPCBindAddress + ":" + cfg.GRPCPort
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("gRPC listen on %s: %v", addr, err)
+		logging.Fatalf(ctx, "gRPC listen on %s: %v", addr, err)
 	}
 	defer lis.Close()
 
 	grpcServer := NewGRPCServer(cfg)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
-	
+
 	// Enable reflection only in unauthenticated (local development) mode.
 	// When AuthToken is set for remote/production deployments, reflection
 	// is disabled to prevent API surface enumeration bypass of auth.
@@ -470,11 +470,11 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 		}
 	}()
 
-	log.Printf("gRPC server listening on %s", addr)
+	logging.Infof(ctx, "gRPC server listening on %s", addr)
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Printf("gRPC server error: %v", err)
+		logging.Errorf(ctx, "gRPC server error: %v", err)
 	}
-	log.Println("gRPC server stopped")
+	logging.Infof(ctx, "gRPC server stopped")
 }
 
 // Suppress unused import warnings.
