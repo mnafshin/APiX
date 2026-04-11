@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -21,6 +22,9 @@ import (
 )
 
 func main() {
+	configCheck := flag.Bool("config-check", false, "Validate config and exit")
+	flag.Parse()
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -29,6 +33,15 @@ func main() {
 
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())
+
+	// If invoked with --config-check bail out after validating the config.
+	if *configCheck {
+		if err := cfg.Validate(); err != nil {
+			log.Fatalf("config validation failed: %v", err)
+		}
+		log.Println("config: validation passed")
+		return
+	}
 
 	// 2. Open SQLite database.
 	db, err := storage.Open(cfg.DBPath)
