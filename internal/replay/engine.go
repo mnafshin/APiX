@@ -6,15 +6,25 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/mnafshin/apix/internal/storage"
 )
 
 // ClientConfig holds options for the replay HTTP client.
+// It exposes fine-grained upstream timeouts so the replay engine can be
+// configured to fail-fast against slow or unresponsive upstreams.
 type ClientConfig struct {
-	SkipTLSVerify bool
-	Client        *http.Client
+	SkipTLSVerify          bool
+	Client                 *http.Client
+	DialTimeout            time.Duration
+	TLSHandshakeTimeout    time.Duration
+	ResponseHeaderTimeout  time.Duration
+	IdleConnTimeout        time.Duration
+	ExpectContinueTimeout  time.Duration
+	MaxIdleConnsPerHost    int
 }
 
 // Engine replays stored or user-supplied HTTP requests against the original
@@ -28,27 +38,58 @@ type Engine struct {
 // If cfg is nil, uses system certificate pool (TLS verification enabled).
 // Accepts optional custom http.Client or ClientConfig.SkipTLSVerify to bypass verification.
 func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
-	var client *http.Client
-
 	if cfg != nil && cfg.Client != nil {
-		// Use custom client if provided
-		client = cfg.Client
-	} else if cfg != nil && cfg.SkipTLSVerify {
-		// Create client with InsecureSkipVerify (for self-signed cert scenarios)
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-			},
+		return &Engine{db: db, client: cfg.Client}
+	}
+
+	// Defaults mirror proxy/transport defaults.
+	dialTimeout := 10 * time.Second
+	idleTimeout := 90 * time.Second
+	tlsHandshake := 10 * time.Second
+	respHeaderTimeout := 30 * time.Second
+	expectContinue := 1 * time.Second
+	maxIdle := 10
+
+	if cfg != nil {
+		if cfg.DialTimeout != 0 {
+			dialTimeout = cfg.DialTimeout
 		}
-	} else {
-		// Default: use system certificate pool (TLS verification enabled)
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{}, // Uses system root CAs
-			},
+		if cfg.IdleConnTimeout != 0 {
+			idleTimeout = cfg.IdleConnTimeout
+		}
+		if cfg.TLSHandshakeTimeout != 0 {
+			tlsHandshake = cfg.TLSHandshakeTimeout
+		}
+		if cfg.ResponseHeaderTimeout != 0 {
+			respHeaderTimeout = cfg.ResponseHeaderTimeout
+		}
+		if cfg.ExpectContinueTimeout != 0 {
+			expectContinue = cfg.ExpectContinueTimeout
+		}
+		if cfg.MaxIdleConnsPerHost != 0 {
+			maxIdle = cfg.MaxIdleConnsPerHost
 		}
 	}
 
+	// Build transport with dialer so Dial timeout is honoured.
+	dialer := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
+	tlsCfg := &tls.Config{}
+	if cfg != nil && cfg.SkipTLSVerify {
+		tlsCfg = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig:       tlsCfg,
+		DialContext:           dialer.DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   maxIdle,
+		IdleConnTimeout:       idleTimeout,
+		TLSHandshakeTimeout:   tlsHandshake,
+		ResponseHeaderTimeout: respHeaderTimeout,
+		ExpectContinueTimeout: expectContinue,
+	}
+
+	client := &http.Client{Transport: transport}
 	return &Engine{db: db, client: client}
 }
 

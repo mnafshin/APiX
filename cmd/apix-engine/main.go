@@ -76,14 +76,23 @@ func main() {
 
 	// 7. Create replay Engine with TLS config from settings.
 	replayEng := replay.NewEngine(db, &replay.ClientConfig{
-		SkipTLSVerify: cfg.ReplaySkipTLSVerify,
+		SkipTLSVerify:         cfg.ReplaySkipTLSVerify,
+		DialTimeout:           time.Duration(cfg.DialTimeoutSec) * time.Second,
+		IdleConnTimeout:       time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
+		TLSHandshakeTimeout:   time.Duration(cfg.UpstreamTLSHandshakeTimeoutSec) * time.Second,
+		ResponseHeaderTimeout: time.Duration(cfg.UpstreamResponseHeaderTimeoutSec) * time.Second,
+		ExpectContinueTimeout: time.Duration(cfg.UpstreamExpectContinueTimeoutSec) * time.Second,
+		MaxIdleConnsPerHost:   cfg.MaxIdleConnsPerHost,
 	})
 
 	// 8. Create TLS + HTTP proxies.
 	transportOpts := proxy.TransportOptions{
-		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
-		IdleConnTimeout:     time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
-		DialTimeout:         time.Duration(cfg.DialTimeoutSec) * time.Second,
+		MaxIdleConnsPerHost:   cfg.MaxIdleConnsPerHost,
+		IdleConnTimeout:       time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
+		DialTimeout:           time.Duration(cfg.DialTimeoutSec) * time.Second,
+		TLSHandshakeTimeout:   time.Duration(cfg.UpstreamTLSHandshakeTimeoutSec) * time.Second,
+		ResponseHeaderTimeout: time.Duration(cfg.UpstreamResponseHeaderTimeoutSec) * time.Second,
+		ExpectContinueTimeout: time.Duration(cfg.UpstreamExpectContinueTimeoutSec) * time.Second,
 	}
 	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts, cfg)
 	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)

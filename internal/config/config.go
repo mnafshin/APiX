@@ -9,23 +9,26 @@ import (
 )
 
 type Config struct {
-	HTTPPort              string `yaml:"http_port"`
-	GRPCPort              string `yaml:"grpc_port"`
-	GRPCBindAddress       string `yaml:"grpc_bind_address"`
-	DBPath                string `yaml:"db_path"`
-	CACertPath            string `yaml:"ca_cert_path"`
-	CAKeyPath             string `yaml:"ca_key_path"`
-	TLSEnabled            bool   `yaml:"tls_enabled"`
-	AuthToken             string `yaml:"auth_token"`
-	MaxIdleConnsPerHost   int    `yaml:"max_idle_conns_per_host"`
-	IdleConnTimeoutSec    int    `yaml:"idle_conn_timeout_sec"`
-	DialTimeoutSec        int    `yaml:"dial_timeout_sec"`
-	HTTPReadHeaderTimeout int    `yaml:"http_read_header_timeout_sec"`
-	HTTPReadTimeout       int    `yaml:"http_read_timeout_sec"`
-	HTTPWriteTimeout      int    `yaml:"http_write_timeout_sec"`
-	HTTPIdleTimeout       int    `yaml:"http_idle_timeout_sec"`
-	MaxBodySizeMB         int    `yaml:"max_body_size_mb"`
-	ReplaySkipTLSVerify   bool   `yaml:"replay_skip_tls_verify"`
+	HTTPPort                             string `yaml:"http_port"`
+	GRPCPort                             string `yaml:"grpc_port"`
+	GRPCBindAddress                      string `yaml:"grpc_bind_address"`
+	DBPath                               string `yaml:"db_path"`
+	CACertPath                           string `yaml:"ca_cert_path"`
+	CAKeyPath                            string `yaml:"ca_key_path"`
+	TLSEnabled                           bool   `yaml:"tls_enabled"`
+	AuthToken                            string `yaml:"auth_token"`
+	MaxIdleConnsPerHost                  int    `yaml:"max_idle_conns_per_host"`
+	IdleConnTimeoutSec                   int    `yaml:"idle_conn_timeout_sec"`
+	DialTimeoutSec                       int    `yaml:"dial_timeout_sec"`
+	UpstreamTLSHandshakeTimeoutSec      int    `yaml:"upstream_tls_handshake_timeout_sec"`
+	UpstreamResponseHeaderTimeoutSec    int    `yaml:"upstream_response_header_timeout_sec"`
+	UpstreamExpectContinueTimeoutSec    int    `yaml:"upstream_expect_continue_timeout_sec"`
+	HTTPReadHeaderTimeout               int    `yaml:"http_read_header_timeout_sec"`
+	HTTPReadTimeout                     int    `yaml:"http_read_timeout_sec"`
+	HTTPWriteTimeout                    int    `yaml:"http_write_timeout_sec"`
+	HTTPIdleTimeout                     int    `yaml:"http_idle_timeout_sec"`
+	MaxBodySizeMB                       int    `yaml:"max_body_size_mb"`
+	ReplaySkipTLSVerify                 bool   `yaml:"replay_skip_tls_verify"`
 }
 
 // DefaultPath returns the config file path following these priorities:
@@ -72,14 +75,17 @@ func LoadConfig(path string) *Config {
 		CACertPath:            filepath.Join(home, ".apix", "ca.pem"),
 		CAKeyPath:             filepath.Join(home, ".apix", "ca-key.pem"),
 		TLSEnabled:            false,
-		MaxIdleConnsPerHost:   10,
-		IdleConnTimeoutSec:    90,
-		DialTimeoutSec:        10,
-		HTTPReadHeaderTimeout: 10,
-		HTTPReadTimeout:       30,
-		HTTPWriteTimeout:      120,
-		HTTPIdleTimeout:       120,
-		MaxBodySizeMB:         32,
+		MaxIdleConnsPerHost:               10,
+		IdleConnTimeoutSec:                90,
+		DialTimeoutSec:                    10,
+		UpstreamTLSHandshakeTimeoutSec:   10,
+		UpstreamResponseHeaderTimeoutSec: 30,
+		UpstreamExpectContinueTimeoutSec: 1,
+		HTTPReadHeaderTimeout:            10,
+		HTTPReadTimeout:                  30,
+		HTTPWriteTimeout:                 120,
+		HTTPIdleTimeout:                  120,
+		MaxBodySizeMB:                    32,
 	}
 
 	file, err := os.ReadFile(path)
