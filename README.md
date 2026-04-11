@@ -240,6 +240,8 @@ Create a file in `internal/plugins/builtins/` and register it in `cmd/apix-engin
 
 All settings live in `internal/config/config.yaml`. The file is optional — defaults are used when it is absent.
 
+Configuration validation: run `apix-engine --config-check` to validate your configuration and exit (see docs/CONFIG_VALIDATION.md).
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `http_port` | `8080` | HTTP proxy listen port |
