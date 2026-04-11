@@ -19,7 +19,9 @@ import (
 	"github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/server"
 	"github.com/mnafshin/apix/internal/storage"
+	usermsg "github.com/mnafshin/apix/internal/usermsg"
 )
+
 
 func main() {
 	configCheck := flag.Bool("config-check", false, "Validate config and exit")
@@ -37,7 +39,8 @@ func main() {
 	// If invoked with --config-check bail out after validating the config.
 	if *configCheck {
 		if err := cfg.Validate(); err != nil {
-			log.Fatalf("config validation failed: %v", err)
+			log.Printf("config validation failed: %v", err)
+			log.Fatalf("%s", usermsg.UserMessage(err))
 		}
 		log.Println("config: validation passed")
 		return
@@ -46,14 +49,16 @@ func main() {
 	// 2. Open SQLite database.
 	db, err := storage.Open(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		log.Printf("open database: %v", err)
+		log.Fatalf("%s", usermsg.UserMessage(err))
 	}
 	defer db.Close()
 
 	// 3. Create CertAuthority.
 	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)
 	if err != nil {
-		log.Fatalf("create cert authority: %v", err)
+		log.Printf("create cert authority: %v", err)
+		log.Fatalf("%s", usermsg.UserMessage(err))
 	}
 
 	// 4. Create breakpoints manager.
