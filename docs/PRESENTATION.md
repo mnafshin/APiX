@@ -318,9 +318,10 @@ apix/
 
 | Milestone | Features |
 |---|---|
-| **v0.1 (current)** | MITM proxy, breakpoints, replay, plugins, SQLite, VS Code extension |
-| **v0.2** | WebSocket support, conditional breakpoints, plugin config UI, gRPC proxy support |
-| **v1.0** | Wasm plugin sandbox (external plugins without recompile), VS Code Marketplace publish, CI/CD integration hooks |
+| **v1.0 (current)** | MITM proxy, breakpoints, replay, plugins, SQLite, VS Code extension |
+| **v1.1** | Contract-first CLI migration, WebSocket support, conditional breakpoints, plugin config UI |
+| **v1.2** | HAR import/export, request composition, gRPC proxy support, AI-facing automation surfaces |
+| **v2.0** | Wasm plugin sandbox (external plugins without recompile), VS Code Marketplace publish, CI/CD integration hooks |
 
 ---
 

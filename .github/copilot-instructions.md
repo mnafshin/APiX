@@ -1,21 +1,15 @@
 # APiX – Copilot Instructions
 
-APiX is a developer-first HTTP/HTTPS proxy and API debugging toolkit. It acts as an intercepting proxy (like mitmproxy) that captures traffic and exposes it via a gRPC server. A VS Code extension (`apix-vscode`) and a CLI (`apix-cli`) both connect to the engine to stream captured traffic, set breakpoints, replay requests, and query status.
+APiX is a developer-first HTTP/HTTPS proxy and API debugging toolkit. It acts as an intercepting proxy (like mitmproxy) that captures traffic and exposes it via a gRPC server. The current tree contains the Go engine and the VS Code extension; a first-class `cmd/apix-cli` is planned next, but is not present in the repository yet.
 
 ## Build & Run
 
 ```bash
-# Build all Go binaries
+# Build the engine binary
 go build ./cmd/apix-engine
-go build ./cmd/apix-cli
 
 # Run the engine (HTTP proxy :8080, gRPC :9090)
 ./apix-engine
-
-# Run CLI commands
-./apix-cli status
-./apix-cli log
-./apix-cli plugins
 
 # Send traffic through the proxy
 curl -x http://localhost:8080 https://example.com
@@ -31,7 +25,7 @@ npm run compile            # compile TypeScript → out/
 npx tsc --noEmit           # type-check only (no output)
 ```
 
-There are currently no tests, Makefile, or CI configs. Manual testing is done via `curl` and the CLI.
+Use `make test`, `make lint`, and `make ext-build` for the current workflow. Manual proxy validation is typically done via `curl` and the VS Code extension.
 
 ## Full Development Setup
 
@@ -50,7 +44,7 @@ To run the full stack locally (engine + VS Code extension):
 
 ## Architecture
 
-The project has two binaries, a VS Code extension, and a layered internal structure:
+The project currently has one Go binary, a VS Code extension, and a layered internal structure:
 
 ```
 cmd/apix-engine  →  internal/server/grpc.go (gRPC, :9090)
@@ -65,8 +59,6 @@ cmd/apix-engine  →  internal/server/grpc.go (gRPC, :9090)
                     internal/plugins        (plugin runtime + built-ins)
                           ↓
                     pkg/api/generated       (Protobuf-generated gRPC types)
-
-cmd/apix-cli     →  gRPC client connecting to :9090
 
 apix-vscode/     →  VS Code extension
     src/engineClient.ts        — typed gRPC client (proto-loader)
@@ -104,7 +96,7 @@ apix-vscode/     →  VS Code extension
 | SQLite storage | `internal/storage/` | ✅ Working |
 | Config | `internal/config/` | ✅ Working |
 | VS Code extension | `apix-vscode/` | ✅ Working |
-| CLI | `cmd/apix-cli/` | ✅ Working |
+| CLI | `cmd/apix-cli/` | 🚧 Planned next major migration |
 
 ## Protobuf Workflow
 
@@ -142,22 +134,16 @@ Do not edit files in `pkg/api/generated/` directly — they are overwritten on r
 - **TypeScript**: Plain interfaces in `types.ts` mirror proto message shapes. No generated TS code — use `keepCase: false` + camelCase manually. Extension host code only (no webview imports of VS Code API).
 # APiX – Copilot Instructions
 
-APiX is a developer-first HTTP/HTTPS proxy and API debugging toolkit. It acts as an intercepting proxy (like mitmproxy) that captures traffic and exposes it via a gRPC server. A CLI (`apix-cli`) connects to the engine to stream captured traffic, query status, and list plugins.
+APiX is a developer-first HTTP/HTTPS proxy and API debugging toolkit. It acts as an intercepting proxy (like mitmproxy) that captures traffic and exposes it via a gRPC server. The repository currently centers on the engine and the VS Code extension; the CLI is planned, not implemented.
 
 ## Build & Run
 
 ```bash
-# Build both binaries
+# Build the engine binary
 go build ./cmd/apix-engine
-go build ./cmd/apix-cli
 
 # Run the engine (HTTP proxy :8080, gRPC :9090)
 ./apix-engine
-
-# Run CLI commands
-./apix-cli status
-./apix-cli log
-./apix-cli plugins
 
 # Send traffic through the proxy
 curl -x http://localhost:8080 https://example.com
@@ -166,11 +152,11 @@ curl -x http://localhost:8080 https://example.com
 grpcurl -plaintext localhost:9090 list
 ```
 
-There are currently no tests, Makefile, or CI configs. Manual testing is done via `curl` and the CLI.
+Use the repository Makefile for the current workflow. Manual proxy validation is typically done via `curl` and the VS Code extension.
 
 ## Architecture
 
-The codebase has two binaries and a layered internal structure:
+The codebase currently has one Go binary and a layered internal structure:
 
 ```
 cmd/apix-engine  →  internal/server (HTTP proxy + gRPC server)
@@ -179,7 +165,6 @@ cmd/apix-engine  →  internal/server (HTTP proxy + gRPC server)
                           ↓
                     pkg/api/generated  (Protobuf-generated gRPC types)
 
-cmd/apix-cli     →  gRPC client connecting to :9090
 ```
 
 - **`internal/engine`** – Core: thread-safe request storage (`sync.Mutex` over a slice) and a subscriber channel map for streaming traffic to gRPC clients.

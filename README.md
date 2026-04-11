@@ -14,7 +14,7 @@
 
 ## What is APiX?
 
-APiX is an API debugging toolkit that runs as a VS Code extension backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behaviour with plugins — all without leaving your editor.
+APiX is an API debugging toolkit that runs as a VS Code extension backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behaviour with plugins — all without leaving your editor. The next major migration is a first-class CLI built on the same gRPC engine API.
 
 ## Features
 
@@ -313,7 +313,6 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - ✅ Plugin system (3 built-ins: HeaderEditor, MockResponse, EnvSubst)
 - ✅ SQLite persistent storage
 - ✅ VS Code extension
-- ✅ CLI client
 - ✅ Multi-platform binaries (macOS, Linux, Windows)
 - ✅ Comprehensive deployment guide
 - ✅ Security hardening (TLS, auth tokens, secure defaults)
@@ -324,6 +323,9 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [ ] Additional logging/debugging options
 
 ### v1.1 (Minor - ~4-6 weeks)
+- [ ] Contract-first CLI foundation (`cmd/apix-cli`, shared transport/auth config, stable flags)
+- [ ] AI-ready output contracts (`--output json`, NDJSON streams, stable exit codes)
+- [ ] Core CLI read flows (`status`, `plugins`, `history`, `watch`)
 - [ ] WebSocket traffic inspection
 - [ ] HAR export/import (session persistence)
 - [ ] Breakpoint conditions (match on headers, body, status code)
@@ -331,6 +333,8 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [ ] Request composition/templating
 
 ### v1.2 (Minor - ~6-8 weeks)
+- [ ] Core CLI write flows (breakpoint CRUD, paused request actions, replay/send)
+- [ ] CLI operator tooling (`doctor`, certificate status/help, shell completion)
 - [ ] HTTP/2 and HTTP/3 support
 - [ ] API authentication/authorization testing
 - [ ] Performance profiling
@@ -346,6 +350,18 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [ ] Multi-engine clustering
 - [ ] Custom plugin marketplace
 - [ ] Analytics dashboard
+
+## CLI Direction
+
+APiX will keep **gRPC as the engine control plane** for both the VS Code extension and the upcoming CLI. That remains the right backend boundary: one API surface for streaming, auth, remote access, and feature parity.
+
+The CLI will add a separate **user contract**, not a separate backend protocol. The first milestone is a terminal workflow that is:
+
+- **Human-friendly**: concise defaults, readable tables/text, good help, and explicit troubleshooting
+- **Automation-friendly**: stable flags, deterministic exit codes, and script-safe non-interactive behavior
+- **AI-ready**: machine-readable JSON and NDJSON output modes with stable field names and no need to scrape prose
+
+If browser-native or third-party HTTP integrations become a primary requirement later, APiX can add a thin gateway on top of gRPC. That should be a later compatibility layer, not a replacement for the engine API.
 
 ## Supported Versions
 
@@ -410,7 +426,7 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 
 ### High memory usage
 - Clear traffic history: APiX UI → right-click → Clear History
-- Or: `apix-cli history clear` (if using CLI)
+- CLI support for history management is planned as part of the upcoming CLI migration
 - Reduce retention: set `history_max_size_mb` in config.yaml
 
 ### Certificate validation errors
