@@ -30,6 +30,11 @@ type Config struct {
 	HTTPIdleTimeout                  int    `yaml:"http_idle_timeout_sec"`
 	MaxBodySizeMB                    int    `yaml:"max_body_size_mb"`
 	ReplaySkipTLSVerify              bool   `yaml:"replay_skip_tls_verify"`
+
+	// Observability
+	MetricsEnabled     bool   `yaml:"metrics_enabled"`
+	MetricsPort        string `yaml:"metrics_port"`
+	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
 }
 
 // DefaultPath returns the config file path following these priorities:
@@ -87,6 +92,10 @@ func LoadConfig(path string) *Config {
 		HTTPWriteTimeout:                 120,
 		HTTPIdleTimeout:                  120,
 		MaxBodySizeMB:                    32,
+		// Observability defaults
+		MetricsEnabled:     false,
+		MetricsPort:        "9091",
+		SlowlogThresholdMs: 1000,
 	}
 
 	file, err := os.ReadFile(path)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
+	metrics "github.com/mnafshin/apix/internal/metrics"
 	"io"
 	"net/http"
 	"time"
@@ -122,6 +123,11 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	reqID := logging.EnsureRequestID(r.Header)
 	ctx = logging.WithRequestID(ctx, reqID)
+
+	// Instrument active connections
+	metrics.IncActive()
+	defer metrics.DecActive()
+
 	defer func() {
 		if rec := recover(); rec != nil {
 			logging.Errorf(ctx, "HTTP proxy panic (recovered): %v", rec)
@@ -309,6 +315,18 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
 			logging.Errorf(ctx, "store transaction: %v", err)
+		}
+	}
+
+	// Observe metrics
+	durationSec := time.Since(start).Seconds()
+	metrics.ObserveRequest(proxyReq.Method, proxyResp.StatusCode, durationSec)
+
+	// Slowlog
+	if p.cfg != nil && p.cfg.SlowlogThresholdMs > 0 {
+		if time.Since(start).Milliseconds() > int64(p.cfg.SlowlogThresholdMs) {
+			logging.Warnf(ctx, "slow request: method=%s url=%s status=%d duration_ms=%d request_id=%s",
+				proxyReq.Method, proxyReq.URL.String(), proxyResp.StatusCode, time.Since(start).Milliseconds(), reqID)
 		}
 	}
 

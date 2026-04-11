@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	logging "github.com/mnafshin/apix/internal/logging"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
+	"github.com/mnafshin/apix/internal/metrics"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/pluginrt/builtins"
 	"github.com/mnafshin/apix/internal/proxy"
@@ -37,6 +39,31 @@ func main() {
 
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())
+
+	// Initialize metrics (Prometheus endpoint + slowlog)
+	metrics.Init(cfg.MetricsEnabled)
+	if cfg.MetricsEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", metrics.Handler())
+			addr := ":" + cfg.MetricsPort
+			srv := &http.Server{Addr: addr, Handler: mux}
+			go func() {
+				<-ctx.Done()
+				shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := srv.Shutdown(shutCtx); err != nil {
+					logging.Errorf(ctx, "metrics server shutdown: %v", err)
+				}
+			}()
+			logging.Infof(ctx, "metrics endpoint listening on %s", addr)
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logging.Errorf(ctx, "metrics server error: %v", err)
+			}
+		}()
+	}
 
 	// If invoked with --config-check bail out after validating the config.
 	if *configCheck {
