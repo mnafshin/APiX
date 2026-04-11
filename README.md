@@ -188,6 +188,12 @@ go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakp
 - ✅ Coverage: Security (P0), Business Logic (P1), Error Paths (P2), Completeness (P3)
 - ✅ Performance baselines established for CI regression detection
 
+**Next testing layers for CLI and MCP:**
+- stateful workflow tests for breakpoint/pause/replay/rule lifecycles
+- contract and transcript regression tests for machine-readable CLI and MCP behavior
+- resilience and fault-injection tests for streams, reconnects, and engine restarts
+- release smoke tests across engine, extension, and future CLI artifacts
+
 **See [TESTING.md](docs/TESTING.md) for comprehensive test strategy and how to contribute tests.**
 
 ## gRPC API

@@ -4,12 +4,13 @@ This document describes APiX's comprehensive multi-layer test coverage and how t
 
 ## Overview
 
-APiX uses a **4-tier testing approach** to ensure reliability:
+APiX uses a layered testing approach to ensure reliability:
 
 1. **Unit Tests** — Package-level logic in isolation
 2. **Integration Tests** — Multiple components wired together
 3. **E2E Tests** — Full-stack scenarios through gRPC
 4. **Contract, Fuzz, and Benchmark Tests** — Specialized coverage
+5. **Planned next layers** — CLI/MCP contract safety, stateful workflows, resilience, and release smoke coverage
 
 ```
 Unit Tests (70+)              Integration Tests (16)          E2E Tests (6)
@@ -23,9 +24,37 @@ Unit Tests (70+)              Integration Tests (16)          E2E Tests (6)
 Contract Tests (2)            Fuzz Tests (18 seeds)           Benchmarks (5)
 ├─ Proto sync                 ├─ EnvSubst injection          ├─ Proxy throughput
 └─ Generated code freshness   ├─ Header manipulation         ├─ Storage latency
-                              ├─ URL pattern ReDoS           ├─ Pattern matching
-                              └─ Input validation            └─ Query performance
+                               ├─ URL pattern ReDoS           ├─ Pattern matching
+                               └─ Input validation            └─ Query performance
 ```
+
+## Next planned test mechanisms
+
+The current suite covers the engine well, but upcoming CLI and MCP work adds new contract surfaces and long-lived workflows. To stay on track as those land, APiX should add the following layers:
+
+### 1. MCP contract and transcript regression tests
+
+**Purpose:** Protect tool schemas, response shapes, and representative agent workflows from silent drift.
+
+**Why it matters:** MCP is an automation contract, not just another UI. A minor response-shape change can break agents even when the code still compiles.
+
+### 2. Stateful workflow tests
+
+**Purpose:** Exercise lifecycle transitions such as breakpoint add → hit → pause → forward/drop/respond, replay from stored history, and future rule interactions.
+
+**Why it matters:** As APiX gains CLI, rules, and MCP clients, correctness depends on state transitions across components and clients, not only isolated handlers.
+
+### 3. Fault-injection and resilience tests
+
+**Purpose:** Deliberately simulate timeouts, stream disconnects, malformed upstream responses, engine restarts, and reconnect behavior.
+
+**Why it matters:** CLI and MCP clients will depend on long-lived streams and recoverable failures in real development loops.
+
+### 4. Release smoke tests
+
+**Purpose:** Validate built artifacts with lightweight real-world checks across the engine, VS Code extension, and upcoming CLI.
+
+**Why it matters:** This catches packaging, binary-layout, generated-file, and wiring problems that unit and package tests often miss.
 
 ## Test Layers
 
