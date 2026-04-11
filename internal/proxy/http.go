@@ -5,11 +5,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -51,10 +50,10 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {
-			log.Printf("http proxy shutdown: %v", err)
+			logging.Errorf(ctx, "http proxy shutdown: %v", err)
 		}
 	}()
-	log.Printf("HTTP proxy listening on %s (timeouts: header=%v, read=%v, write=%v, idle=%v)",
+	logging.Infof(ctx, "HTTP proxy listening on %s (timeouts: header=%v, read=%v, write=%v, idle=%v)",
 		p.addr, srv.ReadHeaderTimeout, srv.ReadTimeout, srv.WriteTimeout, srv.IdleTimeout)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("http proxy: %w", err)
@@ -64,9 +63,10 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 
 // ServeHTTP handles both plain HTTP and CONNECT (tunnel) requests.
 func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("HTTP proxy panic in ServeHTTP (recovered): %v", rec)
+			logging.Errorf(ctx, "HTTP proxy panic in ServeHTTP (recovered): %v", rec)
 			http.Error(w, "proxy error", http.StatusBadGateway)
 		}
 	}()
@@ -80,9 +80,10 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // handleConnect upgrades the connection for HTTPS tunnelling.
 func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("HTTP proxy panic in handleConnect (recovered): %v", rec)
+			logging.Errorf(ctx, "HTTP proxy panic in handleConnect (recovered): %v", rec)
 			http.Error(w, "proxy error", http.StatusInternalServerError)
 		}
 	}()
@@ -95,14 +96,14 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	conn, brw, err := hj.Hijack()
 	if err != nil {
-		log.Printf("hijack: %v", err)
+		logging.Errorf(ctx, "hijack: %v", err)
 		return
 	}
 
 	// Flush any buffered data from the hijacked reader.
 	if brw.Reader.Buffered() > 0 {
 		conn.Close()
-		log.Printf("handleConnect: unexpected buffered data after hijack")
+		logging.Warnf(ctx, "handleConnect: unexpected buffered data after hijack")
 		return
 	}
 
@@ -113,20 +114,21 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.tlsProxy.HandleConn(r.Context(), conn, r.Host)
+	p.tlsProxy.HandleConn(ctx, conn, r.Host)
 }
 
 // handleHTTP proxies a plain HTTP request, runs plugin chain, stores traffic.
 func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	reqID := logging.EnsureRequestID(r.Header)
+	ctx = logging.WithRequestID(ctx, reqID)
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("HTTP proxy panic (recovered): %v", rec)
+			logging.Errorf(ctx, "HTTP proxy panic (recovered): %v", rec)
 			http.Error(w, "proxy error", http.StatusBadGateway)
 		}
 	}()
 
-	ctx := r.Context()
-	reqID := uuid.NewString()
 	start := time.Now()
 
 	// Buffer the entire request body so it can be stored and forwarded.
@@ -161,13 +163,13 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Printf("HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
+					logging.Errorf(ctx, "HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
 					pluginReqFailed = true
 				}
 			}()
 			modified, err := p.plugins.RunRequest(ctx, proxyReq)
 			if err != nil {
-				log.Printf("plugin OnRequest error: %v", err)
+				logging.Errorf(ctx, "plugin OnRequest error: %v", err)
 				pluginReqFailed = true
 				return
 			}
@@ -186,7 +188,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			var err error
 			mockedBody, err = io.ReadAll(proxyReq.MockedResponse.Body)
 			if err != nil {
-				log.Printf("read mocked response body: %v", err)
+				logging.Errorf(ctx, "read mocked response body: %v", err)
 			}
 		}
 		writeProxyResponse(w, proxyReq.MockedResponse, mockedBody)
@@ -205,7 +207,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = bpID
 		modified, action, err := p.engine.PauseRequest(tx)
 		if err != nil {
-			log.Printf("pause request: %v", err)
+			logging.Errorf(ctx, "pause request: %v", err)
 			http.Error(w, fmt.Sprintf("pause request: %v", err), http.StatusBadGateway)
 			return
 		}
@@ -221,7 +223,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 					var err error
 					respBody, err = io.ReadAll(tx.Response.Body)
 					if err != nil {
-						log.Printf("read synthetic response body: %v", err)
+						logging.Errorf(ctx, "read synthetic response body: %v", err)
 					}
 				}
 				writeProxyResponse(w, tx.Response, respBody)
@@ -276,14 +278,14 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		func() {
 			defer func() {
 				if rec := recover(); rec != nil {
-					log.Printf("HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
+					logging.Errorf(ctx, "HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
 				}
 			}()
 			// Give plugins the body they expect
 			proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
 			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
 			if err != nil {
-				log.Printf("plugin OnResponse error: %v", err)
+				logging.Errorf(ctx, "plugin OnResponse error: %v", err)
 			} else if modResp != nil {
 				proxyResp = modResp
 				// Extract body from modified response if provided
@@ -292,7 +294,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 					var readErr error
 					finalRespBody, readErr = io.ReadAll(limitedBody)
 					if readErr != nil {
-						log.Printf("plugin modified response body read error: %v", readErr)
+						logging.Errorf(ctx, "plugin modified response body read error: %v", readErr)
 						// Keep the original respBody on error
 					}
 				}
@@ -306,7 +308,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		tx.ResponseBody = finalRespBody
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
-			log.Printf("store transaction: %v", err)
+			logging.Errorf(ctx, "store transaction: %v", err)
 		}
 	}
 
@@ -334,7 +336,12 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse, body
 	w.WriteHeader(resp.StatusCode)
 	if len(body) > 0 {
 		if _, err := w.Write(body); err != nil {
-			log.Printf("proxy: write response to client: %v", err)
+			rid := resp.Headers.Get(logging.RequestIDHeader)
+			ctx := context.Background()
+			if rid != "" {
+				ctx = logging.WithRequestID(ctx, rid)
+			}
+			logging.Errorf(ctx, "proxy: write response to client: %v", err)
 		}
 	}
 }

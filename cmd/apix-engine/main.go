@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	logging "github.com/mnafshin/apix/internal/logging"
 	"os"
 	"os/signal"
 	"sync"
@@ -33,32 +33,35 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
+	// Initialize structured logging
+	logging.Init(os.Stdout)
+
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())
 
 	// If invoked with --config-check bail out after validating the config.
 	if *configCheck {
 		if err := cfg.Validate(); err != nil {
-			log.Printf("config validation failed: %v", err)
-			log.Fatalf("%s", usermsg.UserMessage(err))
+			logging.Errorf(ctx, "config validation failed: %v", err)
+			logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
 		}
-		log.Println("config: validation passed")
+		logging.Infof(ctx, "config: validation passed")
 		return
 	}
 
 	// 2. Open SQLite database.
 	db, err := storage.Open(cfg.DBPath)
 	if err != nil {
-		log.Printf("open database: %v", err)
-		log.Fatalf("%s", usermsg.UserMessage(err))
+		logging.Errorf(ctx, "open database: %v", err)
+		logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
 	}
 	defer db.Close()
 
 	// 3. Create CertAuthority.
 	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)
 	if err != nil {
-		log.Printf("create cert authority: %v", err)
-		log.Fatalf("%s", usermsg.UserMessage(err))
+		logging.Errorf(ctx, "create cert authority: %v", err)
+		logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
 	}
 
 	// 4. Create breakpoints manager.
@@ -67,13 +70,13 @@ func main() {
 	// 5. Create plugin runtime and register built-ins.
 	pluginRT := pluginrt.NewRuntime()
 	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
-		log.Printf("register header-editor: %v", err)
+		logging.Warnf(ctx, "register header-editor: %v", err)
 	}
 	if err := pluginRT.Register(&builtins.MockResponse{}); err != nil {
-		log.Printf("register mock-response: %v", err)
+		logging.Warnf(ctx, "register mock-response: %v", err)
 	}
 	if err := pluginRT.Register(&builtins.EnvSubst{}); err != nil {
-		log.Printf("register env-subst: %v", err)
+		logging.Warnf(ctx, "register env-subst: %v", err)
 	}
 
 	// 6. Create Engine.
@@ -114,13 +117,13 @@ func main() {
 	go func() {
 		defer wg.Done()
 		if err := httpProxy.Start(ctx); err != nil {
-			log.Printf("HTTP proxy stopped: %v", err)
+			logging.Errorf(ctx, "HTTP proxy stopped: %v", err)
 		}
 	}()
 
 	// 11. Wait for shutdown signal.
 	<-stop
-	log.Println("Shutting down…")
+	logging.Infof(ctx, "Shutting down…")
 	cancel()
 	
 	// 12. Close proxies to release file descriptors.
@@ -136,9 +139,8 @@ func main() {
 	
 	select {
 	case <-done:
-		log.Println("Goodbye.")
+		logging.Infof(ctx, "Goodbye.")
 	case <-time.After(15 * time.Second):
-		log.Println("FATAL: shutdown timeout exceeded (15s), forcing exit")
-		os.Exit(1)
+		logging.Fatalf(ctx, "FATAL: shutdown timeout exceeded (15s), forcing exit")
 	}
 }
