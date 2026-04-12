@@ -24,8 +24,8 @@ import (
 	"github.com/mnafshin/apix/internal/replay"
 	"github.com/mnafshin/apix/internal/server"
 	"github.com/mnafshin/apix/internal/storage"
-	"github.com/mnafshin/apix/pkg/plugins"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
+	"github.com/mnafshin/apix/pkg/plugins"
 	"google.golang.org/grpc"
 )
 
@@ -52,8 +52,8 @@ func newCLITestStack(t *testing.T, authToken string) *cliTestStack {
 	eng := engine.New(db, bpm, rt)
 	re := replay.NewEngine(db, nil)
 	cfg := &config.Config{
-		HTTPPort: "8080",
-		GRPCPort: "9090",
+		HTTPPort:  "8080",
+		GRPCPort:  "9090",
 		AuthToken: authToken,
 	}
 
