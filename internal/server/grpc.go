@@ -15,6 +15,7 @@ import (
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/engine"
+	"github.com/mnafshin/apix/internal/har"
 	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/internal/replay"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
@@ -398,6 +399,46 @@ func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.E
 		return nil, status.Errorf(codes.Internal, "clear history: %v", err)
 	}
 	return &apix.Empty{}, nil
+}
+
+func (s *EngineServer) ExportHAR(_ context.Context, req *apix.ExportHARRequest) (*apix.ExportHARResponse, error) {
+	requests, responses, err := s.engine.DB().ExportTransactions(req.TransactionIds)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "export HAR: %v", err)
+	}
+	harJSON, err := har.MarshalTransactions(requests, responses)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "export HAR: %v", err)
+	}
+	return &apix.ExportHARResponse{HarJson: harJSON}, nil
+}
+
+func (s *EngineServer) ImportHAR(ctx context.Context, req *apix.ImportHARRequest) (*apix.ImportHARResponse, error) {
+	imported, err := har.ParseTransactions(req.HarJson)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "import HAR: %v", err)
+	}
+
+	transactionIDs := make([]string, 0, len(imported))
+	for _, tx := range imported {
+		select {
+		case <-ctx.Done():
+			return nil, status.Error(codes.Canceled, "import HAR canceled")
+		default:
+		}
+
+		if err := s.engine.DB().SaveRequest(tx.Request); err != nil {
+			return nil, status.Errorf(codes.Internal, "import HAR request: %v", err)
+		}
+		if tx.Response != nil {
+			if err := s.engine.DB().SaveResponse(tx.Response); err != nil {
+				return nil, status.Errorf(codes.Internal, "import HAR response: %v", err)
+			}
+		}
+		transactionIDs = append(transactionIDs, tx.Request.ID)
+	}
+
+	return &apix.ImportHARResponse{TransactionIds: transactionIDs}, nil
 }
 
 // validateToken checks the incoming metadata for a valid Bearer token.

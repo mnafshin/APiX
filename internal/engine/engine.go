@@ -87,6 +87,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Method:    req.Method,
 			Url:       req.URL.String(),
 			Headers:   hdrs,
+			Body:      tx.RequestBody,
 			Timestamp: time.Now().UnixMilli(),
 		}
 		e.mu.Lock()

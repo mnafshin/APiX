@@ -25,6 +25,9 @@
   ],
   "activationEvents": [
     "onCommand:apix.openTrafficPanel",
+    "onCommand:apix.exportHAR",
+    "onCommand:apix.importHAR",
+    "onCommand:apix.copyAsCurl",
     "onView:apix.trafficView",
     "onView:apix.breakpointsView"
   ],
@@ -65,6 +68,21 @@
         "command": "apix.replayRequest",
         "title": "APiX: Replay Request",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "apix.copyAsCurl",
+        "title": "APiX: Copy Request as curl",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "apix.exportHAR",
+        "title": "APiX: Export Traffic as HAR",
+        "icon": "$(export)"
+      },
+      {
+        "command": "apix.importHAR",
+        "title": "APiX: Import HAR File",
+        "icon": "$(import)"
       },
       {
         "command": "apix.openTrafficPanel",
@@ -130,6 +148,16 @@
           "command": "apix.refreshTraffic",
           "when": "view == apix.trafficView",
           "group": "navigation"
+        },
+        {
+          "command": "apix.exportHAR",
+          "when": "view == apix.trafficView",
+          "group": "navigation"
+        },
+        {
+          "command": "apix.importHAR",
+          "when": "view == apix.trafficView",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -137,6 +165,16 @@
           "command": "apix.replayRequest",
           "when": "view == apix.trafficView && viewItem == httpTransaction",
           "group": "inline"
+        },
+        {
+          "command": "apix.copyAsCurl",
+          "when": "view == apix.trafficView && viewItem == httpTransaction",
+          "group": "inline"
+        },
+        {
+          "command": "apix.exportHAR",
+          "when": "view == apix.trafficView && viewItem == httpTransaction",
+          "group": "navigation"
         },
         {
           "command": "apix.deleteBreakpoint",

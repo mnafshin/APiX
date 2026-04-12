@@ -139,6 +139,22 @@ message HistoryQuery {
   int64  since_ms      = 6; // only transactions after this Unix ms timestamp
 }
 
+message ExportHARRequest {
+  repeated string transaction_ids = 1; // empty = all stored traffic
+}
+
+message ExportHARResponse {
+  string har_json = 1;
+}
+
+message ImportHARRequest {
+  string har_json = 1;
+}
+
+message ImportHARResponse {
+  repeated string transaction_ids = 1;
+}
+
 // ========== Service ==========
 
 service Engine {
@@ -173,4 +189,8 @@ service Engine {
   rpc GetHistory(HistoryQuery) returns (stream HttpTransaction);
   // Clear all stored history.
   rpc ClearHistory(Empty) returns (Empty);
+  // Export stored traffic as HAR 1.2 JSON.
+  rpc ExportHAR(ExportHARRequest) returns (ExportHARResponse);
+  // Import HAR 1.2 JSON into stored history.
+  rpc ImportHAR(ImportHARRequest) returns (ImportHARResponse);
 }

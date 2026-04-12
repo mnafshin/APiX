@@ -8,7 +8,7 @@
 | **Critical** | **Distribution and install trust** | “Top class” products are easy to install and discover. Marketplace/package-manager flow is still weak. | **Partly tracked:** #113 |
 | **Critical** | **Workflow completeness, not just primitives** | APiX can capture/pause/replay, but the polished workflows around them are still thin. | **Mixed tracking** |
 | **High** | **Automation/contract maturity** | CLI/MCP value depends on stable schemas, retries, state handling, and regression safety. | **Tracked but incomplete:** #95–#98 |
-| **High** | **Feature parity on must-have debugger capabilities** | Missing breakpoint conditions, HAR, body search/indexing, rich inspectors, rules/mocking UI, WebSocket, gRPC/HTTP2 keep APiX below top-tier tools. | **Mixed:** #13, #14, #15, #22, #85, #86, #87, #94, #109, #112 |
+| **High** | **Feature parity on must-have debugger capabilities** | Remaining gaps like breakpoint conditions, deeper search/indexing, rich inspectors, rules/mocking UI, WebSocket, and gRPC/HTTP2 still keep APiX below top-tier tools, even though HAR import/export and copy-as-curl are now shipped. | **Mixed:** #13, #15, #22, #85, #86, #87, #94, #109, #112 |
 | **High** | **Issue/roadmap rigor** | Several closures were premature; some roadmap items are broad, weakly specified, or duplicated. That slows real product progress. | **Not fully tracked** |
 
 ## Deep analysis by area
@@ -41,7 +41,9 @@ These are the biggest competitive gaps:
 - **Breakpoint conditions** beyond URL/method
   - header/body/status/content-type/size/time-based matching
   - This is one of the clearest “not yet top class” gaps.
-- **HAR export/import and copy-as-curl**
+- **Portable traffic workflows beyond the first slice**
+  - HAR export/import and copy-as-curl are now shipped
+  - broader session portability and richer portability workflows still need polish
 - **Advanced filtering/search**
   - especially body/content search and scalable indexing
 - **Rich payload inspector**
@@ -147,7 +149,7 @@ These are the gaps I’d elevate most:
    - engine capability without polished surface is not enough
 
 5. **Portable traffic workflows**
-   - HAR/cURL/export/import/session portability
+   - session portability and richer HAR/cURL workflows beyond the current shipped baseline
 
 6. **Search/indexing**
    - body/content search is core to real debugging scale
@@ -171,7 +173,7 @@ These are the gaps I’d elevate most:
    - #84, #124, #113, docs/help/diagnostics coherence
 
 2. **Finish the missing core debugger workflows**
-   - breakpoint conditions, HAR, search/indexing, rich inspector, rules/mock UI
+   - breakpoint conditions, search/indexing, rich inspector, rules/mock UI, and deeper portability polish
 
 3. **Harden automation and reliability**
    - #95–#98, #107, #108, #110, #111, #131

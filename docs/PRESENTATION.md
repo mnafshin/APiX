@@ -300,7 +300,7 @@ apix/
 │   ├── storage/            SQLite backend (WAL mode, FK enforcement)
 │   ├── replay/             Request replay with overrides
 │   ├── engine/             Central coordinator (implements TrafficEngine)
-│   ├── server/             gRPC server (12 RPCs)
+│   ├── server/             gRPC server (14 RPCs)
 │   └── config/             YAML configuration loader
 ├── pkg/
 │   ├── api/proto/          Source of truth for gRPC API (.proto)
@@ -320,7 +320,7 @@ apix/
 |---|---|
 | **v1.0 (current)** | MITM proxy, breakpoints, replay, plugins, SQLite, VS Code extension |
 | **v1.1** | Contract-first CLI migration, WebSocket support, conditional breakpoints, plugin config UI |
-| **v1.2** | HAR import/export, request composition, gRPC proxy support, AI-facing automation surfaces |
+| **v1.2** | request composition, gRPC proxy support, AI-facing automation surfaces |
 | **v2.0** | Wasm plugin sandbox (external plugins without recompile), VS Code Marketplace publish, CI/CD integration hooks |
 
 ---

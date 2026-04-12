@@ -252,6 +252,26 @@ export class EngineClient {
         });
     }
 
+    /** Export selected or all stored traffic as HAR 1.2 JSON. */
+    async exportHAR(transactionIds: string[]): Promise<string> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.exportHAR({ transactionIds }, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve(response.harJson || ''); }
+            });
+        });
+    }
+
+    /** Import HAR 1.2 JSON into stored traffic history. */
+    async importHAR(harJson: string): Promise<string[]> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.importHAR({ harJson }, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve((response.transactionIds || []) as string[]); }
+            });
+        });
+    }
+
     /** Start the real-time traffic capture stream (CaptureTraffic RPC). */
     captureTraffic(
         onData: (tx: HttpTransaction) => void,

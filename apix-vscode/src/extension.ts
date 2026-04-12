@@ -6,6 +6,8 @@ import { TrafficProvider, TrafficItem } from './trafficProvider';
 import { EngineProcessManager } from './engineProcessManager';
 import { ReplayPanel } from './replayPanel';
 import { RequestEditor } from './requestEditor';
+import { HttpTransaction } from './types';
+import { buildCurlCommand } from './trafficFormats';
 
 let engineClient: EngineClient | undefined;
 let processManager: EngineProcessManager | undefined;
@@ -93,6 +95,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.transaction?.id;
             if (id) { openReplayPanel(context, engineClient!, id); }
         }),
+        vscode.commands.registerCommand('apix.copyAsCurl', (itemOrTx: TrafficItem | HttpTransaction) =>
+            copyAsCurl(itemOrTx)
+        ),
+        vscode.commands.registerCommand('apix.exportHAR', (itemOrTx?: TrafficItem | HttpTransaction) =>
+            exportHAR(engineClient!, itemOrTx)
+        ),
+        vscode.commands.registerCommand('apix.importHAR', () =>
+            importHAR(engineClient!, trafficProvider!)
+        ),
         vscode.commands.registerCommand('apix.openTrafficPanel', () =>
             TrafficPanel.createOrShow(context.extensionUri, engineClient!)
         ),
@@ -254,4 +265,52 @@ async function openReplayPanel(
     requestId: string
 ): Promise<void> {
     await ReplayPanel.show(context.extensionUri, client, requestId);
+}
+
+async function copyAsCurl(itemOrTx: TrafficItem | HttpTransaction): Promise<void> {
+    const tx = itemOrTx instanceof TrafficItem ? itemOrTx.transaction : itemOrTx;
+    if (!tx?.request?.url) {
+        vscode.window.showErrorMessage('APiX: No request available to copy as curl.');
+        return;
+    }
+
+    await vscode.env.clipboard.writeText(buildCurlCommand(tx));
+    vscode.window.showInformationMessage('APiX: Copied request as curl.');
+}
+
+async function exportHAR(client: EngineClient, itemOrTx?: TrafficItem | HttpTransaction): Promise<void> {
+    const tx = itemOrTx instanceof TrafficItem ? itemOrTx.transaction : itemOrTx;
+    const defaultDir = vscode.workspace.workspaceFolders?.[0]?.uri ?? vscode.Uri.file(process.cwd());
+    const uri = await vscode.window.showSaveDialog({
+        title: 'APiX: Export Traffic as HAR',
+        defaultUri: vscode.Uri.joinPath(defaultDir, tx?.id ? `${tx.id}.har` : 'apix-traffic.har'),
+        filters: { 'HAR Files': ['har'], 'JSON Files': ['json'] },
+    });
+    if (!uri) { return; }
+
+    try {
+        const harJson = await client.exportHAR(tx?.id ? [tx.id] : []);
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(harJson, 'utf8'));
+        vscode.window.showInformationMessage(`APiX: Exported HAR to ${uri.fsPath}.`);
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`APiX: Failed to export HAR — ${err?.message || err}`);
+    }
+}
+
+async function importHAR(client: EngineClient, provider: TrafficProvider): Promise<void> {
+    const picks = await vscode.window.showOpenDialog({
+        title: 'APiX: Import HAR File',
+        canSelectMany: false,
+        filters: { 'HAR Files': ['har', 'json'] },
+    });
+    if (!picks || picks.length === 0) { return; }
+
+    try {
+        const data = await vscode.workspace.fs.readFile(picks[0]);
+        const importedIDs = await client.importHAR(Buffer.from(data).toString('utf8'));
+        provider.refresh();
+        vscode.window.showInformationMessage(`APiX: Imported ${importedIDs.length} HAR entr${importedIDs.length === 1 ? 'y' : 'ies'}.`);
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`APiX: Failed to import HAR — ${err?.message || err}`);
+    }
 }

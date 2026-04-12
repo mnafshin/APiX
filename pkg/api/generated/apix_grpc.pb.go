@@ -30,6 +30,8 @@ const (
 	Engine_ReplayRequest_FullMethodName       = "/apix.Engine/ReplayRequest"
 	Engine_GetHistory_FullMethodName          = "/apix.Engine/GetHistory"
 	Engine_ClearHistory_FullMethodName        = "/apix.Engine/ClearHistory"
+	Engine_ExportHAR_FullMethodName           = "/apix.Engine/ExportHAR"
+	Engine_ImportHAR_FullMethodName           = "/apix.Engine/ImportHAR"
 )
 
 // EngineClient is the client API for Engine service.
@@ -62,6 +64,10 @@ type EngineClient interface {
 	GetHistory(ctx context.Context, in *HistoryQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpTransaction], error)
 	// Clear all stored history.
 	ClearHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	// Export stored traffic as HAR 1.2 JSON.
+	ExportHAR(ctx context.Context, in *ExportHARRequest, opts ...grpc.CallOption) (*ExportHARResponse, error)
+	// Import HAR 1.2 JSON into stored history.
+	ImportHAR(ctx context.Context, in *ImportHARRequest, opts ...grpc.CallOption) (*ImportHARResponse, error)
 }
 
 type engineClient struct {
@@ -209,6 +215,26 @@ func (c *engineClient) ClearHistory(ctx context.Context, in *Empty, opts ...grpc
 	return out, nil
 }
 
+func (c *engineClient) ExportHAR(ctx context.Context, in *ExportHARRequest, opts ...grpc.CallOption) (*ExportHARResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExportHARResponse)
+	err := c.cc.Invoke(ctx, Engine_ExportHAR_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ImportHAR(ctx context.Context, in *ImportHARRequest, opts ...grpc.CallOption) (*ImportHARResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportHARResponse)
+	err := c.cc.Invoke(ctx, Engine_ImportHAR_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EngineServer is the server API for Engine service.
 // All implementations must embed UnimplementedEngineServer
 // for forward compatibility.
@@ -239,6 +265,10 @@ type EngineServer interface {
 	GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error
 	// Clear all stored history.
 	ClearHistory(context.Context, *Empty) (*Empty, error)
+	// Export stored traffic as HAR 1.2 JSON.
+	ExportHAR(context.Context, *ExportHARRequest) (*ExportHARResponse, error)
+	// Import HAR 1.2 JSON into stored history.
+	ImportHAR(context.Context, *ImportHARRequest) (*ImportHARResponse, error)
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -281,6 +311,12 @@ func (UnimplementedEngineServer) GetHistory(*HistoryQuery, grpc.ServerStreamingS
 }
 func (UnimplementedEngineServer) ClearHistory(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearHistory not implemented")
+}
+func (UnimplementedEngineServer) ExportHAR(context.Context, *ExportHARRequest) (*ExportHARResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExportHAR not implemented")
+}
+func (UnimplementedEngineServer) ImportHAR(context.Context, *ImportHARRequest) (*ImportHARResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ImportHAR not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
 func (UnimplementedEngineServer) testEmbeddedByValue()                {}
@@ -480,6 +516,42 @@ func _Engine_ClearHistory_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_ExportHAR_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportHARRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ExportHAR(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ExportHAR_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ExportHAR(ctx, req.(*ExportHARRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ImportHAR_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportHARRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ImportHAR(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ImportHAR_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ImportHAR(ctx, req.(*ImportHARRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Engine_ServiceDesc is the grpc.ServiceDesc for Engine service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -518,6 +590,14 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClearHistory",
 			Handler:    _Engine_ClearHistory_Handler,
+		},
+		{
+			MethodName: "ExportHAR",
+			Handler:    _Engine_ExportHAR_Handler,
+		},
+		{
+			MethodName: "ImportHAR",
+			Handler:    _Engine_ImportHAR_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
