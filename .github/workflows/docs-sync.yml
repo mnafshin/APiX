@@ -1,0 +1,25 @@
+name: docs-sync
+
+on:
+  push:
+    paths:
+      - 'docs/**'
+      - 'README.md'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'README.md'
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Go tests
+        run: make test
+      - name: Run markdown link checker (lychee)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          paths: 'docs/**/*.md,README.md'
+      - name: Lint markdown (markdownlint)
+        uses: actions-hub/markdownlint-action@v1

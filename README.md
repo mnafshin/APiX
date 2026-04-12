@@ -477,3 +477,7 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 APiX exposes Prometheus-format metrics at `/metrics` when metrics are enabled. To integrate with OpenTelemetry, run the OpenTelemetry Collector configured to scrape APiX and export metrics via OTLP. See `docs/OTEL.md` and the sample config `docs/otel-collector-config.yaml` for a quick-start example.
 
+## Project status and claims
+
+The README aims to represent shipped functionality versus roadmap items clearly. Shipped features are those implemented in the default branch; roadmap items are noted in docs/ and the issue tracker. For an up-to-date list of implemented features, see the "Features" section below and check the issue tracker for open RFCs and roadmap items.
+
