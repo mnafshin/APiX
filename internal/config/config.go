@@ -35,6 +35,14 @@ type Config struct {
 	MetricsEnabled     bool   `yaml:"metrics_enabled"`
 	MetricsPort        string `yaml:"metrics_port"`
 	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
+
+	// Plugin paths — each entry is a path to a plugin shared library or
+	// script. Validated at startup via --config-check.
+	PluginPaths []string `yaml:"plugin_paths"`
+
+	// URLPatterns holds pre-configured URL regex patterns (e.g., allow/deny
+	// lists). Each entry must be a valid Go regexp; validated at startup.
+	URLPatterns []string `yaml:"url_patterns"`
 }
 
 // DefaultPath returns the config file path following these priorities:

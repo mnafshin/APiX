@@ -32,7 +32,8 @@ type rootOptions struct {
 	output     string
 	noColor    bool
 	timeout    time.Duration
-	configPath string
+	configPath  string
+	configCheck bool
 }
 
 type app struct {
@@ -144,6 +145,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable color output")
 	fs.DurationVar(&opts.timeout, "timeout", 0, "per-command timeout (0 = sensible default)")
 	fs.StringVar(&opts.configPath, "config", "", "path to config file (default: APiX search path)")
+	fs.BoolVar(&opts.configCheck, "config-check", false, "validate config and exit (0=ok, 1=invalid)")
 	fs.Usage = func() {
 		fmt.Fprintln(errw, "Usage: apix [global flags] <command> [args]")
 		fmt.Fprintln(errw, "")
@@ -184,6 +186,11 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		cfg:  config.LoadConfig(cfgPath),
 	}
 	defer app.close()
+
+	// --config-check: validate config then exit without starting anything.
+	if opts.configCheck {
+		return app.runConfigCheck(cfgPath)
+	}
 
 	switch fs.Arg(0) {
 	case "status":
@@ -1078,6 +1085,34 @@ func certInfo(cfg *config.Config) map[string]any {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// runConfigCheck validates the loaded config, prints a summary, and exits with
+// code 0 on success or 1 on failure. It is triggered by the --config-check flag.
+func (a *app) runConfigCheck(cfgPath string) int {
+	err := a.cfg.Validate()
+	if err == nil {
+		if a.opts.output == "json" {
+			_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": true, "errors": []string{}})
+		} else {
+			fmt.Fprintf(a.out, "config ok: %s\n", cfgPath)
+		}
+		return 0
+	}
+	if a.opts.output == "json" {
+		var msgs []string
+		if ve, ok := err.(*config.ValidationError); ok {
+			for _, e := range ve.Errs {
+				msgs = append(msgs, e.Error())
+			}
+		} else {
+			msgs = []string{err.Error()}
+		}
+		_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": false, "errors": msgs})
+	} else {
+		fmt.Fprintln(a.errw, err.Error())
+	}
+	return 1
 }
 
 func (a *app) cmdConfig(args []string) error {
