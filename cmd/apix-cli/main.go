@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -58,6 +59,43 @@ type historyGetOptions struct {
 
 type watchOptions struct {
 	count int
+}
+
+type sendOptions struct {
+	method          string
+	url             string
+	headers         headerFlags
+	body            string
+	followRedirects bool
+}
+
+type replayOptions struct {
+	headers         headerFlags
+	body            string
+	followRedirects bool
+}
+
+type breakpointAddOptions struct {
+	urlPattern string
+	methods    stringSliceFlags
+	label      string
+	enabled    bool
+}
+
+type pausedForwardOptions struct {
+	requestID string
+	method    string
+	url       string
+	headers   headerFlags
+	body      string
+}
+
+type pausedRespondOptions struct {
+	requestID  string
+	statusCode int
+	statusText string
+	headers    headerFlags
+	body       string
 }
 
 type headerFlags []string
@@ -112,8 +150,12 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		fmt.Fprintln(errw, "Commands:")
 		fmt.Fprintln(errw, "  status")
 		fmt.Fprintln(errw, "  plugins list")
-		fmt.Fprintln(errw, "  history list|get")
+		fmt.Fprintln(errw, "  history list|get|clear")
 		fmt.Fprintln(errw, "  watch [traffic]")
+		fmt.Fprintln(errw, "  breakpoints list|add|delete|enable|disable")
+		fmt.Fprintln(errw, "  paused watch|forward|drop|respond")
+		fmt.Fprintln(errw, "  send")
+		fmt.Fprintln(errw, "  replay")
 		fmt.Fprintln(errw, "  help")
 		fmt.Fprintln(errw, "")
 		fs.PrintDefaults()
@@ -148,6 +190,14 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return app.wrapErr(app.cmdHistory(fs.Args()[1:]))
 	case "watch":
 		return app.wrapErr(app.cmdWatch(fs.Args()[1:]))
+	case "breakpoints":
+		return app.wrapErr(app.cmdBreakpoints(fs.Args()[1:]))
+	case "paused":
+		return app.wrapErr(app.cmdPaused(fs.Args()[1:]))
+	case "send":
+		return app.wrapErr(app.cmdSend(fs.Args()[1:]))
+	case "replay":
+		return app.wrapErr(app.cmdReplay(fs.Args()[1:]))
 	case "help":
 		fs.Usage()
 		return 0
@@ -338,7 +388,7 @@ func (a *app) cmdPlugins(args []string) error {
 
 func (a *app) cmdHistory(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: history list|get")
+		return fmt.Errorf("usage: history list|get|clear")
 	}
 	switch args[0] {
 	case "list":
@@ -348,6 +398,8 @@ func (a *app) cmdHistory(args []string) error {
 			return fmt.Errorf("usage: history get <id> [--page-size N]")
 		}
 		return a.cmdHistoryGet(args[1], args[2:])
+	case "clear":
+		return a.cmdHistoryClear(args[1:])
 	default:
 		return fmt.Errorf("unknown history subcommand: %s", args[0])
 	}
@@ -446,6 +498,32 @@ func (a *app) cmdHistoryGet(id string, args []string) error {
 		}
 		offset += len(items)
 	}
+}
+
+func (a *app) cmdHistoryClear(args []string) error {
+	fs := flag.NewFlagSet("history clear", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	force := fs.Bool("force", false, "clear history without confirmation prompt")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if !*force {
+		return fmt.Errorf("history clear requires --force")
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	if _, err := client.ClearHistory(ctx, &apix.Empty{}); err != nil {
+		return err
+	}
+	if a.opts.output == "json" {
+		return emitJSON(a.out, map[string]any{"cleared": true})
+	}
+	fmt.Fprintln(a.out, "History cleared")
+	return nil
 }
 
 func recvHistory(stream grpc.ServerStreamingClient[apix.HttpTransaction]) ([]*apix.HttpTransaction, error) {
@@ -547,6 +625,417 @@ func (a *app) cmdWatch(args []string) error {
 			return nil
 		}
 	}
+}
+
+func (a *app) cmdBreakpoints(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: breakpoints list|add|delete|enable|disable")
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "list":
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		resp, err := client.ListBreakpoints(ctx, &apix.Empty{})
+		if err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			items := make([]map[string]any, 0, len(resp.Breakpoints))
+			for _, bp := range resp.Breakpoints {
+				items = append(items, breakpointToJSON(bp))
+			}
+			return emitJSON(a.out, items)
+		}
+		if len(resp.Breakpoints) == 0 {
+			fmt.Fprintln(a.out, "No breakpoints configured")
+			return nil
+		}
+		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "ID\tENABLED\tMETHODS\tPATTERN\tLABEL")
+		for _, bp := range resp.Breakpoints {
+			methods := strings.Join(bp.Methods, ",")
+			if methods == "" {
+				methods = "ALL"
+			}
+			fmt.Fprintf(tw, "%s\t%t\t%s\t%s\t%s\n", bp.Id, bp.Enabled, methods, bp.UrlPattern, bp.Label)
+		}
+		return tw.Flush()
+	case "add":
+		return a.cmdBreakpointAdd(client, args[1:])
+	case "delete":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: breakpoints delete <id>")
+		}
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		_, err := client.DeleteBreakpoint(ctx, &apix.BreakpointID{Id: args[1]})
+		if err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{"deleted": args[1]})
+		}
+		fmt.Fprintf(a.out, "Deleted breakpoint %s\n", args[1])
+		return nil
+	case "enable", "disable":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: breakpoints %s <id>", args[0])
+		}
+		return a.cmdBreakpointToggle(client, args[1], args[0] == "enable")
+	default:
+		return fmt.Errorf("unknown breakpoints subcommand: %s", args[0])
+	}
+}
+
+func breakpointToJSON(bp *apix.BreakpointRule) map[string]any {
+	return map[string]any{
+		"id":          bp.Id,
+		"url_pattern": bp.UrlPattern,
+		"methods":     bp.Methods,
+		"enabled":     bp.Enabled,
+		"label":       bp.Label,
+	}
+}
+
+func (a *app) cmdBreakpointAdd(client apix.EngineClient, args []string) error {
+	fs := flag.NewFlagSet("breakpoints add", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := breakpointAddOptions{enabled: true}
+	fs.StringVar(&opts.urlPattern, "url-pattern", "", "URL pattern to match")
+	fs.Var(&opts.methods, "method", "repeatable HTTP method filter")
+	fs.StringVar(&opts.label, "label", "", "optional label")
+	fs.BoolVar(&opts.enabled, "enabled", true, "whether the breakpoint starts enabled")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.urlPattern == "" {
+		return fmt.Errorf("breakpoints add requires --url-pattern")
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.SetBreakpoint(ctx, &apix.BreakpointRule{
+		UrlPattern: opts.urlPattern,
+		Methods:    []string(opts.methods),
+		Enabled:    opts.enabled,
+		Label:      opts.label,
+	})
+	if err != nil {
+		return err
+	}
+	if a.opts.output == "json" {
+		return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
+	}
+	fmt.Fprintf(a.out, "Added breakpoint %s\n", resp.Breakpoint.Id)
+	return nil
+}
+
+func (a *app) cmdBreakpointToggle(client apix.EngineClient, id string, enabled bool) error {
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	list, err := client.ListBreakpoints(ctx, &apix.Empty{})
+	if err != nil {
+		return err
+	}
+	for _, bp := range list.Breakpoints {
+		if bp.Id != id {
+			continue
+		}
+		ctx2, cancel2 := a.unaryContext()
+		defer cancel2()
+		resp, err := client.SetBreakpoint(ctx2, &apix.BreakpointRule{
+			Id:         bp.Id,
+			UrlPattern: bp.UrlPattern,
+			Methods:    bp.Methods,
+			Enabled:    enabled,
+			Label:      bp.Label,
+		})
+		if err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
+		}
+		fmt.Fprintf(a.out, "%s breakpoint %s\n", map[bool]string{true: "Enabled", false: "Disabled"}[enabled], id)
+		return nil
+	}
+	return status.Error(codes.NotFound, "breakpoint not found")
+}
+
+func (a *app) cmdPaused(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: paused watch|forward|drop|respond")
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "watch":
+		return a.cmdPausedWatch(client, args[1:])
+	case "forward":
+		return a.cmdPausedForward(client, args[1:])
+	case "drop":
+		return a.cmdPausedDrop(client, args[1:])
+	case "respond":
+		return a.cmdPausedRespond(client, args[1:])
+	default:
+		return fmt.Errorf("unknown paused subcommand: %s", args[0])
+	}
+}
+
+func (a *app) cmdPausedWatch(client apix.EngineClient, args []string) error {
+	fs := flag.NewFlagSet("paused watch", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	count := fs.Int("count", 0, "stop after N events")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ctx, cancel := a.streamContext()
+	defer cancel()
+	stream, err := client.WatchPausedRequests(ctx, &apix.Empty{})
+	if err != nil {
+		return err
+	}
+	seen := 0
+	for {
+		msg, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		payload := map[string]any{
+			"request_id":    msg.RequestId,
+			"breakpoint_id": msg.BreakpointId,
+			"paused_at":     msg.PausedAt,
+			"request": map[string]any{
+				"id":        msg.Request.Id,
+				"method":    msg.Request.Method,
+				"url":       msg.Request.Url,
+				"headers":   msg.Request.Headers,
+				"body":      string(msg.Request.Body),
+				"timestamp": msg.Request.Timestamp,
+			},
+		}
+		if a.opts.output == "ndjson" || a.opts.output == "json" {
+			if err := emitNDJSON(a.out, payload); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintf(a.out, "%s\t%s\t%s\n", msg.RequestId, msg.Request.Method, msg.Request.Url)
+		}
+		seen++
+		if *count > 0 && seen >= *count {
+			return nil
+		}
+	}
+}
+
+func (a *app) cmdPausedForward(client apix.EngineClient, args []string) error {
+	fs := flag.NewFlagSet("paused forward", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := pausedForwardOptions{}
+	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
+	fs.StringVar(&opts.method, "method", "", "override method")
+	fs.StringVar(&opts.url, "url", "", "override URL")
+	fs.Var(&opts.headers, "header", "repeatable header override key:value")
+	fs.StringVar(&opts.body, "body", "", "override body")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.requestID == "" {
+		return fmt.Errorf("paused forward requires --request-id")
+	}
+	headers, err := opts.headers.Map()
+	if err != nil {
+		return err
+	}
+	req := &apix.ResumeAction{
+		RequestId: opts.requestID,
+		Action:    apix.ResumeAction_FORWARD,
+	}
+	if opts.method != "" || opts.url != "" || len(headers) > 0 || opts.body != "" {
+		req.ModifiedRequest = &apix.HttpRequest{
+			Method:  opts.method,
+			Url:     opts.url,
+			Headers: headers,
+			Body:    []byte(opts.body),
+		}
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	if _, err := client.ResumeRequest(ctx, req); err != nil {
+		return err
+	}
+	return a.simpleResult("forwarded", opts.requestID)
+}
+
+func (a *app) cmdPausedDrop(client apix.EngineClient, args []string) error {
+	fs := flag.NewFlagSet("paused drop", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	requestID := fs.String("request-id", "", "paused request id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *requestID == "" {
+		return fmt.Errorf("paused drop requires --request-id")
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{RequestId: *requestID, Action: apix.ResumeAction_DROP}); err != nil {
+		return err
+	}
+	return a.simpleResult("dropped", *requestID)
+}
+
+func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
+	fs := flag.NewFlagSet("paused respond", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := pausedRespondOptions{statusCode: 200, statusText: "OK"}
+	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
+	fs.IntVar(&opts.statusCode, "status-code", 200, "response status code")
+	fs.StringVar(&opts.statusText, "status-text", "OK", "response status text")
+	fs.Var(&opts.headers, "header", "repeatable header key:value")
+	fs.StringVar(&opts.body, "body", "", "response body")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.requestID == "" {
+		return fmt.Errorf("paused respond requires --request-id")
+	}
+	headers, err := opts.headers.Map()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{
+		RequestId: opts.requestID,
+		Action:    apix.ResumeAction_RESPOND,
+		ModifiedResponse: &apix.HttpResponse{
+			StatusCode: int32(opts.statusCode),
+			StatusText: opts.statusText,
+			Headers:    headers,
+			Body:       []byte(opts.body),
+		},
+	}); err != nil {
+		return err
+	}
+	return a.simpleResult("responded", opts.requestID)
+}
+
+func (a *app) simpleResult(action, id string) error {
+	if a.opts.output == "json" {
+		return emitJSON(a.out, map[string]any{"result": action, "request_id": id})
+	}
+	fmt.Fprintf(a.out, "%s %s\n", strings.Title(action), id)
+	return nil
+}
+
+func (a *app) cmdSend(args []string) error {
+	fs := flag.NewFlagSet("send", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := sendOptions{method: "GET"}
+	fs.StringVar(&opts.method, "method", "GET", "HTTP method")
+	fs.StringVar(&opts.url, "url", "", "request URL")
+	fs.Var(&opts.headers, "header", "repeatable header key:value")
+	fs.StringVar(&opts.body, "body", "", "request body")
+	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.url == "" {
+		return fmt.Errorf("send requires --url")
+	}
+	headers, err := opts.headers.Map()
+	if err != nil {
+		return err
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
+		Source: &apix.ReplaySpec_RawRequest{RawRequest: &apix.HttpRequest{
+			Method:  opts.method,
+			Url:     opts.url,
+			Headers: headers,
+			Body:    []byte(opts.body),
+		}},
+		FollowRedirects: opts.followRedirects,
+	})
+	if err != nil {
+		return err
+	}
+	return a.renderResponse(resp)
+}
+
+func (a *app) cmdReplay(args []string) error {
+	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := replayOptions{}
+	fs.Var(&opts.headers, "header", "repeatable override header key:value")
+	fs.StringVar(&opts.body, "body", "", "override body")
+	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: replay <request-id> [--header key:value] [--body BODY]")
+	}
+	id := fs.Arg(0)
+	headers, err := opts.headers.Map()
+	if err != nil {
+		return err
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
+		Source:          &apix.ReplaySpec_RequestId{RequestId: id},
+		OverrideHeaders: headers,
+		OverrideBody:    []byte(opts.body),
+		FollowRedirects: opts.followRedirects,
+	})
+	if err != nil {
+		return err
+	}
+	return a.renderResponse(resp)
+}
+
+func (a *app) renderResponse(resp *apix.HttpResponse) error {
+	if a.opts.output == "json" {
+		return emitJSON(a.out, map[string]any{
+			"status_code": resp.StatusCode,
+			"status_text": resp.StatusText,
+			"headers":     resp.Headers,
+			"body":        string(resp.Body),
+		})
+	}
+	fmt.Fprintf(a.out, "Status: %d %s\n", resp.StatusCode, resp.StatusText)
+	if len(resp.Headers) > 0 {
+		keys := make([]string, 0, len(resp.Headers))
+		for k := range resp.Headers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintln(a.out, "Headers:")
+		for _, k := range keys {
+			fmt.Fprintf(a.out, "  %s: %s\n", k, resp.Headers[k])
+		}
+	}
+	fmt.Fprintf(a.out, "\n%s\n", string(resp.Body))
+	return nil
 }
 
 func main() {

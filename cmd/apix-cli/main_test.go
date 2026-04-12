@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -230,4 +232,91 @@ func TestCLIWatchNDJSON_RealTraffic(t *testing.T) {
 	if event["id"] != "watch-1" {
 		t.Fatalf("event id=%v", event["id"])
 	}
+}
+
+func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, out, errOut := runCLI(t, stack.args("--output", "json", "breakpoints", "add", "--url-pattern", "example.com", "--method", "GET", "--label", "bp1")...)
+	if exit != 0 {
+		t.Fatalf("breakpoints add exit=%d err=%s", exit, errOut)
+	}
+	var bp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &bp); err != nil {
+		t.Fatalf("breakpoint json: %v", err)
+	}
+	id := bp["id"].(string)
+
+	exit, _, errOut = runCLI(t, stack.args("breakpoints", "disable", id)...)
+	if exit != 0 {
+		t.Fatalf("breakpoints disable exit=%d err=%s", exit, errOut)
+	}
+	exit, _, errOut = runCLI(t, stack.args("breakpoints", "enable", id)...)
+	if exit != 0 {
+		t.Fatalf("breakpoints enable exit=%d err=%s", exit, errOut)
+	}
+	exit, _, errOut = runCLI(t, stack.args("breakpoints", "delete", id)...)
+	if exit != 0 {
+		t.Fatalf("breakpoints delete exit=%d err=%s", exit, errOut)
+	}
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("pong"))
+	}))
+	defer upstream.Close()
+
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "send", "--method", "GET", "--url", upstream.URL+"/send")...)
+	if exit != 0 {
+		t.Fatalf("send exit=%d err=%s", exit, errOut)
+	}
+	var sendResp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &sendResp); err != nil {
+		t.Fatalf("send json: %v", err)
+	}
+	if int(sendResp["status_code"].(float64)) != 200 {
+		t.Fatalf("send status=%v", sendResp["status_code"])
+	}
+
+	stack.storeTransaction(t, "req-replay", "GET", upstream.URL+"/replay", "", "", 0)
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "replay", "req-replay")...)
+	if exit != 0 {
+		t.Fatalf("replay exit=%d err=%s", exit, errOut)
+	}
+
+	stack.storeTransaction(t, "clear-1", "GET", "https://example.com/clear", "", "", 200)
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "history", "clear", "--force")...)
+	if exit != 0 {
+		t.Fatalf("history clear exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"cleared":true`) {
+		t.Fatalf("history clear output=%s", out)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		entry := breakpoints.NewPausedEntry("paused-1", "bp-1", mustRequest(t, "GET", "https://example.com/paused"))
+		_, _ = stack.bpm.Pause(context.Background(), entry)
+		close(done)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	exit, _, errOut = runCLI(t, stack.args("paused", "drop", "--request-id", "paused-1")...)
+	if exit != 0 {
+		t.Fatalf("paused drop exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused request not resumed")
+	}
+}
+
+func mustRequest(t *testing.T, method, rawURL string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(method, rawURL, nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest: %v", err)
+	}
+	return req
 }
