@@ -2,7 +2,6 @@ package main
 
 import (
 "encoding/json"
-"errors"
 "flag"
 "fmt"
 "io"
@@ -72,6 +71,24 @@ count = v
 }
 }
 return cmdWatch(*output, count, out)
+case "breakpoints":
+// breakpoints list|add|delete|enable|disable
+if fs.NArg() < 2 {
+fmt.Fprintln(errw, "usage: breakpoints list|add|delete|enable|disable")
+return 2
+}
+sub := fs.Arg(1)
+return cmdBreakpoints(sub, fs.Args()[2:], out)
+case "send":
+// send --method METHOD --url URL [--header k:v] --body BODY
+fmt.Fprintln(out, "send: not implemented in this scaffold (stub)")
+return 0
+case "replay":
+fmt.Fprintln(out, "replay: not implemented in this scaffold (stub)")
+return 0
+case "doctor":
+fmt.Fprintln(out, "doctor: not implemented (stub). Shows connection, cert state, and config info.")
+return 0
 case "help":
 fmt.Fprintln(out, "Commands: status, plugins list, history list|get, watch, breakpoints, doctor")
 return 0
@@ -150,6 +167,30 @@ return 0
 // non-streaming text fallback
 fmt.Fprintln(out, "Starting watch (use --output ndjson for machine-readable streaming)")
 return 0
+}
+
+func cmdBreakpoints(sub string, args []string, out io.Writer) int {
+// TODO: implement breakpoint management commands that call engine via gRPC
+switch sub {
+case "list":
+fmt.Fprintln(out, "No breakpoints configured")
+return 0
+case "add":
+fmt.Fprintln(out, "add: not implemented (stub)")
+return 0
+case "delete":
+fmt.Fprintln(out, "delete: not implemented (stub)")
+return 0
+case "enable":
+fmt.Fprintln(out, "enable: not implemented (stub)")
+return 0
+case "disable":
+fmt.Fprintln(out, "disable: not implemented (stub)")
+return 0
+default:
+fmt.Fprintf(out, "unknown breakpoints subcommand: %s\n", sub)
+return 2
+}
 }
 
 func main() {
