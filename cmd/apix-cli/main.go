@@ -1241,7 +1241,7 @@ func (a *app) cmdConfig(args []string) error {
 		path = config.DefaultPath()
 	}
 	validation := "ok"
-	if err := a.cfg.Validate(); err != nil {
+	if err := a.cfg.ValidateRuntime(); err != nil {
 		validation = err.Error()
 	}
 	payload := map[string]any{
@@ -1552,7 +1552,7 @@ func (a *app) cmdDoctor() error {
 		configPath = config.DefaultPath()
 	}
 	configValidation := "ok"
-	if err := a.cfg.Validate(); err != nil {
+	if err := a.cfg.ValidateRuntime(); err != nil {
 		configValidation = err.Error()
 	}
 	cert := certInfo(a.cfg)

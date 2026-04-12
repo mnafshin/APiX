@@ -30,6 +30,18 @@ func (ve *ValidationError) Unwrap() []error { return ve.Errs }
 // that aggregates every problem found. This powers the --config-check flag so
 // operators see all issues at once instead of one-at-a-time.
 func (c *Config) Validate() error {
+	return c.validate(false)
+}
+
+// ValidateRuntime checks the configuration for commands that inspect or operate
+// against an already-running engine. It skips port-availability checks so the
+// engine's own bound ports do not make `apix doctor` or `apix config show`
+// report the active config as invalid.
+func (c *Config) ValidateRuntime() error {
+	return c.validate(true)
+}
+
+func (c *Config) validate(allowBoundPorts bool) error {
 	var errs []error
 
 	// ── Port validation ────────────────────────────────────────────────────
@@ -47,14 +59,14 @@ func (c *Config) Validate() error {
 
 	// ── Port conflict checks ───────────────────────────────────────────────
 	// Only check when port values look valid.
-	if c.HTTPPort != "" {
+	if !allowBoundPorts && c.HTTPPort != "" {
 		if _, err := strconv.Atoi(c.HTTPPort); err == nil {
 			if conflictErr := checkPortAvailable("tcp", c.HTTPPort); conflictErr != nil {
 				errs = append(errs, fmt.Errorf("http_port %s is already in use: %w — stop the conflicting process or choose a different port", c.HTTPPort, conflictErr))
 			}
 		}
 	}
-	if c.GRPCPort != "" {
+	if !allowBoundPorts && c.GRPCPort != "" {
 		if _, err := strconv.Atoi(c.GRPCPort); err == nil {
 			if conflictErr := checkPortAvailable("tcp", c.GRPCPort); conflictErr != nil {
 				errs = append(errs, fmt.Errorf("grpc_port %s is already in use: %w — stop the conflicting process or choose a different port", c.GRPCPort, conflictErr))

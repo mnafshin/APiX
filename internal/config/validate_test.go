@@ -114,6 +114,29 @@ func TestValidate_PortConflict(t *testing.T) {
 	}
 }
 
+func TestValidateRuntime_AllowsBoundPorts(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("could not bind test listener: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	addrParts := strings.Split(ln.Addr().String(), ":")
+	port := addrParts[len(addrParts)-1]
+
+	cfg := &Config{
+		HTTPPort:            "18080",
+		GRPCPort:            port,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+	}
+	if err := cfg.ValidateRuntime(); err != nil {
+		t.Fatalf("expected runtime validation to allow bound grpc port, got: %v", err)
+	}
+}
+
 // TestValidate_PluginPaths checks that missing plugin paths are caught.
 func TestValidate_PluginPaths(t *testing.T) {
 	t.Parallel()
