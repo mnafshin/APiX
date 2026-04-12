@@ -2,23 +2,36 @@ name: Integration tests
 
 on:
   workflow_dispatch:
+  schedule:
+    # Run full integration suite nightly at 02:00 UTC.
+    - cron: '0 2 * * *'
   pull_request:
     paths:
       - 'tests/integration/**'
 
 jobs:
-  integration:
+  # Fast integration tests (no Docker): run on every PR that touches integration/
+  integration-fast:
     runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:20.10.16
-        options: --privileged
     steps:
       - uses: actions/checkout@v4
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.20'
-      - name: Run integration tests
-        run: |
-          go test ./tests/integration -v -run Test -count=1
+      - name: Run integration tests (no build tag)
+        run: go test ./tests/integration -v -count=1
+
+  # Testcontainers-backed tests: run nightly or on manual trigger.
+  integration-containers:
+    runs-on: ubuntu-latest
+    # Only run when triggered manually or on schedule; skip on ordinary PRs.
+    if: github.event_name != 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - name: Run Testcontainers integration tests
+        run: go test ./tests/integration -v -tags=integration -run TestContainers -count=1 -timeout 10m
