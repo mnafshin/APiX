@@ -86,11 +86,28 @@ return 0
 case "replay":
 fmt.Fprintln(out, "replay: not implemented in this scaffold (stub)")
 return 0
+case "cert":
+// cert status
+if fs.NArg() < 2 || fs.Arg(1) != "status" {
+fmt.Fprintln(errw, "usage: cert status")
+return 2
+}
+return cmdCertStatus(*output, out)
+case "config":
+// config show
+if fs.NArg() < 2 || fs.Arg(1) != "show" {
+fmt.Fprintln(errw, "usage: config show")
+return 2
+}
+return cmdConfigShow(*output, out)
+case "completion":
+fmt.Fprintln(out, "completion: shell completion generation not implemented in scaffold")
+return 0
 case "doctor":
 fmt.Fprintln(out, "doctor: not implemented (stub). Shows connection, cert state, and config info.")
 return 0
 case "help":
-fmt.Fprintln(out, "Commands: status, plugins list, history list|get, watch, breakpoints, doctor")
+fmt.Fprintln(out, "Commands: status, plugins list, history list|get, watch, breakpoints, cert status, config show, doctor")
 return 0
 default:
 fmt.Fprintf(errw, "unknown command: %s\n", cmd)
@@ -191,6 +208,30 @@ default:
 fmt.Fprintf(out, "unknown breakpoints subcommand: %s\n", sub)
 return 2
 }
+}
+
+func cmdCertStatus(output string, out io.Writer) int {
+// TODO: inspect local cert file and engine trust
+info := map[string]string{"status": "missing", "detail": "no certs found (stub)"}
+if output == "json" {
+b, _ := json.Marshal(info)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintln(out, "Cert status: missing (stub)")
+return 0
+}
+
+func cmdConfigShow(output string, out io.Writer) int {
+// TODO: show effective config; for now print a minimal stub
+cfg := map[string]interface{}{"host": "localhost", "port": 9090}
+if output == "json" {
+b, _ := json.Marshal(cfg)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintln(out, "host: localhost\nport: 9090")
+return 0
 }
 
 func main() {
