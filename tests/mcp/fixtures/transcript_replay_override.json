@@ -1,0 +1,25 @@
+{
+  "transcript": [
+    {
+      "role": "user",
+      "type": "tool_call",
+      "tool": "replay_request",
+      "arguments": {
+        "request_id": "req-abc",
+        "override_body": "{\"user_id\": 99}",
+        "override_headers": { "X-Test": "smoke" }
+      }
+    },
+    {
+      "role": "assistant",
+      "type": "tool_result",
+      "tool": "replay_request",
+      "content": {
+        "status": "ok",
+        "response_status": 201,
+        "response_body": "{\"created\": true}"
+      }
+    }
+  ],
+  "metadata": { "version": "1", "workflow": "replay_with_override" }
+}

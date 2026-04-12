@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {
+      "field": "request_id",
+      "reason": "required field missing"
+    }
+  }
+}

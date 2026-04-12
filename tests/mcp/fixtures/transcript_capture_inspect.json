@@ -1,0 +1,42 @@
+{
+  "transcript": [
+    {
+      "role": "user",
+      "type": "tool_call",
+      "tool": "capture_traffic",
+      "arguments": { "limit": 10 }
+    },
+    {
+      "role": "assistant",
+      "type": "tool_result",
+      "tool": "capture_traffic",
+      "content": {
+        "status": "ok",
+        "message": "Capturing up to 10 requests."
+      }
+    },
+    {
+      "role": "user",
+      "type": "tool_call",
+      "tool": "get_history",
+      "arguments": { "limit": 5 }
+    },
+    {
+      "role": "assistant",
+      "type": "tool_result",
+      "tool": "get_history",
+      "content": {
+        "status": "ok",
+        "transactions": [
+          {
+            "method": "GET",
+            "url": "http://api.example.com/users",
+            "status_code": 200,
+            "duration_ms": 42
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": { "version": "1", "workflow": "capture_and_inspect" }
+}

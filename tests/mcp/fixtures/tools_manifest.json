@@ -1,0 +1,122 @@
+{
+  "tools": [
+    {
+      "name": "capture_traffic",
+      "description": "Start capturing HTTP traffic through the APiX proxy.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Optional URL pattern (regex) to filter captured requests."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Maximum number of requests to capture."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "get_history",
+      "description": "Retrieve previously captured HTTP transactions from storage.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "filter_url": {
+            "type": "string"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "set_breakpoint",
+      "description": "Add a breakpoint rule that pauses requests matching a URL pattern.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "url_pattern": {
+            "type": "string",
+            "description": "Regex pattern to match against request URLs."
+          },
+          "method": {
+            "type": "string",
+            "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", ""],
+            "description": "HTTP method filter. Empty means all methods."
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": ["url_pattern"]
+      }
+    },
+    {
+      "name": "resume_request",
+      "description": "Resume a paused request with one of forward, drop, or respond actions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "ID of the paused request."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["forward", "drop", "respond"],
+            "description": "Action to take."
+          },
+          "response_status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599,
+            "description": "Used when action is 'respond'."
+          },
+          "response_body": {
+            "type": "string",
+            "description": "Response body string when action is 'respond'."
+          }
+        },
+        "required": ["request_id", "action"]
+      }
+    },
+    {
+      "name": "replay_request",
+      "description": "Replay a previously captured request, optionally with modifications.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "description": "ID of the request to replay from history."
+          },
+          "override_url": {
+            "type": "string",
+            "description": "Send the replayed request to a different URL."
+          },
+          "override_method": {
+            "type": "string"
+          },
+          "override_body": {
+            "type": "string"
+          },
+          "override_headers": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
+        },
+        "required": ["request_id"]
+      }
+    }
+  ]
+}
