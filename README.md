@@ -22,6 +22,7 @@ APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP
 - 🛑 **URL breakpoints** — pause, inspect, edit, and resume requests
 - 🔁 **Request replay** with header/body overrides
 - 📤 **Traffic portability** — HAR export/import and copy-as-curl from the VS Code workflow
+- 🔄 **WebSocket inspection** — capture upgrade handshakes and inspect persisted frames
 - 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
 - 💾 **SQLite persistent storage** — traffic history survives restarts
 - 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
@@ -112,6 +113,14 @@ APiX can now move captured traffic in and out of the tool without custom scripts
 - **Copy as curl** from a traffic item or the traffic inspector panel
 - **Export Traffic as HAR** for a single request or the full stored history
 - **Import HAR File** to load requests into history so they can be inspected and replayed
+
+### WebSocket Inspection
+
+APiX now captures upgraded `ws://` and `wss://` sessions as first-class traffic entries:
+
+- **Inspect the `101 Switching Protocols` handshake** alongside regular HTTP history
+- **View persisted client/server frame streams** in the VS Code traffic inspector
+- **Support both cleartext `ws://` and MITM-intercepted `wss://` traffic**
 
 **See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment (Kubernetes, systemd, Docker Compose).**
 
@@ -221,6 +230,7 @@ The engine exposes a single `Engine` service on port `9090`.
 | `ResumeRequest` | Unary | Forward, drop, or synthetically respond to a paused request |
 | `ReplayRequest` | Unary | Re-send a stored or arbitrary request with optional overrides |
 | `GetHistory` | Server-stream | Query stored request/response pairs from SQLite |
+| `GetWebSocketFrames` | Server-stream | Retrieve persisted WebSocket frames for a captured upgrade request |
 | `ClearHistory` | Unary | Delete all stored traffic history |
 | `ExportHAR` | Unary | Export one or more stored transactions as HAR 1.2 JSON |
 | `ImportHAR` | Unary | Import HAR 1.2 traffic into stored history |
@@ -324,6 +334,7 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 
 ### v1.0.0 ✅ (Current)
 - ✅ HTTP/HTTPS interception and MITM
+- ✅ WebSocket inspection for `ws://` and `wss://`
 - ✅ gRPC API for remote control
 - ✅ URL breakpoints (pause, inspect, edit, resume)
 - ✅ Request replay engine
@@ -349,6 +360,7 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [x] CLI operator tooling (`doctor`, certificate status/help, shell completion)
 - [x] History management and export/import foundations
 - [x] Copy-as-curl in the VS Code traffic workflow
+- [x] WebSocket traffic inspection
 - [ ] Breakpoint conditions (match on headers, body, status code)
 - [x] HAR export/import (session persistence)
 - [ ] Response mocking UI
@@ -360,7 +372,6 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [ ] Map Local and cURL/HAR portability improvements
 
 ### v1.4+ (Protocol Expansion)
-- [ ] WebSocket traffic inspection
 - [ ] gRPC-over-HTTP/2 inspection
 - [ ] HTTP/2 and staged HTTP/3 support
 - [ ] API authentication/authorization testing
@@ -399,7 +410,7 @@ APiX's recommended rollout sequence is:
 1. **CLI foundation** — shipped with shared transport/auth config, JSON output, NDJSON streams, and stable exit codes
 2. **Core terminal workflows** — shipped with `history`, `watch`, breakpoint management, paused request actions, `replay`, `send`, and operator tooling
 3. **Agent-ready workflows** — next: add declarative rules, request composition, import/export portability, and MCP integration
-4. **Protocol expansion** — add WebSocket, broader HTTP/2 visibility, and staged HTTP/3 support
+4. **Protocol expansion** — add broader HTTP/2 visibility and staged HTTP/3 support
 
 This ordering is intentional: first make the CLI contract solid, then make it useful without the extension, then make it automatable for agents, and only then broaden protocol coverage.
 
@@ -434,7 +445,7 @@ This ordering is intentional: first make the CLI contract solid, then make it us
 | **Platform** | macOS, Linux, Windows | All | macOS, Windows | Windows | VS Code only |
 | **IDE Integration** | ✅ VS Code | ❌ Separate | ❌ Separate | ❌ Separate | ✅ Built-in |
 | **HTTP/HTTPS** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Limited |
-| **WebSocket** | 🔄 v1.1 | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
+| **WebSocket** | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes | ❌ No |
 | **Request Replay** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
 | **Breakpoints** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
 | **Scripting** | 🔄 v1.1+ | ✅ Python | ❌ No | ✅ .NET | ❌ No |

@@ -1172,6 +1172,126 @@ func (x *HistoryQuery) GetSinceMs() int64 {
 	return 0
 }
 
+type GetWebSocketFramesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransactionId string                 `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWebSocketFramesRequest) Reset() {
+	*x = GetWebSocketFramesRequest{}
+	mi := &file_apix_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWebSocketFramesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWebSocketFramesRequest) ProtoMessage() {}
+
+func (x *GetWebSocketFramesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWebSocketFramesRequest.ProtoReflect.Descriptor instead.
+func (*GetWebSocketFramesRequest) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetWebSocketFramesRequest) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+type WebSocketFrame struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TransactionId string                 `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Direction     string                 `protobuf:"bytes,2,opt,name=direction,proto3" json:"direction,omitempty"` // "client" or "server"
+	Opcode        int32                  `protobuf:"varint,3,opt,name=opcode,proto3" json:"opcode,omitempty"`      // 1=text, 2=binary, 8=close, 9=ping, 10=pong
+	Payload       []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
+	TimestampMs   int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WebSocketFrame) Reset() {
+	*x = WebSocketFrame{}
+	mi := &file_apix_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebSocketFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebSocketFrame) ProtoMessage() {}
+
+func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
+func (*WebSocketFrame) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *WebSocketFrame) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *WebSocketFrame) GetDirection() string {
+	if x != nil {
+		return x.Direction
+	}
+	return ""
+}
+
+func (x *WebSocketFrame) GetOpcode() int32 {
+	if x != nil {
+		return x.Opcode
+	}
+	return 0
+}
+
+func (x *WebSocketFrame) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *WebSocketFrame) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
 type ExportHARRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TransactionIds []string               `protobuf:"bytes,1,rep,name=transaction_ids,json=transactionIds,proto3" json:"transaction_ids,omitempty"` // empty = all stored traffic
@@ -1181,7 +1301,7 @@ type ExportHARRequest struct {
 
 func (x *ExportHARRequest) Reset() {
 	*x = ExportHARRequest{}
-	mi := &file_apix_proto_msgTypes[18]
+	mi := &file_apix_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1193,7 +1313,7 @@ func (x *ExportHARRequest) String() string {
 func (*ExportHARRequest) ProtoMessage() {}
 
 func (x *ExportHARRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[18]
+	mi := &file_apix_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1206,7 +1326,7 @@ func (x *ExportHARRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportHARRequest.ProtoReflect.Descriptor instead.
 func (*ExportHARRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{18}
+	return file_apix_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ExportHARRequest) GetTransactionIds() []string {
@@ -1225,7 +1345,7 @@ type ExportHARResponse struct {
 
 func (x *ExportHARResponse) Reset() {
 	*x = ExportHARResponse{}
-	mi := &file_apix_proto_msgTypes[19]
+	mi := &file_apix_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1237,7 +1357,7 @@ func (x *ExportHARResponse) String() string {
 func (*ExportHARResponse) ProtoMessage() {}
 
 func (x *ExportHARResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[19]
+	mi := &file_apix_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1250,7 +1370,7 @@ func (x *ExportHARResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportHARResponse.ProtoReflect.Descriptor instead.
 func (*ExportHARResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{19}
+	return file_apix_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ExportHARResponse) GetHarJson() string {
@@ -1269,7 +1389,7 @@ type ImportHARRequest struct {
 
 func (x *ImportHARRequest) Reset() {
 	*x = ImportHARRequest{}
-	mi := &file_apix_proto_msgTypes[20]
+	mi := &file_apix_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1281,7 +1401,7 @@ func (x *ImportHARRequest) String() string {
 func (*ImportHARRequest) ProtoMessage() {}
 
 func (x *ImportHARRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[20]
+	mi := &file_apix_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1294,7 +1414,7 @@ func (x *ImportHARRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHARRequest.ProtoReflect.Descriptor instead.
 func (*ImportHARRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{20}
+	return file_apix_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ImportHARRequest) GetHarJson() string {
@@ -1313,7 +1433,7 @@ type ImportHARResponse struct {
 
 func (x *ImportHARResponse) Reset() {
 	*x = ImportHARResponse{}
-	mi := &file_apix_proto_msgTypes[21]
+	mi := &file_apix_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1325,7 +1445,7 @@ func (x *ImportHARResponse) String() string {
 func (*ImportHARResponse) ProtoMessage() {}
 
 func (x *ImportHARResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[21]
+	mi := &file_apix_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1338,7 +1458,7 @@ func (x *ImportHARResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHARResponse.ProtoReflect.Descriptor instead.
 func (*ImportHARResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{21}
+	return file_apix_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ImportHARResponse) GetTransactionIds() []string {
@@ -1452,7 +1572,15 @@ const file_apix_proto_rawDesc = "" +
 	"url_filter\x18\x03 \x01(\tR\turlFilter\x12#\n" +
 	"\rmethod_filter\x18\x04 \x01(\tR\fmethodFilter\x12#\n" +
 	"\rstatus_filter\x18\x05 \x01(\x05R\fstatusFilter\x12\x19\n" +
-	"\bsince_ms\x18\x06 \x01(\x03R\asinceMs\";\n" +
+	"\bsince_ms\x18\x06 \x01(\x03R\asinceMs\"B\n" +
+	"\x19GetWebSocketFramesRequest\x12%\n" +
+	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\"\xaa\x01\n" +
+	"\x0eWebSocketFrame\x12%\n" +
+	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12\x1c\n" +
+	"\tdirection\x18\x02 \x01(\tR\tdirection\x12\x16\n" +
+	"\x06opcode\x18\x03 \x01(\x05R\x06opcode\x12\x18\n" +
+	"\apayload\x18\x04 \x01(\fR\apayload\x12!\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\";\n" +
 	"\x10ExportHARRequest\x12'\n" +
 	"\x0ftransaction_ids\x18\x01 \x03(\tR\x0etransactionIds\".\n" +
 	"\x11ExportHARResponse\x12\x19\n" +
@@ -1460,7 +1588,7 @@ const file_apix_proto_rawDesc = "" +
 	"\x10ImportHARRequest\x12\x19\n" +
 	"\bhar_json\x18\x01 \x01(\tR\aharJson\"<\n" +
 	"\x11ImportHARResponse\x12'\n" +
-	"\x0ftransaction_ids\x18\x01 \x03(\tR\x0etransactionIds2\xf0\x05\n" +
+	"\x0ftransaction_ids\x18\x01 \x03(\tR\x0etransactionIds2\xbf\x06\n" +
 	"\x06Engine\x126\n" +
 	"\tGetStatus\x12\x13.apix.StatusRequest\x1a\x14.apix.StatusResponse\x12;\n" +
 	"\x0eCaptureTraffic\x12\x14.apix.CaptureRequest\x1a\x11.apix.HttpRequest0\x01\x12@\n" +
@@ -1472,7 +1600,8 @@ const file_apix_proto_rawDesc = "" +
 	"\rResumeRequest\x12\x12.apix.ResumeAction\x1a\v.apix.Empty\x125\n" +
 	"\rReplayRequest\x12\x10.apix.ReplaySpec\x1a\x12.apix.HttpResponse\x129\n" +
 	"\n" +
-	"GetHistory\x12\x12.apix.HistoryQuery\x1a\x15.apix.HttpTransaction0\x01\x12(\n" +
+	"GetHistory\x12\x12.apix.HistoryQuery\x1a\x15.apix.HttpTransaction0\x01\x12M\n" +
+	"\x12GetWebSocketFrames\x12\x1f.apix.GetWebSocketFramesRequest\x1a\x14.apix.WebSocketFrame0\x01\x12(\n" +
 	"\fClearHistory\x12\v.apix.Empty\x1a\v.apix.Empty\x12<\n" +
 	"\tExportHAR\x12\x16.apix.ExportHARRequest\x1a\x17.apix.ExportHARResponse\x12<\n" +
 	"\tImportHAR\x12\x16.apix.ImportHARRequest\x1a\x17.apix.ImportHARResponseB6Z4github.com/mnafshin/apix/pkg/api/generated;generatedb\x06proto3"
@@ -1490,38 +1619,40 @@ func file_apix_proto_rawDescGZIP() []byte {
 }
 
 var file_apix_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_apix_proto_goTypes = []any{
-	(ResumeAction_Action)(0),   // 0: apix.ResumeAction.Action
-	(*Empty)(nil),              // 1: apix.Empty
-	(*HttpRequest)(nil),        // 2: apix.HttpRequest
-	(*HttpResponse)(nil),       // 3: apix.HttpResponse
-	(*HttpTransaction)(nil),    // 4: apix.HttpTransaction
-	(*PluginInfo)(nil),         // 5: apix.PluginInfo
-	(*StatusRequest)(nil),      // 6: apix.StatusRequest
-	(*StatusResponse)(nil),     // 7: apix.StatusResponse
-	(*CaptureRequest)(nil),     // 8: apix.CaptureRequest
-	(*PluginListRequest)(nil),  // 9: apix.PluginListRequest
-	(*PluginListResponse)(nil), // 10: apix.PluginListResponse
-	(*BreakpointRule)(nil),     // 11: apix.BreakpointRule
-	(*BreakpointID)(nil),       // 12: apix.BreakpointID
-	(*BreakpointList)(nil),     // 13: apix.BreakpointList
-	(*BreakpointResponse)(nil), // 14: apix.BreakpointResponse
-	(*PausedRequest)(nil),      // 15: apix.PausedRequest
-	(*ResumeAction)(nil),       // 16: apix.ResumeAction
-	(*ReplaySpec)(nil),         // 17: apix.ReplaySpec
-	(*HistoryQuery)(nil),       // 18: apix.HistoryQuery
-	(*ExportHARRequest)(nil),   // 19: apix.ExportHARRequest
-	(*ExportHARResponse)(nil),  // 20: apix.ExportHARResponse
-	(*ImportHARRequest)(nil),   // 21: apix.ImportHARRequest
-	(*ImportHARResponse)(nil),  // 22: apix.ImportHARResponse
-	nil,                        // 23: apix.HttpRequest.HeadersEntry
-	nil,                        // 24: apix.HttpResponse.HeadersEntry
-	nil,                        // 25: apix.ReplaySpec.OverrideHeadersEntry
+	(ResumeAction_Action)(0),          // 0: apix.ResumeAction.Action
+	(*Empty)(nil),                     // 1: apix.Empty
+	(*HttpRequest)(nil),               // 2: apix.HttpRequest
+	(*HttpResponse)(nil),              // 3: apix.HttpResponse
+	(*HttpTransaction)(nil),           // 4: apix.HttpTransaction
+	(*PluginInfo)(nil),                // 5: apix.PluginInfo
+	(*StatusRequest)(nil),             // 6: apix.StatusRequest
+	(*StatusResponse)(nil),            // 7: apix.StatusResponse
+	(*CaptureRequest)(nil),            // 8: apix.CaptureRequest
+	(*PluginListRequest)(nil),         // 9: apix.PluginListRequest
+	(*PluginListResponse)(nil),        // 10: apix.PluginListResponse
+	(*BreakpointRule)(nil),            // 11: apix.BreakpointRule
+	(*BreakpointID)(nil),              // 12: apix.BreakpointID
+	(*BreakpointList)(nil),            // 13: apix.BreakpointList
+	(*BreakpointResponse)(nil),        // 14: apix.BreakpointResponse
+	(*PausedRequest)(nil),             // 15: apix.PausedRequest
+	(*ResumeAction)(nil),              // 16: apix.ResumeAction
+	(*ReplaySpec)(nil),                // 17: apix.ReplaySpec
+	(*HistoryQuery)(nil),              // 18: apix.HistoryQuery
+	(*GetWebSocketFramesRequest)(nil), // 19: apix.GetWebSocketFramesRequest
+	(*WebSocketFrame)(nil),            // 20: apix.WebSocketFrame
+	(*ExportHARRequest)(nil),          // 21: apix.ExportHARRequest
+	(*ExportHARResponse)(nil),         // 22: apix.ExportHARResponse
+	(*ImportHARRequest)(nil),          // 23: apix.ImportHARRequest
+	(*ImportHARResponse)(nil),         // 24: apix.ImportHARResponse
+	nil,                               // 25: apix.HttpRequest.HeadersEntry
+	nil,                               // 26: apix.HttpResponse.HeadersEntry
+	nil,                               // 27: apix.ReplaySpec.OverrideHeadersEntry
 }
 var file_apix_proto_depIdxs = []int32{
-	23, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
-	24, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
+	25, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
+	26, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
 	2,  // 2: apix.HttpTransaction.request:type_name -> apix.HttpRequest
 	3,  // 3: apix.HttpTransaction.response:type_name -> apix.HttpResponse
 	5,  // 4: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
@@ -1532,7 +1663,7 @@ var file_apix_proto_depIdxs = []int32{
 	0,  // 9: apix.ResumeAction.action:type_name -> apix.ResumeAction.Action
 	3,  // 10: apix.ResumeAction.modified_response:type_name -> apix.HttpResponse
 	2,  // 11: apix.ReplaySpec.raw_request:type_name -> apix.HttpRequest
-	25, // 12: apix.ReplaySpec.override_headers:type_name -> apix.ReplaySpec.OverrideHeadersEntry
+	27, // 12: apix.ReplaySpec.override_headers:type_name -> apix.ReplaySpec.OverrideHeadersEntry
 	6,  // 13: apix.Engine.GetStatus:input_type -> apix.StatusRequest
 	8,  // 14: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
 	9,  // 15: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
@@ -1543,24 +1674,26 @@ var file_apix_proto_depIdxs = []int32{
 	16, // 20: apix.Engine.ResumeRequest:input_type -> apix.ResumeAction
 	17, // 21: apix.Engine.ReplayRequest:input_type -> apix.ReplaySpec
 	18, // 22: apix.Engine.GetHistory:input_type -> apix.HistoryQuery
-	1,  // 23: apix.Engine.ClearHistory:input_type -> apix.Empty
-	19, // 24: apix.Engine.ExportHAR:input_type -> apix.ExportHARRequest
-	21, // 25: apix.Engine.ImportHAR:input_type -> apix.ImportHARRequest
-	7,  // 26: apix.Engine.GetStatus:output_type -> apix.StatusResponse
-	2,  // 27: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
-	10, // 28: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
-	14, // 29: apix.Engine.SetBreakpoint:output_type -> apix.BreakpointResponse
-	1,  // 30: apix.Engine.DeleteBreakpoint:output_type -> apix.Empty
-	13, // 31: apix.Engine.ListBreakpoints:output_type -> apix.BreakpointList
-	15, // 32: apix.Engine.WatchPausedRequests:output_type -> apix.PausedRequest
-	1,  // 33: apix.Engine.ResumeRequest:output_type -> apix.Empty
-	3,  // 34: apix.Engine.ReplayRequest:output_type -> apix.HttpResponse
-	4,  // 35: apix.Engine.GetHistory:output_type -> apix.HttpTransaction
-	1,  // 36: apix.Engine.ClearHistory:output_type -> apix.Empty
-	20, // 37: apix.Engine.ExportHAR:output_type -> apix.ExportHARResponse
-	22, // 38: apix.Engine.ImportHAR:output_type -> apix.ImportHARResponse
-	26, // [26:39] is the sub-list for method output_type
-	13, // [13:26] is the sub-list for method input_type
+	19, // 23: apix.Engine.GetWebSocketFrames:input_type -> apix.GetWebSocketFramesRequest
+	1,  // 24: apix.Engine.ClearHistory:input_type -> apix.Empty
+	21, // 25: apix.Engine.ExportHAR:input_type -> apix.ExportHARRequest
+	23, // 26: apix.Engine.ImportHAR:input_type -> apix.ImportHARRequest
+	7,  // 27: apix.Engine.GetStatus:output_type -> apix.StatusResponse
+	2,  // 28: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
+	10, // 29: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
+	14, // 30: apix.Engine.SetBreakpoint:output_type -> apix.BreakpointResponse
+	1,  // 31: apix.Engine.DeleteBreakpoint:output_type -> apix.Empty
+	13, // 32: apix.Engine.ListBreakpoints:output_type -> apix.BreakpointList
+	15, // 33: apix.Engine.WatchPausedRequests:output_type -> apix.PausedRequest
+	1,  // 34: apix.Engine.ResumeRequest:output_type -> apix.Empty
+	3,  // 35: apix.Engine.ReplayRequest:output_type -> apix.HttpResponse
+	4,  // 36: apix.Engine.GetHistory:output_type -> apix.HttpTransaction
+	20, // 37: apix.Engine.GetWebSocketFrames:output_type -> apix.WebSocketFrame
+	1,  // 38: apix.Engine.ClearHistory:output_type -> apix.Empty
+	22, // 39: apix.Engine.ExportHAR:output_type -> apix.ExportHARResponse
+	24, // 40: apix.Engine.ImportHAR:output_type -> apix.ImportHARResponse
+	27, // [27:41] is the sub-list for method output_type
+	13, // [13:27] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -1581,7 +1714,7 @@ func file_apix_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apix_proto_rawDesc), len(file_apix_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   25,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

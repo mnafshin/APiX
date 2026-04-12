@@ -187,12 +187,12 @@ cmd/apix-cli     →  gRPC client connecting to :9090
 | HTTP proxy | `internal/server/http.go` | ✅ Working |
 | gRPC server | `internal/server/grpc.go` | ✅ Working |
 | Config | `internal/config/` | ✅ Working |
-| Plugin runtime | `pkg/plugins/` | 🔄 Empty stub |
-| Storage backend | `pkg/storage/` | 🔄 Empty stub |
-| Tamper engine | `pkg/tamper/` | 🔄 Empty stub |
-| WebSocket proxy | `pkg/proxy/websocket/` | 🔄 Empty stub |
+| Plugin runtime | `internal/pluginrt/` | ✅ Working |
+| Storage backend | `internal/storage/` | ✅ Working |
+| Tamper engine | breakpoint resume actions + replay | ✅ Working |
+| WebSocket proxy | `internal/proxy/websocket.go` | ✅ Working |
 
-Most `pkg/` packages are intentional stubs for planned features (v0.2+).
+Several future-facing `pkg/` namespaces remain intentionally narrow, but the core engine, storage, replay, and WebSocket proxy paths are implemented under `internal/`.
 
 ## Protobuf Workflow
 

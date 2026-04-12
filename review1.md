@@ -8,7 +8,7 @@
 | **Critical** | **Distribution and install trust** | “Top class” products are easy to install and discover. Marketplace/package-manager flow is still weak. | **Partly tracked:** #113 |
 | **Critical** | **Workflow completeness, not just primitives** | APiX can capture/pause/replay, but the polished workflows around them are still thin. | **Mixed tracking** |
 | **High** | **Automation/contract maturity** | CLI/MCP value depends on stable schemas, retries, state handling, and regression safety. | **Tracked but incomplete:** #95–#98 |
-| **High** | **Feature parity on must-have debugger capabilities** | Remaining gaps like breakpoint conditions, deeper search/indexing, rich inspectors, rules/mocking UI, WebSocket, and gRPC/HTTP2 still keep APiX below top-tier tools, even though HAR import/export and copy-as-curl are now shipped. | **Mixed:** #13, #15, #22, #85, #86, #87, #94, #109, #112 |
+| **High** | **Feature parity on must-have debugger capabilities** | Remaining gaps like breakpoint conditions, deeper search/indexing, rich inspectors, rules/mocking UI, and gRPC/HTTP2 still keep APiX below top-tier tools, even though HAR import/export, copy-as-curl, and WebSocket inspection are now shipped. | **Mixed:** #15, #22, #85, #86, #87, #94, #109, #112 |
 | **High** | **Issue/roadmap rigor** | Several closures were premature; some roadmap items are broad, weakly specified, or duplicated. That slows real product progress. | **Not fully tracked** |
 
 ## Deep analysis by area
@@ -53,7 +53,6 @@ These are the biggest competitive gaps:
 - **Guided capture setup**
 
 #### Protocol coverage gaps
-- **WebSocket**
 - **gRPC-over-HTTP/2**
 - **broader HTTP/2 and staged HTTP/3**
 - **GraphQL-specific debugging**
@@ -161,7 +160,7 @@ These are the gaps I’d elevate most:
    - health, rate limiting, compatibility negotiation, config validation
 
 9. **Protocol expansion with focus**
-   - WebSocket and gRPC/HTTP2 matter more than broad “future protocol” language
+   - gRPC/HTTP2 matters more than broad “future protocol” language
 
 10. **Backlog cleanup and dependency shaping**
    - remove duplicate/stale issues
@@ -179,7 +178,7 @@ These are the gaps I’d elevate most:
    - #95–#98, #107, #108, #110, #111, #131
 
 4. **Expand protocol coverage**
-   - WebSocket, gRPC-over-HTTP/2, HTTP/2+
+   - gRPC-over-HTTP/2, HTTP/2+
 
 5. **Then push AI/MCP as a force multiplier**
    - after contracts and workflows are truly stable

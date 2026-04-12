@@ -124,6 +124,20 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	return nil
 }
 
+// StoreWebSocketFrame persists a proxied WebSocket frame for later inspection.
+func (e *Engine) StoreWebSocketFrame(frame *proxy.WebSocketFrame) error {
+	if frame == nil {
+		return nil
+	}
+	return e.db.SaveWebSocketFrame(&storage.WebSocketFrameRecord{
+		TransactionID: frame.TransactionID,
+		Direction:     frame.Direction,
+		Opcode:        frame.Opcode,
+		Payload:       frame.Payload,
+		Timestamp:     frame.Timestamp,
+	})
+}
+
 // PauseRequest holds a request at a breakpoint until resumed.
 // It first evaluates whether any enabled rule matches; if none matches the
 // request is forwarded immediately without blocking.

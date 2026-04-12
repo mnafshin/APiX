@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { HttpTransaction } from './types';
+import { isWebSocketTransaction } from './trafficFormats';
 
 /**
  * TrafficProvider implements TreeDataProvider for the APiX Traffic tree view.
@@ -57,14 +58,16 @@ export class TrafficItem extends vscode.TreeItem {
     constructor(tx: HttpTransaction) {
         const method = tx.request?.method || 'GET';
         const url = tx.request?.url || '(unknown)';
-        super(`${method} ${url}`, vscode.TreeItemCollapsibleState.None);
+        const isWebSocket = isWebSocketTransaction(tx);
+        super(`${isWebSocket ? '[WS] ' : ''}${method} ${url}`, vscode.TreeItemCollapsibleState.None);
 
         this.transaction = tx;
         const status = tx.response?.statusCode || 0;
         const duration = tx.durationMs ? `${tx.durationMs}ms` : '';
-        this.description = status ? `${status} ${duration}`.trim() : duration || '—';
+        const summary = status ? `${status} ${duration}`.trim() : duration || '—';
+        this.description = isWebSocket ? `WS ${summary}`.trim() : summary;
         this.tooltip = new vscode.MarkdownString(
-            `**${method}** ${url}\n\nStatus: ${status || '—'}  Duration: ${duration || '—'}`
+            `**${isWebSocket ? 'WS ' : ''}${method}** ${url}\n\nStatus: ${status || '—'}  Duration: ${duration || '—'}`
         );
         this.contextValue = 'httpTransaction';
         this.iconPath = this._iconForStatus(status);

@@ -394,6 +394,33 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 	return nil
 }
 
+func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, stream grpc.ServerStreamingServer[apix.WebSocketFrame]) error {
+	if req.TransactionId == "" {
+		return status.Error(codes.InvalidArgument, "transaction_id is required")
+	}
+
+	frames, err := s.engine.DB().ListWebSocketFrames(req.TransactionId)
+	if err != nil {
+		return status.Errorf(codes.Internal, "list websocket frames: %v", err)
+	}
+	for _, frame := range frames {
+		opcode, err := int32FromInt(frame.Opcode, "websocket opcode")
+		if err != nil {
+			return status.Errorf(codes.Internal, "list websocket frames: %v", err)
+		}
+		if err := stream.Send(&apix.WebSocketFrame{
+			TransactionId: frame.TransactionID,
+			Direction:     frame.Direction,
+			Opcode:        opcode,
+			Payload:       frame.Payload,
+			TimestampMs:   frame.Timestamp.UnixMilli(),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.Empty, error) {
 	if err := s.engine.DB().DeleteAllTransactions(); err != nil {
 		return nil, status.Errorf(codes.Internal, "clear history: %v", err)

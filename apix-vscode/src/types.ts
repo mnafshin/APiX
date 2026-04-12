@@ -26,6 +26,14 @@ export interface HttpTransaction {
     durationMs: number;
 }
 
+export interface WebSocketFrame {
+    transactionId: string;
+    direction: 'client' | 'server' | string;
+    opcode: number;
+    payload: Uint8Array | string;
+    timestampMs: number;
+}
+
 export interface BreakpointRule {
     id: string;        // empty when creating; server assigns UUID
     urlPattern: string;

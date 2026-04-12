@@ -1,15 +1,18 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
 	metrics "github.com/mnafshin/apix/internal/metrics"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -115,7 +118,17 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p.tlsProxy.HandleConn(ctx, conn, r.Host)
+	proto, err := brw.Reader.Peek(1)
+	if err != nil {
+		_ = conn.Close()
+		logging.Errorf(ctx, "peek CONNECT tunnel protocol: %v", err)
+		return
+	}
+	if len(proto) > 0 && proto[0] == 0x16 {
+		p.tlsProxy.handleBufferedConn(ctx, conn, r.Host, brw.Reader)
+		return
+	}
+	p.handleTunnelConn(ctx, conn, brw.Reader, r.Host)
 }
 
 // handleHTTP proxies a plain HTTP request, runs plugin chain, stores traffic.
@@ -240,6 +253,11 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if isWebSocketRequest(r) {
+		p.handleWebSocket(ctx, w, r, tx, start)
+		return
+	}
+
 	// Build upstream request.
 	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if err != nil {
@@ -331,6 +349,74 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeProxyResponse(w, proxyResp, finalRespBody)
+}
+
+func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, start time.Time) {
+	upstreamHeaders := copyWebSocketRequestHeaders(tx.Request.Headers)
+	dialer := newWebSocketDialer(p.transport, tx.Request)
+	upstreamConn, resp, err := dialer.DialContext(ctx, webSocketTargetURL(tx.Request.URL), upstreamHeaders)
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			defer func() { _ = resp.Body.Close() }()
+			msg, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			if readErr == nil && len(msg) > 0 {
+				http.Error(w, fmt.Sprintf("websocket upstream error: %v: %s", err, msg), http.StatusBadGateway)
+				return
+			}
+		}
+		http.Error(w, fmt.Sprintf("websocket upstream error: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(*http.Request) bool { return true },
+	}
+	if protocol := upstreamConn.Subprotocol(); protocol != "" {
+		upgrader.Subprotocols = []string{protocol}
+	}
+	clientConn, err := upgrader.Upgrade(w, r, copyWebSocketResponseHeaders(resp.Header))
+	if err != nil {
+		_ = upstreamConn.Close()
+		logging.Errorf(ctx, "websocket client upgrade: %v", err)
+		return
+	}
+
+	tx.Response = &plugins.ProxyResponse{
+		StatusCode: http.StatusSwitchingProtocols,
+		Status:     resp.Status,
+		Headers:    resp.Header.Clone(),
+	}
+	tx.DurationMs = time.Since(start).Milliseconds()
+	if p.engine != nil {
+		if err := p.engine.StoreTransaction(tx); err != nil {
+			logging.Errorf(ctx, "store websocket upgrade transaction: %v", err)
+		}
+	}
+
+	relayWebSocket(ctx, p.engine, tx.ID, clientConn, upstreamConn)
+}
+
+func (p *HTTPProxy) handleTunnelConn(ctx context.Context, conn net.Conn, br *bufio.Reader, host string) {
+	defer func() { _ = conn.Close() }()
+
+	for {
+		req, err := http.ReadRequest(br)
+		if err != nil {
+			if err != io.EOF {
+				logging.Errorf(ctx, "read tunneled request from %s: %v", host, err)
+			}
+			return
+		}
+		if req.URL.Host == "" {
+			req.URL.Host = host
+		}
+		if req.URL.Scheme == "" {
+			req.URL.Scheme = "http"
+		}
+		req = req.WithContext(ctx)
+		w := newHijackableResponseWriter(conn, br)
+		p.handleHTTP(w, req)
+	}
 }
 
 // writeProxyResponse writes a ProxyResponse back to the http.ResponseWriter.

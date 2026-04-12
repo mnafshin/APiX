@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -59,6 +60,10 @@ func (p *TLSProxy) CACertPEM() ([]byte, error) {
 
 // HandleConn performs MITM interception on a raw TCP connection destined for host.
 func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
+	p.handleBufferedConn(ctx, conn, host, bufio.NewReader(conn))
+}
+
+func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host string, br *bufio.Reader) {
 	defer func() { _ = conn.Close() }()
 
 	// Strip port from host for cert generation (SNI requires just the hostname).
@@ -76,18 +81,17 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{*cert},
 	}
-	tlsConn := tls.Server(conn, tlsCfg)
+	tlsConn := tls.Server(&bufferedConn{Conn: conn, reader: br}, tlsCfg)
 	if err := tlsConn.Handshake(); err != nil {
 		logging.Errorf(ctx, "tls proxy: handshake for %s: %v", hostname, err)
 		return
 	}
 	defer func() { _ = tlsConn.Close() }()
-
-	br := bufio.NewReader(tlsConn)
+	tlsBr := bufio.NewReader(tlsConn)
 
 	// Handle multiple pipelined requests on the same connection.
 	for {
-		req, err := http.ReadRequest(br)
+		req, err := http.ReadRequest(tlsBr)
 		if err != nil {
 			if err != io.EOF {
 				logging.Errorf(ctx, "tls proxy: read request from %s: %v", hostname, err)
@@ -103,11 +107,20 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 			req.URL.Scheme = "https"
 		}
 
-		p.handleRequest(ctx, tlsConn, req, host)
+		p.handleRequest(ctx, tlsConn, tlsBr, req, host)
 	}
 }
 
-func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Request, host string) {
+type bufferedConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) {
+	return c.reader.Read(p)
+}
+
+func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.Reader, r *http.Request, host string) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logging.Errorf(ctx, "TLS proxy panic (recovered): %v", rec)
@@ -117,6 +130,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 
 	reqID := uuid.NewString()
 	start := time.Now()
+	origHeaders := r.Header.Clone()
 
 	// Instrument active connections
 	metrics.IncActive()
@@ -177,7 +191,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 
 	// Breakpoint check.
-	tx := &Transaction{ID: reqID, Request: proxyReq, RequestBody: bodyBytes}
+	tx := &Transaction{ID: reqID, Request: proxyReq, RequestBody: bodyBytes, OriginalRequestHeaders: origHeaders}
 	if p.engine != nil {
 		modified, action, err := p.engine.PauseRequest(tx)
 		if err != nil {
@@ -196,6 +210,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 			}
 			return
 		}
+	}
+
+	if isWebSocketRequest(r) {
+		p.handleWebSocket(ctx, conn, br, r, tx, start)
+		return
 	}
 
 	// Build and send upstream request using the shared pooled transport.
@@ -281,6 +300,52 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 	}
 
 	writeProxyResponseToConn(conn, proxyResp)
+}
+
+func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio.Reader, clientReq *http.Request, tx *Transaction, start time.Time) {
+	upstreamHeaders := copyWebSocketRequestHeaders(tx.Request.Headers)
+	dialer := newWebSocketDialer(p.transport, tx.Request)
+	upstreamConn, resp, err := dialer.DialContext(ctx, webSocketTargetURL(tx.Request.URL), upstreamHeaders)
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			defer func() { _ = resp.Body.Close() }()
+			msg, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			if readErr == nil && len(msg) > 0 {
+				writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v: %s", err, msg))
+				return
+			}
+		}
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v", err))
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(*http.Request) bool { return true },
+	}
+	if protocol := upstreamConn.Subprotocol(); protocol != "" {
+		upgrader.Subprotocols = []string{protocol}
+	}
+	responseWriter := newHijackableResponseWriter(conn, br)
+	clientConn, err := upgrader.Upgrade(responseWriter, clientReq, copyWebSocketResponseHeaders(resp.Header))
+	if err != nil {
+		_ = upstreamConn.Close()
+		logging.Errorf(ctx, "tls websocket client upgrade: %v", err)
+		return
+	}
+
+	tx.Response = &plugins.ProxyResponse{
+		StatusCode: http.StatusSwitchingProtocols,
+		Status:     resp.Status,
+		Headers:    resp.Header.Clone(),
+	}
+	tx.DurationMs = time.Since(start).Milliseconds()
+	if p.engine != nil {
+		if err := p.engine.StoreTransaction(tx); err != nil {
+			logging.Errorf(ctx, "tls websocket store transaction: %v", err)
+		}
+	}
+
+	relayWebSocket(ctx, p.engine, tx.ID, clientConn, upstreamConn)
 }
 
 // writeHTTPError writes a minimal HTTP error response to the connection.

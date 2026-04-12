@@ -434,6 +434,66 @@ func TestGetHistory(t *testing.T) {
 	}
 }
 
+func TestGetWebSocketFrames(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	req := &storage.RequestRecord{
+		ID:        "ws-req-1",
+		Method:    "GET",
+		URL:       "wss://example.com/socket",
+		Headers:   map[string]string{"Upgrade": "websocket"},
+		Timestamp: time.Now(),
+	}
+	if err := f.db.SaveRequest(req); err != nil {
+		t.Fatalf("SaveRequest: %v", err)
+	}
+	for _, frame := range []*storage.WebSocketFrameRecord{
+		{TransactionID: "ws-req-1", Direction: "client", Opcode: 1, Payload: []byte("hello"), Timestamp: time.Unix(1700000000, 0).UTC()},
+		{TransactionID: "ws-req-1", Direction: "server", Opcode: 2, Payload: []byte{0x01, 0x02}, Timestamp: time.Unix(1700000001, 0).UTC()},
+	} {
+		if err := f.db.SaveWebSocketFrame(frame); err != nil {
+			t.Fatalf("SaveWebSocketFrame: %v", err)
+		}
+	}
+
+	stream, err := f.client.GetWebSocketFrames(context.Background(), &apix.GetWebSocketFramesRequest{
+		TransactionId: "ws-req-1",
+	})
+	if err != nil {
+		t.Fatalf("GetWebSocketFrames: %v", err)
+	}
+	frames := drainWebSocketFrames(t, stream)
+	if len(frames) != 2 {
+		t.Fatalf("expected 2 websocket frames, got %d", len(frames))
+	}
+	if frames[0].Direction != "client" || string(frames[0].Payload) != "hello" {
+		t.Fatalf("first websocket frame mismatch: %+v", frames[0])
+	}
+	if frames[1].Opcode != 2 {
+		t.Fatalf("second websocket frame opcode mismatch: %+v", frames[1])
+	}
+}
+
+func TestGetWebSocketFrames_InvalidRequest(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	stream, err := f.client.GetWebSocketFrames(context.Background(), &apix.GetWebSocketFramesRequest{})
+	if err != nil {
+		t.Fatalf("GetWebSocketFrames: %v", err)
+	}
+	_, err = stream.Recv()
+	if err == nil {
+		t.Fatal("expected error for empty transaction ID")
+	}
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.InvalidArgument {
+		t.Errorf("expected codes.InvalidArgument, got %v", err)
+	}
+}
+
 // ── CaptureTraffic ─────────────────────────────────────────────────────────
 
 func TestCaptureTraffic(t *testing.T) {
@@ -727,6 +787,19 @@ func drainHistory(t *testing.T, stream grpc.ServerStreamingClient[apix.HttpTrans
 		count++
 	}
 	return count
+}
+
+func drainWebSocketFrames(t *testing.T, stream grpc.ServerStreamingClient[apix.WebSocketFrame]) []*apix.WebSocketFrame {
+	t.Helper()
+	frames := []*apix.WebSocketFrame{}
+	for {
+		frame, err := stream.Recv()
+		if err != nil {
+			break
+		}
+		frames = append(frames, frame)
+	}
+	return frames
 }
 
 // seedRequests inserts n request records into the fixture DB with sequential IDs.

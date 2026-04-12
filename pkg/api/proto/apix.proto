@@ -139,6 +139,18 @@ message HistoryQuery {
   int64  since_ms      = 6; // only transactions after this Unix ms timestamp
 }
 
+message GetWebSocketFramesRequest {
+  string transaction_id = 1;
+}
+
+message WebSocketFrame {
+  string transaction_id = 1;
+  string direction      = 2; // "client" or "server"
+  int32  opcode         = 3; // 1=text, 2=binary, 8=close, 9=ping, 10=pong
+  bytes  payload        = 4;
+  int64  timestamp_ms   = 5;
+}
+
 message ExportHARRequest {
   repeated string transaction_ids = 1; // empty = all stored traffic
 }
@@ -187,6 +199,8 @@ service Engine {
   // ----- History -----
   // Retrieve stored request/response pairs from SQLite.
   rpc GetHistory(HistoryQuery) returns (stream HttpTransaction);
+  // Retrieve stored WebSocket frames for a captured upgrade request.
+  rpc GetWebSocketFrames(GetWebSocketFramesRequest) returns (stream WebSocketFrame);
   // Clear all stored history.
   rpc ClearHistory(Empty) returns (Empty);
   // Export stored traffic as HAR 1.2 JSON.
