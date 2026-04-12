@@ -25,13 +25,13 @@ import (
 )
 
 type rootOptions struct {
-	host       string
-	port       int
-	tls        bool
-	token      string
-	output     string
-	noColor    bool
-	timeout    time.Duration
+	host        string
+	port        int
+	tls         bool
+	token       string
+	output      string
+	noColor     bool
+	timeout     time.Duration
 	configPath  string
 	configCheck bool
 }
@@ -160,6 +160,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		fmt.Fprintln(errw, "  replay")
 		fmt.Fprintln(errw, "  cert status")
 		fmt.Fprintln(errw, "  config show")
+		fmt.Fprintln(errw, "  setup [profile]")
 		fmt.Fprintln(errw, "  completion <bash|zsh|fish>")
 		fmt.Fprintln(errw, "  doctor")
 		fmt.Fprintln(errw, "  help")
@@ -215,6 +216,8 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return app.wrapErr(app.cmdConfig(fs.Args()[1:]))
 	case "completion":
 		return app.wrapErr(app.cmdCompletion(fs.Args()[1:]))
+	case "setup":
+		return app.wrapErr(app.cmdSetup(fs.Args()[1:]))
 	case "doctor":
 		return app.wrapErr(app.cmdDoctor())
 	case "help":
@@ -1131,15 +1134,15 @@ func (a *app) cmdConfig(args []string) error {
 		"path":       path,
 		"validation": validation,
 		"config": map[string]any{
-			"http_port":             a.cfg.HTTPPort,
-			"grpc_port":             a.cfg.GRPCPort,
-			"grpc_bind_address":     a.cfg.GRPCBindAddress,
-			"db_path":               a.cfg.DBPath,
-			"ca_cert_path":          a.cfg.CACertPath,
-			"ca_key_path":           a.cfg.CAKeyPath,
-			"tls_enabled":           a.cfg.TLSEnabled,
-			"auth_token_set":        a.cfg.AuthToken != "",
-			"max_body_size_mb":      a.cfg.MaxBodySizeMB,
+			"http_port":              a.cfg.HTTPPort,
+			"grpc_port":              a.cfg.GRPCPort,
+			"grpc_bind_address":      a.cfg.GRPCBindAddress,
+			"db_path":                a.cfg.DBPath,
+			"ca_cert_path":           a.cfg.CACertPath,
+			"ca_key_path":            a.cfg.CAKeyPath,
+			"tls_enabled":            a.cfg.TLSEnabled,
+			"auth_token_set":         a.cfg.AuthToken != "",
+			"max_body_size_mb":       a.cfg.MaxBodySizeMB,
 			"replay_skip_tls_verify": a.cfg.ReplaySkipTLSVerify,
 		},
 	}
@@ -1209,6 +1212,224 @@ _apix "$@"
 	default:
 		return "", fmt.Errorf("unsupported shell %q", shell)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// setup command — guided first-capture onboarding
+// ---------------------------------------------------------------------------
+
+// setupProfile describes a guided capture profile.
+type setupProfile struct {
+	name        string
+	description string
+	proxyEnvVar string // environment variable to set, if applicable
+	guide       string // terminal instructions for this profile
+}
+
+var setupProfiles = []setupProfile{
+	{
+		name:        "terminal",
+		description: "Capture HTTP(S) traffic from shell commands (curl, wget, etc.)",
+		proxyEnvVar: "HTTP_PROXY / HTTPS_PROXY",
+		guide: `To capture traffic from the current terminal session, run:
+
+  export HTTP_PROXY=http://localhost:{{.HTTPPort}}
+  export HTTPS_PROXY=http://localhost:{{.HTTPPort}}
+
+Then run any HTTP command — e.g.:
+
+  curl https://api.example.com/health
+
+To stop capturing: unset HTTP_PROXY HTTPS_PROXY`,
+	},
+	{
+		name:        "system",
+		description: "Capture all system HTTP traffic via OS proxy settings",
+		proxyEnvVar: "OS proxy",
+		guide: `Set your system HTTP proxy to: localhost:{{.HTTPPort}}
+
+macOS:    System Settings → Network → Proxies → Web Proxy (HTTP)
+          Host: localhost  Port: {{.HTTPPort}}
+          Enable for HTTPS too.
+
+Linux:    Network Manager → Proxy → Manual
+          HTTP: localhost:{{.HTTPPort}}
+          HTTPS: localhost:{{.HTTPPort}}
+
+Windows:  Settings → Proxy → Manual proxy setup
+          Address: localhost  Port: {{.HTTPPort}}`,
+	},
+	{
+		name:        "browser",
+		description: "Capture browser traffic (Chrome / Firefox / curl)",
+		proxyEnvVar: "browser proxy",
+		guide: `Configure your browser to use APiX as an HTTP proxy:
+
+  Proxy: localhost  Port: {{.HTTPPort}}
+
+Chrome (via flag):
+  google-chrome --proxy-server="http://localhost:{{.HTTPPort}}"
+
+Firefox:
+  Settings → Network Settings → Manual proxy configuration
+  HTTP: localhost:{{.HTTPPort}}  Use this proxy for all protocols ✓
+
+Then install the APiX CA certificate in your browser's trust store
+to intercept HTTPS traffic (see 'apix cert status').`,
+	},
+}
+
+// cmdSetup runs the guided first-capture setup flow.
+//
+// Subcommands:
+//
+//	apix setup                — interactive walkthrough (default: shows status
+//	                            and prints instructions for all profiles)
+//	apix setup list           — list available capture profiles
+//	apix setup terminal|system|browser  — print profile-specific instructions
+func (a *app) cmdSetup(args []string) error {
+	profile := ""
+	if len(args) > 0 {
+		profile = args[0]
+	}
+
+	// --- certificate status ---
+	cert := certInfo(a.cfg)
+	certReady, _ := cert["ready"].(bool)
+
+	// --- engine reachability ---
+	engineReachable := false
+	proxyPort := a.cfg.HTTPPort
+	var engineErr string
+
+	client, connErr := a.clientConn()
+	if connErr == nil {
+		ctx, cancel := a.unaryContext()
+		resp, err := client.GetStatus(ctx, &apix.StatusRequest{})
+		cancel()
+		if err == nil {
+			engineReachable = true
+			proxyPort = fmt.Sprintf("%d", resp.ProxyPort)
+		} else {
+			engineErr = err.Error()
+		}
+	} else {
+		engineErr = connErr.Error()
+	}
+
+	// --- handle subcommands ---
+	switch profile {
+	case "list":
+		return a.setupList()
+	case "terminal", "system", "browser":
+		return a.setupPrintProfile(profile, proxyPort)
+	case "":
+		// Interactive guided mode: print full status + default profile.
+	default:
+		return fmt.Errorf("unknown setup profile %q — run 'apix setup list' to see available profiles", profile)
+	}
+
+	// JSON mode: emit structured status.
+	if a.opts.output == "json" {
+		return emitJSON(a.out, map[string]any{
+			"cert_ready":       certReady,
+			"cert_path":        cert["cert_path"],
+			"engine_reachable": engineReachable,
+			"engine_error":     engineErr,
+			"proxy_port":       proxyPort,
+			"profiles":         setupProfileNames(),
+		})
+	}
+
+	// Text mode: print guided walkthrough.
+	fmt.Fprintln(a.out, "=== APiX Setup ===")
+	fmt.Fprintln(a.out, "")
+
+	// Step 1: engine health
+	fmt.Fprintln(a.out, "Step 1 — Engine")
+	if engineReachable {
+		fmt.Fprintf(a.out, "  ✓ Engine is running (HTTP proxy on port %s)\n", proxyPort)
+	} else {
+		fmt.Fprintln(a.out, "  ✗ Engine is not reachable.")
+		fmt.Fprintln(a.out, "    Start it with:  apix-engine  (or press F5 in VS Code)")
+		if engineErr != "" {
+			fmt.Fprintf(a.out, "    Error: %s\n", engineErr)
+		}
+	}
+	fmt.Fprintln(a.out, "")
+
+	// Step 2: certificate
+	fmt.Fprintln(a.out, "Step 2 — CA Certificate")
+	if certReady {
+		fmt.Fprintf(a.out, "  ✓ CA certificate present at %s\n", cert["cert_path"])
+	} else {
+		fmt.Fprintln(a.out, "  ✗ CA certificate not found.")
+		fmt.Fprintf(a.out, "    Expected at: %s\n", cert["cert_path"])
+		fmt.Fprintln(a.out, "    The engine generates the certificate on first start.")
+		fmt.Fprintln(a.out, "    To trust it for HTTPS interception, run:")
+		fmt.Fprintf(a.out, "      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s  # macOS\n", cert["cert_path"])
+		fmt.Fprintf(a.out, "      sudo cp %s /usr/local/share/ca-certificates/ && sudo update-ca-certificates          # Linux\n", cert["cert_path"])
+	}
+	fmt.Fprintln(a.out, "")
+
+	// Step 3: capture profile instructions.
+	fmt.Fprintln(a.out, "Step 3 — First Capture (terminal profile)")
+	if proxyPort == "" {
+		proxyPort = a.cfg.HTTPPort
+	}
+	if err := a.setupPrintProfile("terminal", proxyPort); err != nil {
+		return err
+	}
+
+	fmt.Fprintln(a.out, "")
+	fmt.Fprintln(a.out, "Other profiles: run 'apix setup list' or 'apix setup <profile>'")
+	return nil
+}
+
+func setupProfileNames() []string {
+	names := make([]string, len(setupProfiles))
+	for i, p := range setupProfiles {
+		names[i] = p.name
+	}
+	return names
+}
+
+func (a *app) setupList() error {
+	if a.opts.output == "json" {
+		var out []map[string]string
+		for _, p := range setupProfiles {
+			out = append(out, map[string]string{
+				"name":        p.name,
+				"description": p.description,
+			})
+		}
+		return emitJSON(a.out, out)
+	}
+	fmt.Fprintln(a.out, "Available capture profiles:")
+	for _, p := range setupProfiles {
+		fmt.Fprintf(a.out, "  %-12s  %s\n", p.name, p.description)
+	}
+	return nil
+}
+
+func (a *app) setupPrintProfile(name, proxyPort string) error {
+	for _, p := range setupProfiles {
+		if p.name != name {
+			continue
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]string{
+				"name":        p.name,
+				"description": p.description,
+				"proxy_port":  proxyPort,
+				"guide":       strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort),
+			})
+		}
+		fmt.Fprintf(a.out, "Profile: %s — %s\n\n", p.name, p.description)
+		fmt.Fprintln(a.out, strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort))
+		return nil
+	}
+	return fmt.Errorf("unknown profile %q — run 'apix setup list'", name)
 }
 
 func (a *app) cmdDoctor() error {

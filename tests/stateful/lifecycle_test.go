@@ -217,7 +217,7 @@ func TestStateful_ReplayFromHistory(t *testing.T) {
 		Method: "GET",
 		URL:    srv.URL + "/api",
 		Headers: map[string]string{
-			"User-Agent":     "apix-test/1.0",
+			"User-Agent":      "apix-test/1.0",
 			"X-Replay-Header": "present",
 		},
 	}

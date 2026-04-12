@@ -192,4 +192,3 @@ func TestIsValidationError(t *testing.T) {
 		t.Fatal("expected IsValidationError to return true for *ValidationError")
 	}
 }
-
