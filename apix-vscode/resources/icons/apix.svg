@@ -1,5 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-  <path d="M2 17l10 5 10-5"/>
-  <path d="M2 12l10 5 10-5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="APiX icon">
+
+  <!-- Left node: client -->
+  <circle cx="3" cy="12" r="2" fill="#CBD5E1"/>
+
+  <!-- Connector: left → center -->
+  <line x1="5.3" y1="12" x2="7.7" y2="12" stroke="#94A3B8" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Center node: APiX proxy -->
+  <circle cx="12" cy="12" r="4.3" fill="#1D4ED8"/>
+
+  <!-- HTTP traffic hint lines inside center node -->
+  <line x1="10" y1="10.8" x2="14" y2="10.8" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+  <line x1="10" y1="13.2" x2="13" y2="13.2" stroke="white" stroke-width="1" stroke-linecap="round" opacity="0.9"/>
+
+  <!-- Green accent badge -->
+  <circle cx="15.5" cy="8.5" r="2" fill="#16A34A"/>
+
+  <!-- Connector: center → right -->
+  <line x1="16.3" y1="12" x2="18.7" y2="12" stroke="#2563EB" stroke-width="1.2" stroke-linecap="round"/>
+
+  <!-- Right node: server -->
+  <circle cx="21" cy="12" r="2" fill="#CBD5E1"/>
+
 </svg>

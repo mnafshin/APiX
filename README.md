@@ -1,4 +1,4 @@
-![APiX](public/assets/img/APiX.png)
+![APiX](public/assets/img/APiX-logo.svg)
 
 # APiX — API Debugger
 

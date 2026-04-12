@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60" fill="none" role="img" aria-label="APiX logo">
+
+  <!-- ===== PROXY CHAIN ICON ===== -->
+
+  <!-- Left node: client / request source -->
+  <circle cx="16" cy="30" r="7" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
+
+  <!-- Connector: left node → center node (gray, data flowing in) -->
+  <line x1="24" y1="30" x2="33" y2="30" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <polygon points="33,26.5 39,30 33,33.5" fill="#94A3B8"/>
+
+  <!-- Center node: APiX proxy intercept -->
+  <circle cx="52" cy="30" r="13" fill="#1D4ED8"/>
+
+  <!-- HTTP traffic hint: three horizontal lines (document / request lines) -->
+  <line x1="45.5" y1="25.5" x2="58.5" y2="25.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+  <line x1="45.5" y1="30"   x2="58.5" y2="30"   stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+  <line x1="45.5" y1="34.5" x2="54"   y2="34.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- Green accent badge: top-right of center node (growth / success) -->
+  <circle cx="63" cy="19" r="5" fill="#16A34A"/>
+  <!-- Small check mark inside green badge -->
+  <polyline points="60.5,19 62.5,21.5 66,16.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Connector: center node → right node (blue, data flowing out) -->
+  <line x1="66" y1="30" x2="79" y2="30" stroke="#2563EB" stroke-width="1.5" stroke-linecap="round"/>
+  <polygon points="79,26.5 85,30 79,33.5" fill="#2563EB"/>
+
+  <!-- Right node: server / request destination -->
+  <circle cx="92" cy="30" r="7" fill="#E2E8F0" stroke="#CBD5E1" stroke-width="1.5"/>
+
+  <!-- ===== APIX WORDMARK ===== -->
+  <!--
+    "AP"  – bold, near-black  → reliability / stability
+    "i"   – light, mid-blue   → flexibility / lightness
+    "X"   – bold, primary blue → identity / power
+  -->
+  <text font-family="'Segoe UI', Inter, -apple-system, Arial, sans-serif"
+        font-size="30"
+        y="42">
+    <tspan x="112" font-weight="700" fill="#1E293B">AP</tspan><tspan font-weight="300" fill="#3B82F6">i</tspan><tspan font-weight="700" fill="#1D4ED8">X</tspan>
+  </text>
+
+</svg>
