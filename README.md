@@ -376,6 +376,8 @@ The CLI will add a separate **user contract**, not a separate backend protocol. 
 - **Automation-friendly**: stable flags, deterministic exit codes, and script-safe non-interactive behavior
 - **AI-ready**: machine-readable JSON and NDJSON output modes with stable field names and no need to scrape prose
 
+The current compatibility surface is documented in [`docs/cli-contract-v1.md`](docs/cli-contract-v1.md).
+
 If browser-native or third-party HTTP integrations become a primary requirement later, APiX can add a thin gateway on top of gRPC. That should be a later compatibility layer, not a replacement for the engine API.
 
 ### Suggested Rollout Plan

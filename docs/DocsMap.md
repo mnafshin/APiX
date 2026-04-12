@@ -9,6 +9,7 @@ Reading order (recommended):
 4. docs/extension_arch.md — VS Code extension architecture
 5. docs/storage_replay.md — SQLite storage, replay, and breakpoints
 6. docs/cli_mcp.md — CLI strategy, AI-ready contracts, MCP integration
-7. docs/testing_strategy.md — testing layers, release safety, resilience
+7. docs/cli-contract-v1.md — stable CLI flags, output, and exit-code contract
+8. docs/testing_strategy.md — testing layers, release safety, resilience
 
 Each page includes links to the key source files and acceptance criteria for contributors.
