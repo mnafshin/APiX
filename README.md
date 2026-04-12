@@ -23,6 +23,7 @@ APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP
 - 🔁 **Request replay** with header/body overrides
 - 📤 **Traffic portability** — HAR export/import and copy-as-curl from the VS Code workflow
 - 🔄 **WebSocket inspection** — capture upgrade handshakes and inspect persisted frames
+- 💻 **Contract-first CLI** — status, history, watch, breakpoints, paused actions, replay, doctor, setup, and completion
 - 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
 - 💾 **SQLite persistent storage** — traffic history survives restarts
 - 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
@@ -80,11 +81,15 @@ docker run -p 8080:8080 -p 9090:9090 mnafshin/apix:1.0.0
 # Clone repository
 git clone https://github.com/mnafshin/APiX.git && cd APiX
 
-# Build engine
-go build -o apix-engine ./cmd/apix-engine
+# Build engine + CLI
+make build
+make build-cli
 
-# Run engine
+# Run engine (HTTP proxy :8080, gRPC :9090)
 ./apix-engine
+
+# Check engine from the CLI
+./apix-cli status
 ```
 
 ### Configure Your Client
@@ -148,11 +153,18 @@ APiX now captures upgraded `ws://` and `wss://` sessions as first-class traffic 
 ### Building Locally
 
 ```bash
-# Build everything (engine + extension)
-make dev
+# Build engine + CLI
+make build
+make build-cli
 
-# Run Go tests with race detector
+# Build the VS Code extension
+make ext-build
+
+# Run repository Go tests
 make test
+
+# Run focused race tests when needed
+go test -race ./internal/proxy
 
 # Run a single test package
 go test ./tests/integration/... -v
@@ -175,7 +187,8 @@ make build-all
 
 ### Testing
 
-APiX has comprehensive multi-layer test coverage across unit, integration, E2E, contract, fuzz, and benchmark tests:
+APiX has multi-layer coverage across unit, integration, E2E, contract,
+resilience, stateful workflow, MCP, and benchmark suites:
 
 ```bash
 # All tests
@@ -188,22 +201,21 @@ go test ./tests/integration/...
 go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakpoints
 ```
 
-**Test Coverage:**
+**Test coverage by layer:**
 
 | Layer | Coverage | Key Tests |
 |-------|----------|-----------|
-| **Unit Tests** | 13 packages, ~70 tests | Config, plugins, breakpoints, storage, engine |
-| **Integration Tests** | 16 tests across 3 suites | Proxy→Storage pipeline, gRPC auth over TCP, Replay engine |
-| **E2E Tests** | Full-stack scenarios | Breakpoint actions (DROP/RESPOND), plugin mutations, concurrent requests |
-| **Contract Tests** | Proto sync verification | Symlink integrity, generated code freshness |
-| **Fuzz Tests** | 18 seed cases | EnvSubst injection, URL pattern ReDoS, input validation |
-| **Benchmarks** | 5 performance baselines | HTTP proxy (~66µs serial/~42µs parallel), storage (~12µs write/~1ms query), breakpoints (~7µs eval) |
+| **Unit tests** | Core packages | Config, plugins, breakpoints, storage, engine |
+| **Integration tests** | Proxy + gRPC flows | Proxy→storage pipeline, gRPC auth, replay engine |
+| **E2E tests** | Full-stack scenarios | Breakpoint actions, plugin mutations, concurrent traffic |
+| **Contract tests** | API and generated-code integrity | Proto sync, generated-code freshness |
+| **Stateful / resilience / MCP tests** | Workflow and failure coverage | Streams, reconnects, engine restarts, transcript behavior |
+| **Benchmarks** | Performance baselines | HTTP proxy, storage, breakpoints |
 
 **Results:**
-- ✅ 13 Go packages, 100+ tests
+- ✅ Go, extension, and release-smoke workflows run in CI
 - ✅ Race detector: clean
 - ✅ TypeScript type checks: passing
-- ✅ Coverage: Security (P0), Business Logic (P1), Error Paths (P2), Completeness (P3)
 - ✅ Performance baselines established for CI regression detection
 
 **Next testing layers for CLI and MCP:**
@@ -249,7 +261,7 @@ Built-in plugins live in `internal/pluginrt/builtins/`:
 | `MockResponse` | Return a synthetic response without hitting upstream |
 | `EnvSubst` | Replace `${VAR}` placeholders in request bodies with environment values |
 
-**Custom plugins** implement the `Plugin` interface in `internal/plugins/sdk.go`:
+**Custom plugins** implement the `Plugin` interface in `pkg/plugins/sdk.go`:
 
 ```go
 type Plugin interface {
@@ -261,7 +273,9 @@ type Plugin interface {
 }
 ```
 
-Create a file in `internal/plugins/builtins/` and register it in `cmd/apix-engine/main.go`. See [CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide.
+For a custom plugin, implement the interface in your own package and register
+it with the runtime in `cmd/apix-engine/main.go`. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide.
 
 ## Configuration
 
@@ -273,7 +287,7 @@ Configuration validation: run `apix-engine --config-check` to validate your conf
 |-----|---------|-------------|
 | `http_port` | `8080` | HTTP proxy listen port |
 | `grpc_port` | `9090` | gRPC API listen port |
-| `grpc_bind_address` | `127.0.0.1` | gRPC server bind address (loopback by default, 0.0.0.0 with auth) |
+| `grpc_bind_address` | `127.0.0.1` | gRPC server bind address (defaults to loopback; widen only for secured remote access) |
 | `db_path` | `apix.db` | SQLite database path |
 | `ca_cert_path` | `~/.apix/ca.pem` | MITM CA certificate |
 | `ca_key_path` | `~/.apix/ca-key.pem` | MITM CA private key |
@@ -282,10 +296,20 @@ Configuration validation: run `apix-engine --config-check` to validate your conf
 | `max_idle_conns_per_host` | `10` | Max idle upstream connections per host |
 | `idle_conn_timeout_sec` | `90` | Seconds an idle upstream connection stays open |
 | `dial_timeout_sec` | `10` | Seconds allowed for a TCP dial to upstream |
+| `upstream_tls_handshake_timeout_sec` | `10` | TLS handshake timeout for upstream connections |
+| `upstream_response_header_timeout_sec` | `30` | Timeout waiting for upstream response headers |
+| `upstream_expect_continue_timeout_sec` | `1` | Timeout for `100-continue` handling upstream |
 | `http_read_header_timeout_sec` | `10` | HTTP header read timeout (DoS protection) |
 | `http_read_timeout_sec` | `30` | HTTP read timeout (DoS protection) |
 | `http_write_timeout_sec` | `120` | HTTP write timeout (large response bodies) |
+| `http_idle_timeout_sec` | `120` | Idle timeout for client-side HTTP connections |
+| `max_body_size_mb` | `32` | Maximum buffered request body size in MB (`0` disables the limit) |
 | `replay_skip_tls_verify` | `false` | Skip TLS verification for replayed requests (testing only) |
+| `metrics_enabled` | `false` | Enable Prometheus metrics endpoint |
+| `metrics_port` | `9091` | Port for the Prometheus metrics endpoint |
+| `slowlog_threshold_ms` | `1000` | Threshold for slow-request logging |
+| `plugin_paths` | `[]` | Extra plugin artifact paths validated at startup |
+| `url_patterns` | `[]` | Preconfigured URL regex patterns validated at startup |
 
 ## Authentication
 
@@ -478,7 +502,7 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 - Export traffic to HAR before clearing history when you need to archive a session
 - Clear traffic history: APiX UI → right-click → Clear History
 - CLI support for history management is available via `apix history list|get|clear`
-- Reduce retention: set `history_max_size_mb` in config.yaml
+- Lower `max_body_size_mb` in `config.yaml` if large buffered bodies are not needed
 
 ### Certificate validation errors
 - For testing: set `replay_skip_tls_verify: true` in `config.yaml`
@@ -500,7 +524,12 @@ Apache 2.0 — see [LICENSE](LICENSE).
 
 ## Metrics & OpenTelemetry Collector
 
-APiX exposes Prometheus-format metrics at `/metrics` when metrics are enabled. To integrate with OpenTelemetry, run the OpenTelemetry Collector configured to scrape APiX and export metrics via OTLP. See `docs/OTEL.md` and the sample config `docs/otel-collector-config.yaml` for a quick-start example.
+APiX exposes Prometheus-format metrics at `/metrics` when
+`metrics_enabled: true` is set in `config.yaml`. By default the metrics server
+listens on `metrics_port` (`9091`). To integrate with OpenTelemetry, run the
+OpenTelemetry Collector configured to scrape APiX and export metrics via OTLP.
+See `docs/OTEL.md` and the sample config `docs/otel-collector-config.yaml` for
+a quick-start example.
 
 ## Project status and claims
 
