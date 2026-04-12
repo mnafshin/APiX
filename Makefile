@@ -60,6 +60,12 @@ build-all:
 # Dev: build engine + extension together
 dev: build ext-build
 
+smoke:
+	mkdir -p build
+	go build -o build/apix-engine ./cmd/apix-engine/
+	go build -o build/apix-cli ./cmd/apix-cli/
+	./build/apix-cli --help
+
 help:
 	@echo "Available targets:"
 	@echo "  build          - Build engine binary"
