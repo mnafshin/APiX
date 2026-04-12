@@ -220,7 +220,7 @@ Proto definition: [`pkg/api/proto/apix.proto`](pkg/api/proto/apix.proto)
 
 ## Plugins
 
-Built-in plugins live in `internal/plugins/builtins/`:
+Built-in plugins live in `internal/pluginrt/builtins/`:
 
 | Plugin | Description |
 |--------|-------------|
