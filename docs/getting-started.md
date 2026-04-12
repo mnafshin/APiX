@@ -1,23 +1,100 @@
 # Getting Started — Workflow-first Guides
 
-This guide provides short, task-oriented workflows to get APiX users started quickly.
+> **New to APiX?** Pick a workflow below and follow the steps. Each guide is self-contained and takes less than five minutes to complete.
 
-## First capture (quick)
-1. Build and run the engine: ./apix-engine
-2. Configure your tool to use the proxy: curl -x http://localhost:8080 https://example.com
-3. Watch the CLI or VS Code extension for captured requests
-4. Inspect the captured request and response in the UI
+## Prerequisites
 
-## First breakpoint (quick)
-1. Open the VS Code extension or apix-cli and add a breakpoint that matches example.com
-2. Send a request that matches the breakpoint
-3. The request will pause; edit the request/response and Resume (Forward/Respond/Drop)
+1. **Build the engine** (one-time):
 
-## Replay a captured request
-1. From the traffic view, select a captured request
-2. Choose "Replay" and optionally modify the request
-3. Verify the replayed response and compare timings
+   ```sh
+   go build -o apix-engine ./cmd/apix-engine/
+   go build -o apix-cli   ./cmd/apix-cli/
+   ```
 
-Each of the above sections links to more detailed how-to pages (how-to/breakpoints.md, how-to/replay.md) when users need deeper examples.
+2. **Start the engine** (HTTP proxy on `:8080`, gRPC on `:9090`):
 
-(Planned via issue #124)
+   ```sh
+   ./apix-engine
+   ```
+
+   Verify it is running:
+
+   ```sh
+   ./apix-cli status
+   ```
+
+---
+
+## 1 — First capture
+
+→ **[Full how-to guide](how-to/first-capture.md)**
+
+Quick-start:
+
+```sh
+# Send a request through the proxy
+curl -x http://localhost:8080 https://httpbin.org/get
+
+# List captured traffic
+./apix-cli history list
+```
+
+You should see the captured request and its response in the output.
+
+---
+
+## 2 — First breakpoint
+
+→ **[Full how-to guide](how-to/first-breakpoint.md)**
+
+Quick-start:
+
+```sh
+# Add a breakpoint matching any URL containing "httpbin"
+./apix-cli breakpoints add --pattern "httpbin"
+
+# In another terminal, send a matching request
+curl -x http://localhost:8080 https://httpbin.org/get
+
+# Watch the paused request, then forward it
+./apix-cli paused watch         # shows the paused request ID
+./apix-cli paused forward <id>  # forward with original request
+```
+
+---
+
+## 3 — Replay a captured request
+
+→ **[Full how-to guide](how-to/replay.md)**
+
+Quick-start:
+
+```sh
+# List captured requests to find an ID
+./apix-cli history list
+
+# Replay a specific request
+./apix-cli replay --id <request-id>
+```
+
+---
+
+## 4 — Validate your configuration
+
+```sh
+./apix-cli --config-check
+```
+
+This runs all config checks (port availability, plugin paths, regex patterns) and exits 0 on success or 1 with a full error list on failure.
+
+---
+
+## Next steps
+
+| Topic | Link |
+|---|---|
+| HTTPS interception (CA cert setup) | [proxy_mitm.md](proxy_mitm.md) |
+| Plugin development | [extension_arch.md](extension_arch.md) |
+| gRPC API reference | [grpc_protobuf.md](grpc_protobuf.md) |
+| Configuration reference | [CONFIG_VALIDATION.md](CONFIG_VALIDATION.md) |
+| Storage and replay internals | [storage_replay.md](storage_replay.md) |
