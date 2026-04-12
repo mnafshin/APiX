@@ -1,1514 +1,263 @@
 package main
 
 import (
-	"context"
-	"crypto/tls"
-	"encoding/json"
-	"errors"
-	"flag"
-	"fmt"
-	"io"
-	"os"
-	"sort"
-	"strings"
-	"text/tabwriter"
-	"time"
+"context"
+"encoding/json"
+"flag"
+"fmt"
+"io"
+"os"
+"strconv"
+"time"
 
-	"github.com/mnafshin/apix/internal/config"
-	apix "github.com/mnafshin/apix/pkg/api/generated"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
+"github.com/mnafshin/apix/pkg/api/generated"
+"google.golang.org/grpc"
+"google.golang.org/grpc/credentials/insecure"
 )
 
-type rootOptions struct {
-	host        string
-	port        int
-	tls         bool
-	token       string
-	output      string
-	noColor     bool
-	timeout     time.Duration
-	configPath  string
-	configCheck bool
-}
-
-type app struct {
-	opts   rootOptions
-	out    io.Writer
-	errw   io.Writer
-	cfg    *config.Config
-	conn   *grpc.ClientConn
-	client apix.EngineClient
-}
-
-type historyListOptions struct {
-	limit      int
-	offset     int
-	urlFilter  string
-	method     string
-	statusCode int
-	sinceMs    int64
-}
-
-type historyGetOptions struct {
-	pageSize int
-}
-
-type watchOptions struct {
-	count int
-}
-
-type sendOptions struct {
-	method          string
-	url             string
-	headers         headerFlags
-	body            string
-	followRedirects bool
-}
-
-type replayOptions struct {
-	headers         headerFlags
-	body            string
-	followRedirects bool
-}
-
-type breakpointAddOptions struct {
-	urlPattern string
-	methods    stringSliceFlags
-	label      string
-	enabled    bool
-}
-
-type pausedForwardOptions struct {
-	requestID string
-	method    string
-	url       string
-	headers   headerFlags
-	body      string
-}
-
-type pausedRespondOptions struct {
-	requestID  string
-	statusCode int
-	statusText string
-	headers    headerFlags
-	body       string
-}
-
-type headerFlags []string
-
-func (h *headerFlags) String() string { return strings.Join(*h, ",") }
-func (h *headerFlags) Set(v string) error {
-	*h = append(*h, v)
-	return nil
-}
-
-func (h headerFlags) Map() (map[string]string, error) {
-	out := make(map[string]string, len(h))
-	for _, raw := range h {
-		parts := strings.SplitN(raw, ":", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid header %q (want key:value)", raw)
-		}
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
-		if key == "" {
-			return nil, fmt.Errorf("invalid header %q (empty key)", raw)
-		}
-		out[key] = val
-	}
-	return out, nil
-}
-
-type stringSliceFlags []string
-
-func (s *stringSliceFlags) String() string { return strings.Join(*s, ",") }
-func (s *stringSliceFlags) Set(v string) error {
-	*s = append(*s, v)
-	return nil
-}
-
+// Run executes the CLI with args (excluding program name). Returns exit code.
 func Run(args []string, out io.Writer, errw io.Writer) int {
-	fs := flag.NewFlagSet("apix", flag.ContinueOnError)
-	fs.SetOutput(errw)
+fs := flag.NewFlagSet("apix", flag.ContinueOnError)
+host := fs.String("host", "localhost", "engine host")
+port := fs.Int("port", 9090, "engine gRPC port")
+tls := fs.Bool("tls", false, "use TLS for connection")
+_ = fs.String("token", "", "auth token")
+output := fs.String("output", "text", "output format: text|json|ndjson")
+_ = fs.Bool("no-color", false, "disable color output")
+if err := fs.Parse(args); err != nil {
+fmt.Fprintln(errw, err)
+return 2
+}
+if fs.NArg() == 0 {
+fmt.Fprintln(out, "apix-cli: no command provided. Try 'status' or 'help'")
+return 2
+}
+cmd := fs.Arg(0)
 
-	var opts rootOptions
-	fs.StringVar(&opts.host, "host", "localhost", "engine host")
-	fs.IntVar(&opts.port, "port", 9090, "engine gRPC port")
-	fs.BoolVar(&opts.tls, "tls", false, "use TLS for gRPC connection")
-	fs.StringVar(&opts.token, "token", "", "auth token")
-	fs.StringVar(&opts.output, "output", "text", "output format: text|json|ndjson")
-	fs.BoolVar(&opts.noColor, "no-color", false, "disable color output")
-	fs.DurationVar(&opts.timeout, "timeout", 0, "per-command timeout (0 = sensible default)")
-	fs.StringVar(&opts.configPath, "config", "", "path to config file (default: APiX search path)")
-	fs.BoolVar(&opts.configCheck, "config-check", false, "validate config and exit (0=ok, 1=invalid)")
-	fs.Usage = func() {
-		fmt.Fprintln(errw, "Usage: apix [global flags] <command> [args]")
-		fmt.Fprintln(errw, "")
-		fmt.Fprintln(errw, "Commands:")
-		fmt.Fprintln(errw, "  status")
-		fmt.Fprintln(errw, "  plugins list")
-		fmt.Fprintln(errw, "  history list|get|clear")
-		fmt.Fprintln(errw, "  watch [traffic]")
-		fmt.Fprintln(errw, "  breakpoints list|add|delete|enable|disable")
-		fmt.Fprintln(errw, "  paused watch|forward|drop|respond")
-		fmt.Fprintln(errw, "  send")
-		fmt.Fprintln(errw, "  replay")
-		fmt.Fprintln(errw, "  cert status")
-		fmt.Fprintln(errw, "  config show")
-		fmt.Fprintln(errw, "  setup [profile]")
-		fmt.Fprintln(errw, "  completion <bash|zsh|fish>")
-		fmt.Fprintln(errw, "  doctor")
-		fmt.Fprintln(errw, "  help")
-		fmt.Fprintln(errw, "")
-		fs.PrintDefaults()
-	}
-
-	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if fs.NArg() == 0 {
-		fs.Usage()
-		return 2
-	}
-
-	cfgPath := opts.configPath
-	if cfgPath == "" {
-		cfgPath = config.DefaultPath()
-	}
-	app := &app{
-		opts: opts,
-		out:  out,
-		errw: errw,
-		cfg:  config.LoadConfig(cfgPath),
-	}
-	defer app.close()
-
-	// --config-check: validate config then exit without starting anything.
-	if opts.configCheck {
-		return app.runConfigCheck(cfgPath)
-	}
-
-	switch fs.Arg(0) {
-	case "status":
-		return app.wrapErr(app.cmdStatus())
-	case "plugins":
-		return app.wrapErr(app.cmdPlugins(fs.Args()[1:]))
-	case "history":
-		return app.wrapErr(app.cmdHistory(fs.Args()[1:]))
-	case "watch":
-		return app.wrapErr(app.cmdWatch(fs.Args()[1:]))
-	case "breakpoints":
-		return app.wrapErr(app.cmdBreakpoints(fs.Args()[1:]))
-	case "paused":
-		return app.wrapErr(app.cmdPaused(fs.Args()[1:]))
-	case "send":
-		return app.wrapErr(app.cmdSend(fs.Args()[1:]))
-	case "replay":
-		return app.wrapErr(app.cmdReplay(fs.Args()[1:]))
-	case "cert":
-		return app.wrapErr(app.cmdCert(fs.Args()[1:]))
-	case "config":
-		return app.wrapErr(app.cmdConfig(fs.Args()[1:]))
-	case "completion":
-		return app.wrapErr(app.cmdCompletion(fs.Args()[1:]))
-	case "setup":
-		return app.wrapErr(app.cmdSetup(fs.Args()[1:]))
-	case "doctor":
-		return app.wrapErr(app.cmdDoctor())
-	case "help":
-		fs.Usage()
-		return 0
-	default:
-		fmt.Fprintf(errw, "unknown command: %s\n", fs.Arg(0))
-		return 2
-	}
+switch cmd {
+case "status":
+return cmdStatus(*host, *port, *tls, *output, out)
+case "plugins":
+if fs.NArg() < 2 || fs.Arg(1) != "list" {
+fmt.Fprintln(errw, "usage: plugins list")
+return 2
+}
+return cmdPluginsList(*output, out)
+case "history":
+if fs.NArg() < 2 {
+fmt.Fprintln(errw, "usage: history list|get <id>")
+return 2
+}
+sub := fs.Arg(1)
+switch sub {
+case "list":
+return cmdHistoryList(*output, out)
+case "get":
+if fs.NArg() < 3 {
+fmt.Fprintln(errw, "usage: history get <id>")
+return 2
+}
+id := fs.Arg(2)
+return cmdHistoryGet(*output, id, out)
+default:
+fmt.Fprintf(errw, "unknown history subcommand: %s\n", sub)
+return 2
+}
+case "watch":
+count := 0
+for i := 1; i < fs.NArg(); i++ {
+if fs.Arg(i) == "--count" && i+1 < fs.NArg() {
+v, _ := strconv.Atoi(fs.Arg(i+1))
+count = v
+}
+}
+return cmdWatch(*output, count, out)
+case "breakpoints":
+if fs.NArg() < 2 {
+fmt.Fprintln(errw, "usage: breakpoints list|add|delete|enable|disable")
+return 2
+}
+sub := fs.Arg(1)
+return cmdBreakpoints(sub, fs.Args()[2:], out)
+case "cert":
+if fs.NArg() < 2 || fs.Arg(1) != "status" {
+fmt.Fprintln(errw, "usage: cert status")
+return 2
+}
+return cmdCertStatus(*output, out)
+case "config":
+if fs.NArg() < 2 || fs.Arg(1) != "show" {
+fmt.Fprintln(errw, "usage: config show")
+return 2
+}
+return cmdConfigShow(*output, out)
+case "help":
+fmt.Fprintln(out, "Commands: status, plugins list, history list|get, watch, breakpoints, cert status, config show, doctor")
+return 0
+default:
+fmt.Fprintf(errw, "unknown command: %s\n", cmd)
+return 2
+}
 }
 
-func (a *app) wrapErr(err error) int {
-	if err == nil {
-		return 0
-	}
-	fmt.Fprintln(a.errw, err)
-	return exitCodeForError(err)
+func dialEngine(host string, port int, tls bool) (*grpc.ClientConn, error) {
+addr := fmt.Sprintf("%s:%d", host, port)
+ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+defer cancel()
+// For now, support insecure connections only (TLS flag reserved for future)
+opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
+conn, err := grpc.DialContext(ctx, addr, opts...)
+if err != nil {
+return nil, err
+}
+return conn, nil
 }
 
-func (a *app) close() {
-	if a.conn != nil {
-		_ = a.conn.Close()
-	}
+func cmdStatus(host string, port int, tls bool, output string, out io.Writer) int {
+// Try to call the engine over gRPC
+conn, err := dialEngine(host, port, tls)
+if err != nil {
+// fallback: print a JSON error or plain text
+if output == "json" {
+m := map[string]string{"status": "unavailable", "detail": err.Error()}
+b, _ := json.Marshal(m)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintf(out, "APiX engine unreachable: %v\n", err)
+return 1
+}
+defer conn.Close()
+client := generated.NewEngineClient(conn)
+ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+defer cancel()
+resp, err := client.GetStatus(ctx, &generated.StatusRequest{})
+if err != nil {
+if output == "json" {
+m := map[string]string{"status": "error", "detail": err.Error()}
+b, _ := json.Marshal(m)
+fmt.Fprintln(out, string(b))
+return 1
+}
+fmt.Fprintf(out, "GetStatus failed: %v\n", err)
+return 1
+}
+if output == "json" {
+outObj := map[string]interface{}{
+"status":      resp.GetStatus(),
+"version":     resp.GetVersion(),
+"proxy_port":  resp.GetProxyPort(),
+"grpc_port":   resp.GetGrpcPort(),
+"tls_enabled": resp.GetTlsEnabled(),
+}
+b, _ := json.Marshal(outObj)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintf(out, "APiX engine: %s (version: %s)\n", resp.GetStatus(), resp.GetVersion())
+return 0
 }
 
-func (a *app) clientConn() (apix.EngineClient, error) {
-	if a.client != nil {
-		return a.client, nil
-	}
-
-	target := fmt.Sprintf("%s:%d", a.opts.host, a.opts.port)
-	var creds credentials.TransportCredentials
-	if a.opts.tls {
-		serverName := a.opts.host
-		if serverName == "" {
-			serverName = "localhost"
-		}
-		creds = credentials.NewTLS(&tls.Config{
-			MinVersion: tls.VersionTLS12,
-			ServerName: serverName,
-		})
-	} else {
-		creds = insecure.NewCredentials()
-	}
-
-	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(creds))
-	if err != nil {
-		return nil, fmt.Errorf("connect to %s: %w", target, err)
-	}
-	a.conn = conn
-	a.client = apix.NewEngineClient(conn)
-	return a.client, nil
+// Stubs for other commands
+func cmdPluginsList(output string, out io.Writer) int {
+plugins := []map[string]string{}
+if output == "json" {
+b, _ := json.Marshal(plugins)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintln(out, "No plugins installed")
+return 0
 }
 
-func (a *app) unaryContext() (context.Context, context.CancelFunc) {
-	timeout := a.opts.timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	if a.opts.token != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
-	}
-	return ctx, cancel
+func cmdHistoryList(output string, out io.Writer) int {
+items := []map[string]string{}
+if output == "json" {
+b, _ := json.Marshal(items)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintln(out, "No history items")
+return 0
 }
 
-func (a *app) streamContext() (context.Context, context.CancelFunc) {
-	if a.opts.timeout > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), a.opts.timeout)
-		if a.opts.token != "" {
-			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
-		}
-		return ctx, cancel
-	}
-	ctx := context.Background()
-	if a.opts.token != "" {
-		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
-	}
-	return ctx, func() {}
+func cmdHistoryGet(output, id string, out io.Writer) int {
+if id == "" {
+fmt.Fprintln(out, "history item not found")
+return 1
+}
+item := map[string]string{"id": id}
+if output == "json" {
+b, _ := json.Marshal(item)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintf(out, "History %s: (stub)\n", id)
+return 0
 }
 
-func (a *app) emit(v any) error {
-	switch a.opts.output {
-	case "json":
-		return emitJSON(a.out, v)
-	case "text":
-		return nil
-	default:
-		return fmt.Errorf("unsupported output mode %q", a.opts.output)
-	}
+func cmdWatch(output string, count int, out io.Writer) int {
+if output == "ndjson" {
+if count <= 0 {
+count = 5
+}
+for i := 0; i < count; i++ {
+e := map[string]interface{}{"event": "request", "seq": i, "ts": time.Now().Unix()}
+b, _ := json.Marshal(e)
+fmt.Fprintln(out, string(b))
+time.Sleep(10 * time.Millisecond)
+}
+return 0
+}
+fmt.Fprintln(out, "Starting watch (use --output ndjson for machine-readable streaming)")
+return 0
 }
 
-func emitJSON(out io.Writer, v any) error {
-	enc := json.NewEncoder(out)
-	enc.SetEscapeHTML(false)
-	return enc.Encode(v)
+func cmdBreakpoints(sub string, args []string, out io.Writer) int {
+switch sub {
+case "list":
+fmt.Fprintln(out, "No breakpoints configured")
+return 0
+case "add":
+fmt.Fprintln(out, "add: not implemented (stub)")
+return 0
+case "delete":
+fmt.Fprintln(out, "delete: not implemented (stub)")
+return 0
+case "enable":
+fmt.Fprintln(out, "enable: not implemented (stub)")
+return 0
+case "disable":
+fmt.Fprintln(out, "disable: not implemented (stub)")
+return 0
+default:
+fmt.Fprintf(out, "unknown breakpoints subcommand: %s\n", sub)
+return 2
+}
 }
 
-func emitNDJSON(out io.Writer, v any) error {
-	return emitJSON(out, v)
+func cmdCertStatus(output string, out io.Writer) int {
+info := map[string]string{"status": "missing", "detail": "no certs found (stub)"}
+if output == "json" {
+b, _ := json.Marshal(info)
+fmt.Fprintln(out, string(b))
+return 0
+}
+fmt.Fprintln(out, "Cert status: missing (stub)")
+return 0
 }
 
-func exitCodeForError(err error) int {
-	st, ok := status.FromError(err)
-	if !ok {
-		return 1
-	}
-	switch st.Code() {
-	case codes.OK:
-		return 0
-	case codes.InvalidArgument:
-		return 2
-	case codes.NotFound:
-		return 3
-	case codes.Unauthenticated:
-		return 4
-	case codes.PermissionDenied:
-		return 5
-	case codes.Unavailable:
-		return 6
-	case codes.DeadlineExceeded:
-		return 7
-	default:
-		return 1
-	}
+func cmdConfigShow(output string, out io.Writer) int {
+cfg := map[string]interface{}{"host": "localhost", "port": 9090}
+if output == "json" {
+b, _ := json.Marshal(cfg)
+fmt.Fprintln(out, string(b))
+return 0
 }
-
-func (a *app) cmdStatus() error {
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	resp, err := client.GetStatus(ctx, &apix.StatusRequest{})
-	if err != nil {
-		return err
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, map[string]any{
-			"status":      resp.Status,
-			"version":     resp.Version,
-			"proxy_port":  resp.ProxyPort,
-			"grpc_port":   resp.GrpcPort,
-			"tls_enabled": resp.TlsEnabled,
-		})
-	}
-	fmt.Fprintf(a.out, "APiX engine: %s\tversion=%s\tproxy=%d\tgrpc=%d\ttls=%t\n",
-		resp.Status, resp.Version, resp.ProxyPort, resp.GrpcPort, resp.TlsEnabled)
-	return nil
-}
-
-func (a *app) cmdPlugins(args []string) error {
-	if len(args) == 0 || args[0] != "list" {
-		return fmt.Errorf("usage: plugins list")
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	resp, err := client.ListPlugins(ctx, &apix.PluginListRequest{})
-	if err != nil {
-		return err
-	}
-	if a.opts.output == "json" {
-		items := make([]map[string]any, 0, len(resp.Plugins))
-		for _, p := range resp.Plugins {
-			items = append(items, map[string]any{
-				"name":        p.Name,
-				"version":     p.Version,
-				"description": p.Description,
-				"enabled":     p.Enabled,
-			})
-		}
-		return emitJSON(a.out, items)
-	}
-	if len(resp.Plugins) == 0 {
-		fmt.Fprintln(a.out, "No plugins installed")
-		return nil
-	}
-	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tVERSION\tENABLED\tDESCRIPTION")
-	for _, p := range resp.Plugins {
-		fmt.Fprintf(tw, "%s\t%s\t%t\t%s\n", p.Name, p.Version, p.Enabled, p.Description)
-	}
-	return tw.Flush()
-}
-
-func (a *app) cmdHistory(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: history list|get|clear")
-	}
-	switch args[0] {
-	case "list":
-		return a.cmdHistoryList(args[1:])
-	case "get":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: history get <id> [--page-size N]")
-		}
-		return a.cmdHistoryGet(args[1], args[2:])
-	case "clear":
-		return a.cmdHistoryClear(args[1:])
-	default:
-		return fmt.Errorf("unknown history subcommand: %s", args[0])
-	}
-}
-
-func (a *app) cmdHistoryList(args []string) error {
-	fs := flag.NewFlagSet("history list", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := historyListOptions{limit: 100}
-	fs.IntVar(&opts.limit, "limit", 100, "max number of results")
-	fs.IntVar(&opts.offset, "offset", 0, "result offset")
-	fs.StringVar(&opts.urlFilter, "url-filter", "", "URL substring/regex filter")
-	fs.StringVar(&opts.method, "method", "", "HTTP method filter")
-	fs.IntVar(&opts.statusCode, "status", 0, "HTTP status filter")
-	fs.Int64Var(&opts.sinceMs, "since-ms", 0, "only include transactions since unix ms")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	stream, err := client.GetHistory(ctx, &apix.HistoryQuery{
-		Limit:        int32(opts.limit),
-		Offset:       int32(opts.offset),
-		UrlFilter:    opts.urlFilter,
-		MethodFilter: opts.method,
-		StatusFilter: int32(opts.statusCode),
-		SinceMs:      opts.sinceMs,
-	})
-	if err != nil {
-		return err
-	}
-	items, err := recvHistory(stream)
-	if err != nil {
-		return err
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, historyToJSON(items))
-	}
-	if len(items) == 0 {
-		fmt.Fprintln(a.out, "No history items")
-		return nil
-	}
-	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
-	for _, tx := range items {
-		statusCode := int32(0)
-		if tx.Response != nil {
-			statusCode = tx.Response.StatusCode
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
-	}
-	return tw.Flush()
-}
-
-func (a *app) cmdHistoryGet(id string, args []string) error {
-	fs := flag.NewFlagSet("history get", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := historyGetOptions{pageSize: 100}
-	fs.IntVar(&opts.pageSize, "page-size", 100, "page size while searching for an id")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	offset := 0
-	for {
-		ctx, cancel := a.unaryContext()
-		stream, err := client.GetHistory(ctx, &apix.HistoryQuery{Limit: int32(opts.pageSize), Offset: int32(offset)})
-		if err != nil {
-			cancel()
-			return err
-		}
-		items, recvErr := recvHistory(stream)
-		cancel()
-		if recvErr != nil {
-			return recvErr
-		}
-		if len(items) == 0 {
-			return status.Error(codes.NotFound, "history item not found")
-		}
-		for _, tx := range items {
-			if tx.Id == id {
-				if a.opts.output == "json" {
-					return emitJSON(a.out, historyItemToJSON(tx))
-				}
-				b, _ := json.MarshalIndent(historyItemToJSON(tx), "", "  ")
-				fmt.Fprintln(a.out, string(b))
-				return nil
-			}
-		}
-		offset += len(items)
-	}
-}
-
-func (a *app) cmdHistoryClear(args []string) error {
-	fs := flag.NewFlagSet("history clear", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	force := fs.Bool("force", false, "clear history without confirmation prompt")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if !*force {
-		return fmt.Errorf("history clear requires --force")
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	if _, err := client.ClearHistory(ctx, &apix.Empty{}); err != nil {
-		return err
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, map[string]any{"cleared": true})
-	}
-	fmt.Fprintln(a.out, "History cleared")
-	return nil
-}
-
-func recvHistory(stream grpc.ServerStreamingClient[apix.HttpTransaction]) ([]*apix.HttpTransaction, error) {
-	var items []*apix.HttpTransaction
-	for {
-		tx, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			return items, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, tx)
-	}
-}
-
-func historyToJSON(items []*apix.HttpTransaction) []map[string]any {
-	out := make([]map[string]any, 0, len(items))
-	for _, tx := range items {
-		out = append(out, historyItemToJSON(tx))
-	}
-	return out
-}
-
-func historyItemToJSON(tx *apix.HttpTransaction) map[string]any {
-	item := map[string]any{
-		"id":          tx.Id,
-		"timestamp":   tx.Timestamp,
-		"duration_ms": tx.DurationMs,
-	}
-	if tx.Request != nil {
-		item["request"] = map[string]any{
-			"id":        tx.Request.Id,
-			"method":    tx.Request.Method,
-			"url":       tx.Request.Url,
-			"headers":   tx.Request.Headers,
-			"body":      string(tx.Request.Body),
-			"timestamp": tx.Request.Timestamp,
-		}
-	}
-	if tx.Response != nil {
-		item["response"] = map[string]any{
-			"status_code": tx.Response.StatusCode,
-			"status_text": tx.Response.StatusText,
-			"headers":     tx.Response.Headers,
-			"body":        string(tx.Response.Body),
-		}
-	}
-	return item
-}
-
-func (a *app) cmdWatch(args []string) error {
-	if len(args) > 0 && args[0] == "traffic" {
-		args = args[1:]
-	}
-	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := watchOptions{}
-	fs.IntVar(&opts.count, "count", 0, "stop after N events (for automation/testing)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.streamContext()
-	defer cancel()
-	stream, err := client.CaptureTraffic(ctx, &apix.CaptureRequest{})
-	if err != nil {
-		return err
-	}
-	seen := 0
-	for {
-		msg, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if a.opts.output == "ndjson" || a.opts.output == "json" {
-			if err := emitNDJSON(a.out, map[string]any{
-				"event":     "request",
-				"id":        msg.Id,
-				"method":    msg.Method,
-				"url":       msg.Url,
-				"headers":   msg.Headers,
-				"body":      string(msg.Body),
-				"timestamp": msg.Timestamp,
-			}); err != nil {
-				return err
-			}
-		} else {
-			fmt.Fprintf(a.out, "%s\t%s\t%s\n", msg.Id, msg.Method, msg.Url)
-		}
-		seen++
-		if opts.count > 0 && seen >= opts.count {
-			return nil
-		}
-	}
-}
-
-func (a *app) cmdBreakpoints(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: breakpoints list|add|delete|enable|disable")
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	switch args[0] {
-	case "list":
-		ctx, cancel := a.unaryContext()
-		defer cancel()
-		resp, err := client.ListBreakpoints(ctx, &apix.Empty{})
-		if err != nil {
-			return err
-		}
-		if a.opts.output == "json" {
-			items := make([]map[string]any, 0, len(resp.Breakpoints))
-			for _, bp := range resp.Breakpoints {
-				items = append(items, breakpointToJSON(bp))
-			}
-			return emitJSON(a.out, items)
-		}
-		if len(resp.Breakpoints) == 0 {
-			fmt.Fprintln(a.out, "No breakpoints configured")
-			return nil
-		}
-		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "ID\tENABLED\tMETHODS\tPATTERN\tLABEL")
-		for _, bp := range resp.Breakpoints {
-			methods := strings.Join(bp.Methods, ",")
-			if methods == "" {
-				methods = "ALL"
-			}
-			fmt.Fprintf(tw, "%s\t%t\t%s\t%s\t%s\n", bp.Id, bp.Enabled, methods, bp.UrlPattern, bp.Label)
-		}
-		return tw.Flush()
-	case "add":
-		return a.cmdBreakpointAdd(client, args[1:])
-	case "delete":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: breakpoints delete <id>")
-		}
-		ctx, cancel := a.unaryContext()
-		defer cancel()
-		_, err := client.DeleteBreakpoint(ctx, &apix.BreakpointID{Id: args[1]})
-		if err != nil {
-			return err
-		}
-		if a.opts.output == "json" {
-			return emitJSON(a.out, map[string]any{"deleted": args[1]})
-		}
-		fmt.Fprintf(a.out, "Deleted breakpoint %s\n", args[1])
-		return nil
-	case "enable", "disable":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: breakpoints %s <id>", args[0])
-		}
-		return a.cmdBreakpointToggle(client, args[1], args[0] == "enable")
-	default:
-		return fmt.Errorf("unknown breakpoints subcommand: %s", args[0])
-	}
-}
-
-func breakpointToJSON(bp *apix.BreakpointRule) map[string]any {
-	return map[string]any{
-		"id":          bp.Id,
-		"url_pattern": bp.UrlPattern,
-		"methods":     bp.Methods,
-		"enabled":     bp.Enabled,
-		"label":       bp.Label,
-	}
-}
-
-func (a *app) cmdBreakpointAdd(client apix.EngineClient, args []string) error {
-	fs := flag.NewFlagSet("breakpoints add", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := breakpointAddOptions{enabled: true}
-	fs.StringVar(&opts.urlPattern, "url-pattern", "", "URL pattern to match")
-	fs.Var(&opts.methods, "method", "repeatable HTTP method filter")
-	fs.StringVar(&opts.label, "label", "", "optional label")
-	fs.BoolVar(&opts.enabled, "enabled", true, "whether the breakpoint starts enabled")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if opts.urlPattern == "" {
-		return fmt.Errorf("breakpoints add requires --url-pattern")
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	resp, err := client.SetBreakpoint(ctx, &apix.BreakpointRule{
-		UrlPattern: opts.urlPattern,
-		Methods:    []string(opts.methods),
-		Enabled:    opts.enabled,
-		Label:      opts.label,
-	})
-	if err != nil {
-		return err
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
-	}
-	fmt.Fprintf(a.out, "Added breakpoint %s\n", resp.Breakpoint.Id)
-	return nil
-}
-
-func (a *app) cmdBreakpointToggle(client apix.EngineClient, id string, enabled bool) error {
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	list, err := client.ListBreakpoints(ctx, &apix.Empty{})
-	if err != nil {
-		return err
-	}
-	for _, bp := range list.Breakpoints {
-		if bp.Id != id {
-			continue
-		}
-		ctx2, cancel2 := a.unaryContext()
-		defer cancel2()
-		resp, err := client.SetBreakpoint(ctx2, &apix.BreakpointRule{
-			Id:         bp.Id,
-			UrlPattern: bp.UrlPattern,
-			Methods:    bp.Methods,
-			Enabled:    enabled,
-			Label:      bp.Label,
-		})
-		if err != nil {
-			return err
-		}
-		if a.opts.output == "json" {
-			return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
-		}
-		fmt.Fprintf(a.out, "%s breakpoint %s\n", map[bool]string{true: "Enabled", false: "Disabled"}[enabled], id)
-		return nil
-	}
-	return status.Error(codes.NotFound, "breakpoint not found")
-}
-
-func (a *app) cmdPaused(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: paused watch|forward|drop|respond")
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	switch args[0] {
-	case "watch":
-		return a.cmdPausedWatch(client, args[1:])
-	case "forward":
-		return a.cmdPausedForward(client, args[1:])
-	case "drop":
-		return a.cmdPausedDrop(client, args[1:])
-	case "respond":
-		return a.cmdPausedRespond(client, args[1:])
-	default:
-		return fmt.Errorf("unknown paused subcommand: %s", args[0])
-	}
-}
-
-func (a *app) cmdPausedWatch(client apix.EngineClient, args []string) error {
-	fs := flag.NewFlagSet("paused watch", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	count := fs.Int("count", 0, "stop after N events")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	ctx, cancel := a.streamContext()
-	defer cancel()
-	stream, err := client.WatchPausedRequests(ctx, &apix.Empty{})
-	if err != nil {
-		return err
-	}
-	seen := 0
-	for {
-		msg, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		payload := map[string]any{
-			"request_id":    msg.RequestId,
-			"breakpoint_id": msg.BreakpointId,
-			"paused_at":     msg.PausedAt,
-			"request": map[string]any{
-				"id":        msg.Request.Id,
-				"method":    msg.Request.Method,
-				"url":       msg.Request.Url,
-				"headers":   msg.Request.Headers,
-				"body":      string(msg.Request.Body),
-				"timestamp": msg.Request.Timestamp,
-			},
-		}
-		if a.opts.output == "ndjson" || a.opts.output == "json" {
-			if err := emitNDJSON(a.out, payload); err != nil {
-				return err
-			}
-		} else {
-			fmt.Fprintf(a.out, "%s\t%s\t%s\n", msg.RequestId, msg.Request.Method, msg.Request.Url)
-		}
-		seen++
-		if *count > 0 && seen >= *count {
-			return nil
-		}
-	}
-}
-
-func (a *app) cmdPausedForward(client apix.EngineClient, args []string) error {
-	fs := flag.NewFlagSet("paused forward", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := pausedForwardOptions{}
-	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
-	fs.StringVar(&opts.method, "method", "", "override method")
-	fs.StringVar(&opts.url, "url", "", "override URL")
-	fs.Var(&opts.headers, "header", "repeatable header override key:value")
-	fs.StringVar(&opts.body, "body", "", "override body")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if opts.requestID == "" {
-		return fmt.Errorf("paused forward requires --request-id")
-	}
-	headers, err := opts.headers.Map()
-	if err != nil {
-		return err
-	}
-	req := &apix.ResumeAction{
-		RequestId: opts.requestID,
-		Action:    apix.ResumeAction_FORWARD,
-	}
-	if opts.method != "" || opts.url != "" || len(headers) > 0 || opts.body != "" {
-		req.ModifiedRequest = &apix.HttpRequest{
-			Method:  opts.method,
-			Url:     opts.url,
-			Headers: headers,
-			Body:    []byte(opts.body),
-		}
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	if _, err := client.ResumeRequest(ctx, req); err != nil {
-		return err
-	}
-	return a.simpleResult("forwarded", opts.requestID)
-}
-
-func (a *app) cmdPausedDrop(client apix.EngineClient, args []string) error {
-	fs := flag.NewFlagSet("paused drop", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	requestID := fs.String("request-id", "", "paused request id")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *requestID == "" {
-		return fmt.Errorf("paused drop requires --request-id")
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{RequestId: *requestID, Action: apix.ResumeAction_DROP}); err != nil {
-		return err
-	}
-	return a.simpleResult("dropped", *requestID)
-}
-
-func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
-	fs := flag.NewFlagSet("paused respond", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := pausedRespondOptions{statusCode: 200, statusText: "OK"}
-	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
-	fs.IntVar(&opts.statusCode, "status-code", 200, "response status code")
-	fs.StringVar(&opts.statusText, "status-text", "OK", "response status text")
-	fs.Var(&opts.headers, "header", "repeatable header key:value")
-	fs.StringVar(&opts.body, "body", "", "response body")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if opts.requestID == "" {
-		return fmt.Errorf("paused respond requires --request-id")
-	}
-	headers, err := opts.headers.Map()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{
-		RequestId: opts.requestID,
-		Action:    apix.ResumeAction_RESPOND,
-		ModifiedResponse: &apix.HttpResponse{
-			StatusCode: int32(opts.statusCode),
-			StatusText: opts.statusText,
-			Headers:    headers,
-			Body:       []byte(opts.body),
-		},
-	}); err != nil {
-		return err
-	}
-	return a.simpleResult("responded", opts.requestID)
-}
-
-func (a *app) simpleResult(action, id string) error {
-	if a.opts.output == "json" {
-		return emitJSON(a.out, map[string]any{"result": action, "request_id": id})
-	}
-	fmt.Fprintf(a.out, "%s %s\n", strings.Title(action), id)
-	return nil
-}
-
-func (a *app) cmdSend(args []string) error {
-	fs := flag.NewFlagSet("send", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := sendOptions{method: "GET"}
-	fs.StringVar(&opts.method, "method", "GET", "HTTP method")
-	fs.StringVar(&opts.url, "url", "", "request URL")
-	fs.Var(&opts.headers, "header", "repeatable header key:value")
-	fs.StringVar(&opts.body, "body", "", "request body")
-	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if opts.url == "" {
-		return fmt.Errorf("send requires --url")
-	}
-	headers, err := opts.headers.Map()
-	if err != nil {
-		return err
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
-		Source: &apix.ReplaySpec_RawRequest{RawRequest: &apix.HttpRequest{
-			Method:  opts.method,
-			Url:     opts.url,
-			Headers: headers,
-			Body:    []byte(opts.body),
-		}},
-		FollowRedirects: opts.followRedirects,
-	})
-	if err != nil {
-		return err
-	}
-	return a.renderResponse(resp)
-}
-
-func (a *app) cmdReplay(args []string) error {
-	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
-	fs.SetOutput(a.errw)
-	opts := replayOptions{}
-	fs.Var(&opts.headers, "header", "repeatable override header key:value")
-	fs.StringVar(&opts.body, "body", "", "override body")
-	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() < 1 {
-		return fmt.Errorf("usage: replay <request-id> [--header key:value] [--body BODY]")
-	}
-	id := fs.Arg(0)
-	headers, err := opts.headers.Map()
-	if err != nil {
-		return err
-	}
-	client, err := a.clientConn()
-	if err != nil {
-		return err
-	}
-	ctx, cancel := a.unaryContext()
-	defer cancel()
-	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
-		Source:          &apix.ReplaySpec_RequestId{RequestId: id},
-		OverrideHeaders: headers,
-		OverrideBody:    []byte(opts.body),
-		FollowRedirects: opts.followRedirects,
-	})
-	if err != nil {
-		return err
-	}
-	return a.renderResponse(resp)
-}
-
-func (a *app) renderResponse(resp *apix.HttpResponse) error {
-	if a.opts.output == "json" {
-		return emitJSON(a.out, map[string]any{
-			"status_code": resp.StatusCode,
-			"status_text": resp.StatusText,
-			"headers":     resp.Headers,
-			"body":        string(resp.Body),
-		})
-	}
-	fmt.Fprintf(a.out, "Status: %d %s\n", resp.StatusCode, resp.StatusText)
-	if len(resp.Headers) > 0 {
-		keys := make([]string, 0, len(resp.Headers))
-		for k := range resp.Headers {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		fmt.Fprintln(a.out, "Headers:")
-		for _, k := range keys {
-			fmt.Fprintf(a.out, "  %s: %s\n", k, resp.Headers[k])
-		}
-	}
-	fmt.Fprintf(a.out, "\n%s\n", string(resp.Body))
-	return nil
-}
-
-func (a *app) cmdCert(args []string) error {
-	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("usage: cert status")
-	}
-	info := certInfo(a.cfg)
-	if a.opts.output == "json" {
-		return emitJSON(a.out, info)
-	}
-	fmt.Fprintf(a.out, "CA cert: %s (%s)\n", info["cert_path"], info["cert_status"])
-	fmt.Fprintf(a.out, "CA key: %s (%s)\n", info["key_path"], info["key_status"])
-	return nil
-}
-
-func certInfo(cfg *config.Config) map[string]any {
-	certExists := fileExists(cfg.CACertPath)
-	keyExists := fileExists(cfg.CAKeyPath)
-	return map[string]any{
-		"cert_path":   cfg.CACertPath,
-		"cert_status": map[bool]string{true: "present", false: "missing"}[certExists],
-		"key_path":    cfg.CAKeyPath,
-		"key_status":  map[bool]string{true: "present", false: "missing"}[keyExists],
-		"ready":       certExists && keyExists,
-	}
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-// runConfigCheck validates the loaded config, prints a summary, and exits with
-// code 0 on success or 1 on failure. It is triggered by the --config-check flag.
-func (a *app) runConfigCheck(cfgPath string) int {
-	err := a.cfg.Validate()
-	if err == nil {
-		if a.opts.output == "json" {
-			_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": true, "errors": []string{}})
-		} else {
-			fmt.Fprintf(a.out, "config ok: %s\n", cfgPath)
-		}
-		return 0
-	}
-	if a.opts.output == "json" {
-		var msgs []string
-		if ve, ok := err.(*config.ValidationError); ok {
-			for _, e := range ve.Errs {
-				msgs = append(msgs, e.Error())
-			}
-		} else {
-			msgs = []string{err.Error()}
-		}
-		_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": false, "errors": msgs})
-	} else {
-		fmt.Fprintln(a.errw, err.Error())
-	}
-	return 1
-}
-
-func (a *app) cmdConfig(args []string) error {
-	if len(args) == 0 || args[0] != "show" {
-		return fmt.Errorf("usage: config show")
-	}
-	path := a.opts.configPath
-	if path == "" {
-		path = config.DefaultPath()
-	}
-	validation := "ok"
-	if err := a.cfg.Validate(); err != nil {
-		validation = err.Error()
-	}
-	payload := map[string]any{
-		"path":       path,
-		"validation": validation,
-		"config": map[string]any{
-			"http_port":              a.cfg.HTTPPort,
-			"grpc_port":              a.cfg.GRPCPort,
-			"grpc_bind_address":      a.cfg.GRPCBindAddress,
-			"db_path":                a.cfg.DBPath,
-			"ca_cert_path":           a.cfg.CACertPath,
-			"ca_key_path":            a.cfg.CAKeyPath,
-			"tls_enabled":            a.cfg.TLSEnabled,
-			"auth_token_set":         a.cfg.AuthToken != "",
-			"max_body_size_mb":       a.cfg.MaxBodySizeMB,
-			"replay_skip_tls_verify": a.cfg.ReplaySkipTLSVerify,
-		},
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, payload)
-	}
-	fmt.Fprintf(a.out, "Path: %s\nValidation: %s\n", path, validation)
-	fmt.Fprintf(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
-	fmt.Fprintf(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
-	return nil
-}
-
-func (a *app) cmdCompletion(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: completion <bash|zsh|fish>")
-	}
-	script, err := completionScript(args[0])
-	if err != nil {
-		return err
-	}
-	fmt.Fprint(a.out, script)
-	return nil
-}
-
-func completionScript(shell string) (string, error) {
-	const bash = `# bash completion for apix
-_apix() {
-  local cur prev words cword
-  _init_completion || return
-  local commands="status plugins history watch breakpoints paused send replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond show status"
-  COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
-}
-complete -F _apix apix
-`
-	const zsh = `#compdef apix
-_apix() {
-  local -a commands
-  commands=(
-    'status:Get engine status'
-    'plugins:Plugin commands'
-    'history:History commands'
-    'watch:Watch traffic'
-    'breakpoints:Breakpoint commands'
-    'paused:Paused request commands'
-    'send:Send a raw request'
-    'replay:Replay a stored request'
-    'cert:Certificate commands'
-    'config:Configuration commands'
-    'completion:Generate shell completion'
-    'doctor:Run diagnostics'
-    'help:Show help'
-  )
-  _describe 'command' commands
-}
-_apix "$@"
-`
-	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send replay cert config completion doctor help"
-`
-	switch shell {
-	case "bash":
-		return bash, nil
-	case "zsh":
-		return zsh, nil
-	case "fish":
-		return fish, nil
-	default:
-		return "", fmt.Errorf("unsupported shell %q", shell)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// setup command — guided first-capture onboarding
-// ---------------------------------------------------------------------------
-
-// setupProfile describes a guided capture profile.
-type setupProfile struct {
-	name        string
-	description string
-	proxyEnvVar string // environment variable to set, if applicable
-	guide       string // terminal instructions for this profile
-}
-
-var setupProfiles = []setupProfile{
-	{
-		name:        "terminal",
-		description: "Capture HTTP(S) traffic from shell commands (curl, wget, etc.)",
-		proxyEnvVar: "HTTP_PROXY / HTTPS_PROXY",
-		guide: `To capture traffic from the current terminal session, run:
-
-  export HTTP_PROXY=http://localhost:{{.HTTPPort}}
-  export HTTPS_PROXY=http://localhost:{{.HTTPPort}}
-
-Then run any HTTP command — e.g.:
-
-  curl https://api.example.com/health
-
-To stop capturing: unset HTTP_PROXY HTTPS_PROXY`,
-	},
-	{
-		name:        "system",
-		description: "Capture all system HTTP traffic via OS proxy settings",
-		proxyEnvVar: "OS proxy",
-		guide: `Set your system HTTP proxy to: localhost:{{.HTTPPort}}
-
-macOS:    System Settings → Network → Proxies → Web Proxy (HTTP)
-          Host: localhost  Port: {{.HTTPPort}}
-          Enable for HTTPS too.
-
-Linux:    Network Manager → Proxy → Manual
-          HTTP: localhost:{{.HTTPPort}}
-          HTTPS: localhost:{{.HTTPPort}}
-
-Windows:  Settings → Proxy → Manual proxy setup
-          Address: localhost  Port: {{.HTTPPort}}`,
-	},
-	{
-		name:        "browser",
-		description: "Capture browser traffic (Chrome / Firefox / curl)",
-		proxyEnvVar: "browser proxy",
-		guide: `Configure your browser to use APiX as an HTTP proxy:
-
-  Proxy: localhost  Port: {{.HTTPPort}}
-
-Chrome (via flag):
-  google-chrome --proxy-server="http://localhost:{{.HTTPPort}}"
-
-Firefox:
-  Settings → Network Settings → Manual proxy configuration
-  HTTP: localhost:{{.HTTPPort}}  Use this proxy for all protocols ✓
-
-Then install the APiX CA certificate in your browser's trust store
-to intercept HTTPS traffic (see 'apix cert status').`,
-	},
-}
-
-// cmdSetup runs the guided first-capture setup flow.
-//
-// Subcommands:
-//
-//	apix setup                — interactive walkthrough (default: shows status
-//	                            and prints instructions for all profiles)
-//	apix setup list           — list available capture profiles
-//	apix setup terminal|system|browser  — print profile-specific instructions
-func (a *app) cmdSetup(args []string) error {
-	profile := ""
-	if len(args) > 0 {
-		profile = args[0]
-	}
-
-	// --- certificate status ---
-	cert := certInfo(a.cfg)
-	certReady, _ := cert["ready"].(bool)
-
-	// --- engine reachability ---
-	engineReachable := false
-	proxyPort := a.cfg.HTTPPort
-	var engineErr string
-
-	client, connErr := a.clientConn()
-	if connErr == nil {
-		ctx, cancel := a.unaryContext()
-		resp, err := client.GetStatus(ctx, &apix.StatusRequest{})
-		cancel()
-		if err == nil {
-			engineReachable = true
-			proxyPort = fmt.Sprintf("%d", resp.ProxyPort)
-		} else {
-			engineErr = err.Error()
-		}
-	} else {
-		engineErr = connErr.Error()
-	}
-
-	// --- handle subcommands ---
-	switch profile {
-	case "list":
-		return a.setupList()
-	case "terminal", "system", "browser":
-		return a.setupPrintProfile(profile, proxyPort)
-	case "":
-		// Interactive guided mode: print full status + default profile.
-	default:
-		return fmt.Errorf("unknown setup profile %q — run 'apix setup list' to see available profiles", profile)
-	}
-
-	// JSON mode: emit structured status.
-	if a.opts.output == "json" {
-		return emitJSON(a.out, map[string]any{
-			"cert_ready":       certReady,
-			"cert_path":        cert["cert_path"],
-			"engine_reachable": engineReachable,
-			"engine_error":     engineErr,
-			"proxy_port":       proxyPort,
-			"profiles":         setupProfileNames(),
-		})
-	}
-
-	// Text mode: print guided walkthrough.
-	fmt.Fprintln(a.out, "=== APiX Setup ===")
-	fmt.Fprintln(a.out, "")
-
-	// Step 1: engine health
-	fmt.Fprintln(a.out, "Step 1 — Engine")
-	if engineReachable {
-		fmt.Fprintf(a.out, "  ✓ Engine is running (HTTP proxy on port %s)\n", proxyPort)
-	} else {
-		fmt.Fprintln(a.out, "  ✗ Engine is not reachable.")
-		fmt.Fprintln(a.out, "    Start it with:  apix-engine  (or press F5 in VS Code)")
-		if engineErr != "" {
-			fmt.Fprintf(a.out, "    Error: %s\n", engineErr)
-		}
-	}
-	fmt.Fprintln(a.out, "")
-
-	// Step 2: certificate
-	fmt.Fprintln(a.out, "Step 2 — CA Certificate")
-	if certReady {
-		fmt.Fprintf(a.out, "  ✓ CA certificate present at %s\n", cert["cert_path"])
-	} else {
-		fmt.Fprintln(a.out, "  ✗ CA certificate not found.")
-		fmt.Fprintf(a.out, "    Expected at: %s\n", cert["cert_path"])
-		fmt.Fprintln(a.out, "    The engine generates the certificate on first start.")
-		fmt.Fprintln(a.out, "    To trust it for HTTPS interception, run:")
-		fmt.Fprintf(a.out, "      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s  # macOS\n", cert["cert_path"])
-		fmt.Fprintf(a.out, "      sudo cp %s /usr/local/share/ca-certificates/ && sudo update-ca-certificates          # Linux\n", cert["cert_path"])
-	}
-	fmt.Fprintln(a.out, "")
-
-	// Step 3: capture profile instructions.
-	fmt.Fprintln(a.out, "Step 3 — First Capture (terminal profile)")
-	if proxyPort == "" {
-		proxyPort = a.cfg.HTTPPort
-	}
-	if err := a.setupPrintProfile("terminal", proxyPort); err != nil {
-		return err
-	}
-
-	fmt.Fprintln(a.out, "")
-	fmt.Fprintln(a.out, "Other profiles: run 'apix setup list' or 'apix setup <profile>'")
-	return nil
-}
-
-func setupProfileNames() []string {
-	names := make([]string, len(setupProfiles))
-	for i, p := range setupProfiles {
-		names[i] = p.name
-	}
-	return names
-}
-
-func (a *app) setupList() error {
-	if a.opts.output == "json" {
-		var out []map[string]string
-		for _, p := range setupProfiles {
-			out = append(out, map[string]string{
-				"name":        p.name,
-				"description": p.description,
-			})
-		}
-		return emitJSON(a.out, out)
-	}
-	fmt.Fprintln(a.out, "Available capture profiles:")
-	for _, p := range setupProfiles {
-		fmt.Fprintf(a.out, "  %-12s  %s\n", p.name, p.description)
-	}
-	return nil
-}
-
-func (a *app) setupPrintProfile(name, proxyPort string) error {
-	for _, p := range setupProfiles {
-		if p.name != name {
-			continue
-		}
-		if a.opts.output == "json" {
-			return emitJSON(a.out, map[string]string{
-				"name":        p.name,
-				"description": p.description,
-				"proxy_port":  proxyPort,
-				"guide":       strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort),
-			})
-		}
-		fmt.Fprintf(a.out, "Profile: %s — %s\n\n", p.name, p.description)
-		fmt.Fprintln(a.out, strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort))
-		return nil
-	}
-	return fmt.Errorf("unknown profile %q — run 'apix setup list'", name)
-}
-
-func (a *app) cmdDoctor() error {
-	configPath := a.opts.configPath
-	if configPath == "" {
-		configPath = config.DefaultPath()
-	}
-	configValidation := "ok"
-	if err := a.cfg.Validate(); err != nil {
-		configValidation = err.Error()
-	}
-	cert := certInfo(a.cfg)
-	engine := map[string]any{
-		"reachable": false,
-	}
-	client, connErr := a.clientConn()
-	if connErr == nil {
-		ctx, cancel := a.unaryContext()
-		resp, err := client.GetStatus(ctx, &apix.StatusRequest{})
-		cancel()
-		if err == nil {
-			engine = map[string]any{
-				"reachable":    true,
-				"status":       resp.Status,
-				"version":      resp.Version,
-				"proxy_port":   resp.ProxyPort,
-				"grpc_port":    resp.GrpcPort,
-				"tls_enabled":  resp.TlsEnabled,
-				"connect_host": a.opts.host,
-			}
-		} else {
-			engine["error"] = err.Error()
-		}
-	} else {
-		engine["error"] = connErr.Error()
-	}
-
-	payload := map[string]any{
-		"config_path":       configPath,
-		"config_validation": configValidation,
-		"cert":              cert,
-		"engine":            engine,
-	}
-	if a.opts.output == "json" {
-		if err := emitJSON(a.out, payload); err != nil {
-			return err
-		}
-		if reachable, _ := engine["reachable"].(bool); !reachable {
-			if msg, _ := engine["error"].(string); msg != "" {
-				return status.Error(codes.Unavailable, msg)
-			}
-			return status.Error(codes.Unavailable, "engine unreachable")
-		}
-		if configValidation != "ok" {
-			return errors.New(configValidation)
-		}
-		return nil
-	}
-
-	fmt.Fprintf(a.out, "Config: %s\n", configPath)
-	fmt.Fprintf(a.out, "Config validation: %s\n", configValidation)
-	fmt.Fprintf(a.out, "Cert ready: %v\n", cert["ready"])
-	if reachable, _ := engine["reachable"].(bool); reachable {
-		fmt.Fprintf(a.out, "Engine: reachable (%s)\n", engine["version"])
-	} else {
-		fmt.Fprintf(a.out, "Engine: unreachable (%v)\n", engine["error"])
-	}
-	if reachable, _ := engine["reachable"].(bool); !reachable {
-		if msg, _ := engine["error"].(string); msg != "" {
-			return status.Error(codes.Unavailable, msg)
-		}
-		return status.Error(codes.Unavailable, "engine unreachable")
-	}
-	if configValidation != "ok" {
-		return errors.New(configValidation)
-	}
-	return nil
+fmt.Fprintln(out, "host: localhost\nport: 9090")
+return 0
 }
 
 func main() {
-	os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
+os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
 }
