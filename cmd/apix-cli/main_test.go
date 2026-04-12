@@ -144,6 +144,15 @@ func runCLI(t *testing.T, args ...string) (int, string, string) {
 	return exit, out.String(), errb.String()
 }
 
+func parseErrorEnvelope(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &payload); err != nil {
+		t.Fatalf("parse error envelope: %v; raw=%q", err, raw)
+	}
+	return payload
+}
+
 func TestCLIStatusJSON_RealServer(t *testing.T) {
 	t.Parallel()
 	stack := newCLITestStack(t, "")
@@ -384,5 +393,63 @@ func TestCLIExitCodes(t *testing.T) {
 	exit, _, errOut = runCLI(t, "--host", "127.0.0.1", "--port", "1", "status")
 	if exit != 6 {
 		t.Fatalf("expected unavailable exit 6, got %d err=%s", exit, errOut)
+	}
+}
+
+func TestCLIJSONErrorEnvelope(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "secret-token")
+
+	exit, _, errOut := runCLI(t, "--output", "json", "--host", stack.host, "--port", fmt.Sprintf("%d", stack.port), "status")
+	if exit != 4 {
+		t.Fatalf("expected exit 4, got %d err=%s", exit, errOut)
+	}
+	payload := parseErrorEnvelope(t, errOut)
+	errPayload, ok := payload["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing error payload: %#v", payload)
+	}
+	if errPayload["code"] != "unauthenticated" {
+		t.Fatalf("unexpected code: %#v", errPayload["code"])
+	}
+	if errPayload["grpc_code"] != "Unauthenticated" {
+		t.Fatalf("unexpected grpc_code: %#v", errPayload["grpc_code"])
+	}
+	if int(errPayload["exit_code"].(float64)) != 4 {
+		t.Fatalf("unexpected exit_code: %#v", errPayload["exit_code"])
+	}
+}
+
+func TestCLINDJSONErrorEnvelope(t *testing.T) {
+	t.Parallel()
+
+	exit, _, errOut := runCLI(t, "--output", "ndjson", "--host", "127.0.0.1", "--port", "1", "watch", "traffic", "--count", "1")
+	if exit != 6 {
+		t.Fatalf("expected exit 6, got %d err=%s", exit, errOut)
+	}
+	payload := parseErrorEnvelope(t, errOut)
+	errPayload, ok := payload["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing error payload: %#v", payload)
+	}
+	if errPayload["code"] != "unavailable" {
+		t.Fatalf("unexpected code: %#v", errPayload["code"])
+	}
+}
+
+func TestCLIUnknownCommandJSONError(t *testing.T) {
+	t.Parallel()
+
+	exit, _, errOut := runCLI(t, "--output", "json", "wat")
+	if exit != 2 {
+		t.Fatalf("expected exit 2, got %d err=%s", exit, errOut)
+	}
+	payload := parseErrorEnvelope(t, errOut)
+	errPayload := payload["error"].(map[string]any)
+	if errPayload["code"] != "invalid_argument" {
+		t.Fatalf("unexpected code: %#v", errPayload["code"])
+	}
+	if !strings.Contains(errPayload["message"].(string), "unknown command") {
+		t.Fatalf("unexpected message: %#v", errPayload["message"])
 	}
 }

@@ -172,8 +172,12 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return 2
 	}
 	if fs.NArg() == 0 {
-		fs.Usage()
-		return 2
+		err := status.Error(codes.InvalidArgument, "no command provided")
+		emitRootError(out, errw, opts.output, err)
+		if opts.output == "text" {
+			fs.Usage()
+		}
+		return exitCodeForError(err)
 	}
 
 	cfgPath := opts.configPath
@@ -224,8 +228,9 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		fs.Usage()
 		return 0
 	default:
-		fmt.Fprintf(errw, "unknown command: %s\n", fs.Arg(0))
-		return 2
+		err := status.Errorf(codes.InvalidArgument, "unknown command: %s", fs.Arg(0))
+		emitRootError(out, errw, opts.output, err)
+		return exitCodeForError(err)
 	}
 }
 
@@ -233,8 +238,14 @@ func (a *app) wrapErr(err error) int {
 	if err == nil {
 		return 0
 	}
+	exitCode := exitCodeForError(err)
+	if emitsStructuredErrors(a.opts.output) {
+		if emitErr := emitStructuredError(a.errw, a.opts.output, err, exitCode); emitErr == nil {
+			return exitCode
+		}
+	}
 	fmt.Fprintln(a.errw, err)
-	return exitCodeForError(err)
+	return exitCode
 }
 
 func (a *app) close() {
@@ -320,10 +331,72 @@ func emitNDJSON(out io.Writer, v any) error {
 	return emitJSON(out, v)
 }
 
+func emitsStructuredErrors(output string) bool {
+	return output == "json" || output == "ndjson"
+}
+
+func emitRootError(out io.Writer, errw io.Writer, output string, err error) {
+	exitCode := exitCodeForError(err)
+	if emitsStructuredErrors(output) {
+		if emitErr := emitStructuredError(errw, output, err, exitCode); emitErr == nil {
+			return
+		}
+	}
+	fmt.Fprintln(errw, err)
+}
+
+func emitStructuredError(w io.Writer, output string, err error, exitCode int) error {
+	payload := map[string]any{
+		"error": map[string]any{
+			"code":      errorCodeForError(err),
+			"message":   err.Error(),
+			"grpc_code": grpcCodeForError(err),
+			"exit_code": exitCode,
+		},
+	}
+	if output == "ndjson" {
+		return emitNDJSON(w, payload)
+	}
+	return emitJSON(w, payload)
+}
+
+func errorCodeForError(err error) string {
+	st, ok := status.FromError(err)
+	if !ok {
+		return "internal"
+	}
+	switch st.Code() {
+	case codes.OK:
+		return "ok"
+	case codes.InvalidArgument:
+		return "invalid_argument"
+	case codes.NotFound:
+		return "not_found"
+	case codes.Unauthenticated:
+		return "unauthenticated"
+	case codes.PermissionDenied:
+		return "permission_denied"
+	case codes.Unavailable:
+		return "unavailable"
+	case codes.DeadlineExceeded:
+		return "deadline_exceeded"
+	default:
+		return "internal"
+	}
+}
+
+func grpcCodeForError(err error) string {
+	st, ok := status.FromError(err)
+	if !ok {
+		return "Unknown"
+	}
+	return st.Code().String()
+}
+
 func exitCodeForError(err error) int {
 	st, ok := status.FromError(err)
 	if !ok {
-		return 1
+		return 2
 	}
 	switch st.Code() {
 	case codes.OK:
