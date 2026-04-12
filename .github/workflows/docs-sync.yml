@@ -21,5 +21,8 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           paths: 'docs/**/*.md,README.md'
-      - name: Lint markdown (markdownlint)
-        uses: actions-hub/markdownlint-action@v1
+      - name: Lint markdown (markdownlint-cli)
+        run: |
+          # Install markdownlint CLI and run against docs and README
+          npm install -g markdownlint-cli@0.33.0
+          markdownlint "docs/**/*.md" README.md
