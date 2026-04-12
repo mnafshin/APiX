@@ -472,3 +472,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).
+
+## Metrics & OpenTelemetry Collector
+
+APiX exposes Prometheus-format metrics at `/metrics` when metrics are enabled. To integrate with OpenTelemetry, run the OpenTelemetry Collector configured to scrape APiX and export metrics via OTLP. See `docs/OTEL.md` and the sample config `docs/otel-collector-config.yaml` for a quick-start example.
+
