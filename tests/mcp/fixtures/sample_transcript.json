@@ -1,0 +1,6 @@
+{
+  "transcript": [
+    { "role": "agent", "content": "ping" }
+  ],
+  "metadata": { "version": "1" }
+}
