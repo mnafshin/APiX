@@ -88,6 +88,11 @@ export class TrafficPanel {
                     vscode.commands.executeCommand('apix.replayRequest', message.data.requestId);
                 }
                 break;
+            case 'copyAsCurl':
+                if (message.data?.transaction) {
+                    vscode.commands.executeCommand('apix.copyAsCurl', message.data.transaction);
+                }
+                break;
             case 'addBreakpoint':
                 vscode.commands.executeCommand('apix.addBreakpoint');
                 break;
@@ -173,6 +178,7 @@ export class TrafficPanel {
     <h4>Response Body</h4><pre id="detail-resp-body"></pre>
     <div class="detail-actions">
       <button onclick="replayRequest()">↺ Replay</button>
+      <button onclick="copyAsCurl()">⎘ Copy as curl</button>
       <button onclick="addBreakpoint()">⊕ Add Breakpoint</button>
     </div>
   </div>
@@ -247,6 +253,12 @@ export class TrafficPanel {
 
     function addBreakpoint() {
       vscode.postMessage({ type: 'addBreakpoint', data: {} });
+    }
+
+    function copyAsCurl() {
+      if (window._currentTx) {
+        vscode.postMessage({ type: 'copyAsCurl', data: { transaction: window._currentTx } });
+      }
     }
 
     function clearAll() {

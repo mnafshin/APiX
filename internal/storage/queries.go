@@ -130,65 +130,28 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 		LIMIT ? OFFSET ?`, where)
 
 	args = append(args, limit, offset)
-	rows, err := d.db.Query(query, args...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list transactions: %w", err)
+	return d.listTransactionsQuery(query, args...)
+}
+
+// ExportTransactions returns stored transactions for HAR export.
+// When transactionIDs is empty, all stored transactions are returned.
+func (d *DB) ExportTransactions(transactionIDs []string) ([]*RequestRecord, []*ResponseRecord, error) {
+	query := `
+		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp, r.duration_ms,
+		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body
+		FROM requests r
+		LEFT JOIN responses resp ON r.id = resp.request_id`
+	args := make([]interface{}, 0, len(transactionIDs))
+	if len(transactionIDs) > 0 {
+		placeholders := make([]string, len(transactionIDs))
+		for i, id := range transactionIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " WHERE r.id IN (" + strings.Join(placeholders, ", ") + ")"
 	}
-	defer func() { _ = rows.Close() }()
-
-	var reqs []*RequestRecord
-	var resps []*ResponseRecord
-
-	for rows.Next() {
-		var (
-			reqID, method, url, reqHeaders string
-			reqBody                        []byte
-			tsMs, durMs                    int64
-			respReqID                      sql.NullString
-			statusCode                     sql.NullInt64
-			statusText, respHeaders        sql.NullString
-			respBody                       []byte
-		)
-		if err := rows.Scan(
-			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs,
-			&respReqID, &statusCode, &statusText, &respHeaders, &respBody,
-		); err != nil {
-			return nil, nil, fmt.Errorf("scan transaction: %w", err)
-		}
-
-		req := &RequestRecord{
-			ID:         reqID,
-			Method:     method,
-			URL:        url,
-			Body:       reqBody,
-			Timestamp:  time.UnixMilli(tsMs),
-			DurationMs: durMs,
-		}
-		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
-			logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", reqID, err)
-			req.Headers = make(map[string]string)
-		}
-		reqs = append(reqs, req)
-
-		if respReqID.Valid {
-			resp := &ResponseRecord{
-				RequestID:  respReqID.String,
-				StatusCode: int(statusCode.Int64),
-				StatusText: statusText.String,
-				Body:       respBody,
-			}
-			if respHeaders.Valid {
-				if err := json.Unmarshal([]byte(respHeaders.String), &resp.Headers); err != nil {
-					logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", respReqID.String, err)
-					resp.Headers = make(map[string]string)
-				}
-			}
-			resps = append(resps, resp)
-		} else {
-			resps = append(resps, nil)
-		}
-	}
-	return reqs, resps, rows.Err()
+	query += " ORDER BY r.timestamp ASC"
+	return d.listTransactionsQuery(query, args...)
 }
 
 // DeleteAllTransactions removes all rows from requests (cascades to responses).
@@ -303,4 +266,66 @@ func (d *DB) scanResponse(row *sql.Row) (*ResponseRecord, error) {
 		resp.Headers = make(map[string]string)
 	}
 	return resp, nil
+}
+
+func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*RequestRecord, []*ResponseRecord, error) {
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list transactions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var reqs []*RequestRecord
+	var resps []*ResponseRecord
+
+	for rows.Next() {
+		var (
+			reqID, method, url, reqHeaders string
+			reqBody                        []byte
+			tsMs, durMs                    int64
+			respReqID                      sql.NullString
+			statusCode                     sql.NullInt64
+			statusText, respHeaders        sql.NullString
+			respBody                       []byte
+		)
+		if err := rows.Scan(
+			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs,
+			&respReqID, &statusCode, &statusText, &respHeaders, &respBody,
+		); err != nil {
+			return nil, nil, fmt.Errorf("scan transaction: %w", err)
+		}
+
+		req := &RequestRecord{
+			ID:         reqID,
+			Method:     method,
+			URL:        url,
+			Body:       reqBody,
+			Timestamp:  time.UnixMilli(tsMs),
+			DurationMs: durMs,
+		}
+		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
+			logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", reqID, err)
+			req.Headers = make(map[string]string)
+		}
+		reqs = append(reqs, req)
+
+		if respReqID.Valid {
+			resp := &ResponseRecord{
+				RequestID:  respReqID.String,
+				StatusCode: int(statusCode.Int64),
+				StatusText: statusText.String,
+				Body:       respBody,
+			}
+			if respHeaders.Valid {
+				if err := json.Unmarshal([]byte(respHeaders.String), &resp.Headers); err != nil {
+					logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", respReqID.String, err)
+					resp.Headers = make(map[string]string)
+				}
+			}
+			resps = append(resps, resp)
+		} else {
+			resps = append(resps, nil)
+		}
+	}
+	return reqs, resps, rows.Err()
 }

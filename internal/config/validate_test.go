@@ -9,9 +9,10 @@ import (
 )
 
 func TestValidate_ValidConfig(t *testing.T) {
+	httpPort, grpcPort := mustFreePorts(t)
 	cfg := &Config{
-		HTTPPort:            "8080",
-		GRPCPort:            "9090",
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
 		DBPath:              "apix.db",
 		MaxIdleConnsPerHost: 10,
 		MaxBodySizeMB:       32,
@@ -101,7 +102,7 @@ func TestValidate_PortConflict(t *testing.T) {
 
 	cfg := &Config{
 		HTTPPort:            port,
-		GRPCPort:            "19999", // assume free
+		GRPCPort:            mustFreePort(t),
 		DBPath:              "apix.db",
 		MaxIdleConnsPerHost: 10,
 	}
@@ -146,9 +147,10 @@ func TestValidate_PluginPaths(t *testing.T) {
 		t.Fatalf("create temp plugin: %v", err)
 	}
 
+	httpPort, grpcPort := mustFreePorts(t)
 	cfg := &Config{
-		HTTPPort:            "8080",
-		GRPCPort:            "9090",
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
 		DBPath:              "apix.db",
 		MaxIdleConnsPerHost: 10,
 		PluginPaths:         []string{existing, "/nonexistent/plugin.so"},
@@ -195,9 +197,10 @@ func TestValidate_URLPatterns(t *testing.T) {
 // TestValidate_ValidURLPatterns ensures well-formed patterns pass.
 func TestValidate_ValidURLPatterns(t *testing.T) {
 	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
 	cfg := &Config{
-		HTTPPort:            "8080",
-		GRPCPort:            "9090",
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
 		DBPath:              "apix.db",
 		MaxIdleConnsPerHost: 10,
 		URLPatterns:         []string{"https://example\\.com/.*", "^/api/v[0-9]+/"},
@@ -213,5 +216,38 @@ func TestIsValidationError(t *testing.T) {
 	ve := &ValidationError{Errs: []error{}}
 	if !IsValidationError(ve) {
 		t.Fatal("expected IsValidationError to return true for *ValidationError")
+	}
+}
+
+func mustFreePorts(t *testing.T) (string, string) {
+	t.Helper()
+	first, closeFirst := mustReservePort(t)
+	second, closeSecond := mustReservePort(t)
+	closeFirst()
+	closeSecond()
+	return first, second
+}
+
+func mustFreePort(t *testing.T) string {
+	t.Helper()
+	port, closePort := mustReservePort(t)
+	closePort()
+	return port
+}
+
+func mustReservePort(t *testing.T) (string, func()) {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on ephemeral port: %v", err)
+	}
+
+	_, port, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		_ = ln.Close()
+		t.Fatalf("split host/port: %v", err)
+	}
+	return port, func() {
+		_ = ln.Close()
 	}
 }

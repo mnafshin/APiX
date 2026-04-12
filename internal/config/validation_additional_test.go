@@ -22,7 +22,8 @@ func TestValidate_BadPorts(t *testing.T) {
 
 func TestValidate_OKWithTLSAndToken(t *testing.T) {
 	t.Parallel()
-	cfg := &Config{HTTPPort: "8080", GRPCPort: "9090", DBPath: "db", TLSEnabled: true, AuthToken: "token", MaxIdleConnsPerHost: 1, MaxBodySizeMB: 0}
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{HTTPPort: httpPort, GRPCPort: grpcPort, DBPath: "db", TLSEnabled: true, AuthToken: "token", MaxIdleConnsPerHost: 1, MaxBodySizeMB: 0}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got %v", err)
 	}

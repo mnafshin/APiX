@@ -21,6 +21,7 @@ APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP
 - 🔌 **HTTP/HTTPS intercepting proxy** with MITM support
 - 🛑 **URL breakpoints** — pause, inspect, edit, and resume requests
 - 🔁 **Request replay** with header/body overrides
+- 📤 **Traffic portability** — HAR export/import and copy-as-curl from the VS Code workflow
 - 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
 - 💾 **SQLite persistent storage** — traffic history survives restarts
 - 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
@@ -103,6 +104,14 @@ curl https://api.example.com/endpoint
 ```
 
 Then open VS Code and the APiX extension will automatically start the engine and show captured traffic in the sidebar.
+
+### Traffic Portability
+
+APiX can now move captured traffic in and out of the tool without custom scripts:
+
+- **Copy as curl** from a traffic item or the traffic inspector panel
+- **Export Traffic as HAR** for a single request or the full stored history
+- **Import HAR File** to load requests into history so they can be inspected and replayed
 
 **See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment (Kubernetes, systemd, Docker Compose).**
 
@@ -213,6 +222,8 @@ The engine exposes a single `Engine` service on port `9090`.
 | `ReplayRequest` | Unary | Re-send a stored or arbitrary request with optional overrides |
 | `GetHistory` | Server-stream | Query stored request/response pairs from SQLite |
 | `ClearHistory` | Unary | Delete all stored traffic history |
+| `ExportHAR` | Unary | Export one or more stored transactions as HAR 1.2 JSON |
+| `ImportHAR` | Unary | Import HAR 1.2 traffic into stored history |
 
 Proto definition: [`pkg/api/proto/apix.proto`](pkg/api/proto/apix.proto)
 
@@ -336,9 +347,10 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 ### v1.2 (Minor - ~6-8 weeks)
 - [x] Core CLI terminal workflows (`history`, `watch`, breakpoints, paused request actions, replay/send)
 - [x] CLI operator tooling (`doctor`, certificate status/help, shell completion)
-- [ ] History management and export/import foundations
+- [x] History management and export/import foundations
+- [x] Copy-as-curl in the VS Code traffic workflow
 - [ ] Breakpoint conditions (match on headers, body, status code)
-- [ ] HAR export/import (session persistence)
+- [x] HAR export/import (session persistence)
 - [ ] Response mocking UI
 
 ### v1.3 (Minor)
@@ -452,6 +464,7 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 - Check engine logs for proxy errors
 
 ### High memory usage
+- Export traffic to HAR before clearing history when you need to archive a session
 - Clear traffic history: APiX UI → right-click → Clear History
 - CLI support for history management is available via `apix history list|get|clear`
 - Reduce retention: set `history_max_size_mb` in config.yaml

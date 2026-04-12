@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -285,6 +286,122 @@ func TestClearHistory(t *testing.T) {
 	countAfter := drainHistory(t, streamAfter)
 	if countAfter != 0 {
 		t.Errorf("expected 0 transactions after clear, got %d", countAfter)
+	}
+}
+
+func TestExportHAR(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	now := time.Unix(1700000000, 0).UTC()
+	if err := f.db.SaveRequest(&storage.RequestRecord{
+		ID:         "har-1",
+		Method:     "POST",
+		URL:        "https://example.com/users",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       []byte(`{"name":"alice"}`),
+		Timestamp:  now,
+		DurationMs: 42,
+	}); err != nil {
+		t.Fatalf("SaveRequest: %v", err)
+	}
+	if err := f.db.SaveResponse(&storage.ResponseRecord{
+		RequestID:  "har-1",
+		StatusCode: 201,
+		StatusText: "Created",
+		Headers:    map[string]string{"Content-Type": "application/json"},
+		Body:       []byte(`{"id":1}`),
+	}); err != nil {
+		t.Fatalf("SaveResponse: %v", err)
+	}
+
+	resp, err := f.client.ExportHAR(context.Background(), &apix.ExportHARRequest{
+		TransactionIds: []string{"har-1"},
+	})
+	if err != nil {
+		t.Fatalf("ExportHAR: %v", err)
+	}
+	for _, want := range []string{
+		`"version": "1.2"`,
+		`"url": "https://example.com/users"`,
+		`"status": 201`,
+		`"text": "{\"name\":\"alice\"}"`,
+	} {
+		if !strings.Contains(resp.HarJson, want) {
+			t.Fatalf("expected HAR export to contain %q\n%s", want, resp.HarJson)
+		}
+	}
+}
+
+func TestImportHAR(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	harJSON := `{
+	  "log": {
+	    "version": "1.2",
+	    "creator": { "name": "tester", "version": "1" },
+	    "entries": [{
+	      "startedDateTime": "2024-01-01T00:00:00Z",
+	      "time": 25,
+	      "request": {
+	        "method": "POST",
+	        "url": "https://example.com/imported",
+	        "httpVersion": "HTTP/1.1",
+	        "headers": [{ "name": "Authorization", "value": "Bearer token" }],
+	        "postData": {
+	          "mimeType": "application/json",
+	          "text": "{\"imported\":true}"
+	        },
+	        "headersSize": -1,
+	        "bodySize": 17
+	      },
+	      "response": {
+	        "status": 200,
+	        "statusText": "OK",
+	        "httpVersion": "HTTP/1.1",
+	        "headers": [],
+	        "content": {
+	          "mimeType": "application/json",
+	          "text": "{\"ok\":true}"
+	        },
+	        "redirectURL": "",
+	        "headersSize": -1,
+	        "bodySize": 11
+	      },
+	      "timings": { "send": 0, "wait": 25, "receive": 0 }
+	    }]
+	  }
+	}`
+
+	resp, err := f.client.ImportHAR(context.Background(), &apix.ImportHARRequest{HarJson: harJSON})
+	if err != nil {
+		t.Fatalf("ImportHAR: %v", err)
+	}
+	if len(resp.TransactionIds) != 1 {
+		t.Fatalf("expected 1 imported transaction ID, got %d", len(resp.TransactionIds))
+	}
+
+	req, replayableResp, err := f.db.GetTransaction(resp.TransactionIds[0])
+	if err != nil {
+		t.Fatalf("GetTransaction: %v", err)
+	}
+	if req == nil {
+		t.Fatal("expected imported request")
+	}
+	if req.URL != "https://example.com/imported" {
+		t.Fatalf("request URL: got %q want %q", req.URL, "https://example.com/imported")
+	}
+	if string(req.Body) != `{"imported":true}` {
+		t.Fatalf("request body: got %q", req.Body)
+	}
+	if replayableResp == nil {
+		t.Fatal("expected imported response")
+	}
+	if replayableResp.StatusCode != 200 {
+		t.Fatalf("response status: got %d want 200", replayableResp.StatusCode)
 	}
 }
 
