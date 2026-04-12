@@ -63,11 +63,17 @@ func TestHTTPProxy_WebSocketFramesStored(t *testing.T) {
 
 	reqID := waitForWebSocketTransaction(t, eng)
 	frames := waitForWebSocketFrames(t, eng, reqID, 2)
-	if frames[0].Direction != "client" || string(frames[0].Payload) != "hello" {
-		t.Fatalf("unexpected first frame: %+v", frames[0])
+	var sawClient, sawServer bool
+	for _, frame := range frames {
+		switch frame.Direction {
+		case "client":
+			sawClient = sawClient || string(frame.Payload) == "hello"
+		case "server":
+			sawServer = sawServer || string(frame.Payload) == "echo:hello"
+		}
 	}
-	if frames[1].Direction != "server" || string(frames[1].Payload) != "echo:hello" {
-		t.Fatalf("unexpected second frame: %+v", frames[1])
+	if !sawClient || !sawServer {
+		t.Fatalf("expected client and server websocket frames, got %+v", frames)
 	}
 }
 

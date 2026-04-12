@@ -108,6 +108,9 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 		}
 
 		p.handleRequest(ctx, tlsConn, tlsBr, req, host)
+		if isWebSocketRequest(req) {
+			return
+		}
 	}
 }
 

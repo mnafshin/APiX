@@ -118,7 +118,7 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	proto, err := brw.Reader.Peek(1)
+	proto, err := brw.Peek(1)
 	if err != nil {
 		_ = conn.Close()
 		logging.Errorf(ctx, "peek CONNECT tunnel protocol: %v", err)
@@ -416,6 +416,9 @@ func (p *HTTPProxy) handleTunnelConn(ctx context.Context, conn net.Conn, br *buf
 		req = req.WithContext(ctx)
 		w := newHijackableResponseWriter(conn, br)
 		p.handleHTTP(w, req)
+		if isWebSocketRequest(req) {
+			return
+		}
 	}
 }
 

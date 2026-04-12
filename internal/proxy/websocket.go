@@ -113,10 +113,14 @@ func copyWebSocketResponseHeaders(headers http.Header) http.Header {
 }
 
 func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID string, clientConn, upstreamConn *websocket.Conn) {
-	defer func() { _ = clientConn.Close() }()
-	defer func() { _ = upstreamConn.Close() }()
-
-	var closeOnce sync.Once
+	var forwardCloseOnce sync.Once
+	var shutdownOnce sync.Once
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			_ = clientConn.Close()
+			_ = upstreamConn.Close()
+		})
+	}
 	closePeer := func(peer *websocket.Conn, messageType int, payload []byte) error {
 		deadline := time.Now().Add(5 * time.Second)
 		return peer.WriteControl(messageType, payload, deadline)
@@ -134,7 +138,7 @@ func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID str
 		src.SetCloseHandler(func(code int, text string) error {
 			payload := websocket.FormatCloseMessage(code, text)
 			recordWebSocketFrame(ctx, engine, transactionID, direction, websocket.CloseMessage, payload)
-			closeOnce.Do(func() {
+			forwardCloseOnce.Do(func() {
 				if err := closePeer(dst, websocket.CloseMessage, payload); err != nil {
 					logging.Warnf(ctx, "websocket relay close forward: %v", err)
 				}
@@ -147,7 +151,9 @@ func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID str
 	configureControlHandlers(upstreamConn, clientConn, webSocketDirectionServer)
 
 	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
 	relay := func(src, dst *websocket.Conn, direction string) {
+		defer wg.Done()
 		for {
 			messageType, payload, err := src.ReadMessage()
 			if err != nil {
@@ -162,6 +168,7 @@ func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID str
 		}
 	}
 
+	wg.Add(2)
 	go relay(clientConn, upstreamConn, webSocketDirectionClient)
 	go relay(upstreamConn, clientConn, webSocketDirectionServer)
 
@@ -172,6 +179,8 @@ func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID str
 			logging.Warnf(ctx, "websocket relay ended: %v", err)
 		}
 	}
+	shutdown()
+	wg.Wait()
 }
 
 func isExpectedWebSocketClose(err error) bool {
