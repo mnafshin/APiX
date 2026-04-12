@@ -16,6 +16,7 @@ jobs:
         uses: bufbuild/buf-action@v1
         with:
           version: '1.35.0'
+          setup_only: true
       - name: Run buf lint
         run: |
           buf lint --path pkg/api/proto
@@ -29,6 +30,7 @@ jobs:
         uses: bufbuild/buf-action@v1
         with:
           version: '1.35.0'
+          setup_only: true
       - name: Run buf breaking check
         run: |
           # Compare against main branch for breaking changes
