@@ -5,6 +5,7 @@ go 1.25.1
 require (
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.16.0
+	golang.org/x/tools v0.42.0
 	google.golang.org/grpc v1.75.1
 	google.golang.org/protobuf v1.36.9
 	modernc.org/sqlite v1.48.1
@@ -24,15 +25,17 @@ require (
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
 
 require (
-	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )
