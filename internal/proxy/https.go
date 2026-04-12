@@ -147,14 +147,27 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		Raw:     r,
 	}
 
-	// Run plugin OnRequest chain.
+	// Run plugin OnRequest chain with panic recovery.
 	if p.plugins != nil {
-		modified, err := p.plugins.RunRequest(ctx, proxyReq)
-		if err != nil {
-			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", err))
+		var pluginErr error
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					pluginErr = fmt.Errorf("panic in plugin OnRequest: %v", rec)
+					logging.Errorf(ctx, "TLS proxy panic in plugin OnRequest (recovered): %v", rec)
+				}
+			}()
+			modified, err := p.plugins.RunRequest(ctx, proxyReq)
+			if err != nil {
+				pluginErr = err
+				return
+			}
+			proxyReq = modified
+		}()
+		if pluginErr != nil {
+			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", pluginErr))
 			return
 		}
-		proxyReq = modified
 	}
 
 	// Mocked response short-circuit.
@@ -215,14 +228,21 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		Raw:        upResp,
 	}
 
-	// Run plugin OnResponse chain.
+	// Run plugin OnResponse chain with panic recovery.
 	if p.plugins != nil {
-		modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
-		if err != nil {
-			logging.Errorf(ctx, "tls proxy: plugin OnResponse: %v", err)
-		} else if modResp != nil {
-			proxyResp = modResp
-		}
+		func() {
+			defer func() {
+				if rec := recover(); rec != nil {
+					logging.Errorf(ctx, "TLS proxy panic in plugin OnResponse (recovered): %v", rec)
+				}
+			}()
+			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
+			if err != nil {
+				logging.Errorf(ctx, "tls proxy: plugin OnResponse: %v", err)
+			} else if modResp != nil {
+				proxyResp = modResp
+			}
+		}()
 	}
 
 	// Buffer the final response body (plugins may have modified it) so we can
