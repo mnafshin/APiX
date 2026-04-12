@@ -20,7 +20,8 @@ jobs:
       - name: Run markdown link checker (lychee)
         uses: lycheeverse/lychee-action@v2
         with:
-          paths: 'docs/**/*.md,README.md'
+          args: 'docs/**/*.md README.md --root .'
+          # pass --root . so lychee can resolve root-relative links like /public/...
       - name: Lint markdown (markdownlint-cli)
         run: |
           # Install markdownlint CLI and run against docs and README
