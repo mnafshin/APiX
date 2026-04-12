@@ -24,7 +24,9 @@
     "mitm"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onCommand:apix.openTrafficPanel",
+    "onView:apix.trafficView",
+    "onView:apix.breakpointsView"
   ],
   "main": "./out/extension.js",
   "contributes": {
