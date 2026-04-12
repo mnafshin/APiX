@@ -1,0 +1,11 @@
+version: v1
+name: github.com/mnafshin/apix
+deps: []
+
+# Basic configuration for buf lint
+lint:
+  use:
+    - DEFAULT
+
+breaking:
+  use: ["FILE"]

@@ -1,0 +1,40 @@
+name: Proto checks
+
+on:
+  pull_request:
+  push:
+    paths:
+      - 'pkg/api/proto/**'
+      - 'pkg/api/generated/**'
+
+jobs:
+  buf-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install buf
+        uses: bufbuild/buf-action@v1
+        with:
+          version: '1.18.0'
+      - name: Run buf lint
+        run: |
+          buf lint pkg/api/proto
+
+  buf-breaking:
+    runs-on: ubuntu-latest
+    needs: buf-lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install buf
+        uses: bufbuild/buf-action@v1
+        with:
+          version: '1.18.0'
+      - name: Run buf breaking check
+        run: |
+          # Compare against main branch for breaking changes
+          git fetch origin main:refs/remotes/origin/main || true
+          if git rev-parse --verify origin/main >/dev/null 2>&1; then
+            buf breaking --against=ref://origin/main:pkg/api/proto || true
+          else
+            echo "No origin/main to compare against; skipping breaking check"
+          fi
