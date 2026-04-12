@@ -112,7 +112,7 @@ Custom plugins implement the `Plugin` interface from `pkg/plugins/sdk.go`.
 └────────────────────────────────────────────┘
 ```
 
-**12 gRPC RPCs** connect the extension to the engine:
+**14 gRPC RPCs** connect the extension to the engine:
 
 | RPC | Type | Purpose |
 |---|---|---|
@@ -126,7 +126,10 @@ Custom plugins implement the `Plugin` interface from `pkg/plugins/sdk.go`.
 | `ResumeRequest` | Unary | Forward / drop / respond |
 | `ReplayRequest` | Unary | Replay with overrides |
 | `GetHistory` | Server-stream | Paginated traffic history |
+| `GetWebSocketFrames` | Server-stream | Persisted frame inspection for captured upgrades |
 | `ClearHistory` | Unary | Wipe storage |
+| `ExportHAR` | Unary | Export stored traffic as HAR 1.2 JSON |
+| `ImportHAR` | Unary | Import HAR 1.2 traffic into history |
 
 ---
 
@@ -318,8 +321,8 @@ apix/
 
 | Milestone | Features |
 |---|---|
-| **v1.0 (current)** | MITM proxy, breakpoints, replay, plugins, SQLite, VS Code extension |
-| **v1.1** | Contract-first CLI migration, WebSocket support, conditional breakpoints, plugin config UI |
+| **v1.0 (current)** | MITM proxy, WebSocket inspection, breakpoints, replay, plugins, SQLite, VS Code extension |
+| **v1.1** | Contract-first CLI migration, conditional breakpoints, plugin config UI |
 | **v1.2** | request composition, gRPC proxy support, AI-facing automation surfaces |
 | **v2.0** | Wasm plugin sandbox (external plugins without recompile), VS Code Marketplace publish, CI/CD integration hooks |
 

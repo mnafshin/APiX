@@ -10,38 +10,38 @@ message Empty {}
 
 // HttpRequest represents a captured or synthesized HTTP request.
 message HttpRequest {
-  string method    = 1;
-  string url       = 2;
+  string method = 1;
+  string url = 2;
   map<string, string> headers = 3;
-  bytes  body      = 4;
-  int64  timestamp = 5;
-  string id        = 6; // UUID assigned at capture time
+  bytes body = 4;
+  int64 timestamp = 5;
+  string id = 6; // UUID assigned at capture time
 }
 
 // HttpResponse represents a captured or synthesized HTTP response.
 message HttpResponse {
-  int32  status_code = 1;
+  int32 status_code = 1;
   string status_text = 2;
   map<string, string> headers = 3;
-  bytes  body        = 4;
+  bytes body = 4;
 }
 
 // HttpTransaction pairs a request with its response plus metadata.
 message HttpTransaction {
-  string      id          = 1;
-  HttpRequest  request    = 2;
-  HttpResponse response   = 3;
-  int64        timestamp  = 4; // Unix ms
-  int64        duration_ms = 5;
+  string id = 1;
+  HttpRequest request = 2;
+  HttpResponse response = 3;
+  int64 timestamp = 4; // Unix ms
+  int64 duration_ms = 5;
 }
 
 // ========== Plugin messages ==========
 
 message PluginInfo {
-  string name        = 1;
-  string version     = 2;
+  string name = 1;
+  string version = 2;
   string description = 3;
-  bool   enabled     = 4;
+  bool enabled = 4;
 }
 
 // ========== Status messages ==========
@@ -49,11 +49,11 @@ message PluginInfo {
 message StatusRequest {}
 
 message StatusResponse {
-  string status  = 1;
+  string status = 1;
   string version = 2;
-  int32  proxy_port = 3;
-  int32  grpc_port  = 4;
-  bool   tls_enabled = 5;
+  int32 proxy_port = 3;
+  int32 grpc_port = 4;
+  bool tls_enabled = 5;
 }
 
 // ========== Traffic capture messages ==========
@@ -72,11 +72,11 @@ message PluginListResponse {
 
 // BreakpointRule defines a URL pattern to pause on.
 message BreakpointRule {
-  string   id          = 1; // UUID; empty on creation, server assigns
-  string   url_pattern = 2; // regex or glob pattern matched against full URL
+  string id = 1; // UUID; empty on creation, server assigns
+  string url_pattern = 2; // regex or glob pattern matched against full URL
   repeated string methods = 3; // empty = all methods
-  bool     enabled    = 4;
-  string   label      = 5; // human-readable label (optional)
+  bool enabled = 4;
+  string label = 5; // human-readable label (optional)
 }
 
 message BreakpointID {
@@ -94,21 +94,21 @@ message BreakpointResponse {
 
 // PausedRequest is streamed to the client when a request hits a breakpoint.
 message PausedRequest {
-  string      request_id    = 1;
-  HttpRequest request       = 2;
-  string      breakpoint_id = 3;
-  int64       paused_at     = 4; // Unix ms
+  string request_id = 1;
+  HttpRequest request = 2;
+  string breakpoint_id = 3;
+  int64 paused_at = 4; // Unix ms
 }
 
 // ResumeAction tells the engine what to do with a paused request.
 message ResumeAction {
-  string      request_id       = 1;
+  string request_id = 1;
   HttpRequest modified_request = 2; // nil = forward original
-  Action      action           = 3;
+  Action action = 3;
 
   enum Action {
     FORWARD = 0; // forward (optionally modified)
-    DROP    = 1; // drop the request, return 502
+    DROP = 1; // drop the request, return 502
     RESPOND = 2; // return a synthetic response (modified_response must be set)
   }
 
@@ -120,23 +120,35 @@ message ResumeAction {
 // ReplaySpec describes what to replay and optional overrides.
 message ReplaySpec {
   oneof source {
-    string      request_id  = 1; // replay from history by ID
+    string request_id = 1; // replay from history by ID
     HttpRequest raw_request = 2; // replay an arbitrary request
   }
   map<string, string> override_headers = 3;
-  bytes               override_body    = 4;
-  bool                follow_redirects = 5;
+  bytes override_body = 4;
+  bool follow_redirects = 5;
 }
 
 // ========== History messages ==========
 
 message HistoryQuery {
-  int32  limit         = 1; // default 100
-  int32  offset        = 2;
-  string url_filter    = 3; // substring or regex
+  int32 limit = 1; // default 100
+  int32 offset = 2;
+  string url_filter = 3; // substring or regex
   string method_filter = 4; // e.g. "GET"
-  int32  status_filter = 5; // e.g. 404; 0 = no filter
-  int64  since_ms      = 6; // only transactions after this Unix ms timestamp
+  int32 status_filter = 5; // e.g. 404; 0 = no filter
+  int64 since_ms = 6; // only transactions after this Unix ms timestamp
+}
+
+message GetWebSocketFramesRequest {
+  string transaction_id = 1;
+}
+
+message WebSocketFrame {
+  string transaction_id = 1;
+  string direction = 2; // "client" or "server"
+  int32 opcode = 3; // 1=text, 2=binary, 8=close, 9=ping, 10=pong
+  bytes payload = 4;
+  int64 timestamp_ms = 5;
 }
 
 message ExportHARRequest {
@@ -187,6 +199,8 @@ service Engine {
   // ----- History -----
   // Retrieve stored request/response pairs from SQLite.
   rpc GetHistory(HistoryQuery) returns (stream HttpTransaction);
+  // Retrieve stored WebSocket frames for a captured upgrade request.
+  rpc GetWebSocketFrames(GetWebSocketFramesRequest) returns (stream WebSocketFrame);
   // Clear all stored history.
   rpc ClearHistory(Empty) returns (Empty);
   // Export stored traffic as HAR 1.2 JSON.

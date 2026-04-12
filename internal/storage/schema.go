@@ -43,6 +43,17 @@ CREATE TABLE IF NOT EXISTS plugins (
     config     TEXT NOT NULL DEFAULT '{}'   -- JSON object of plugin config
 );`
 
+const CreateWebSocketFramesTable = `
+CREATE TABLE IF NOT EXISTS ws_frames (
+    id             TEXT PRIMARY KEY,
+    transaction_id TEXT NOT NULL,
+    direction      TEXT NOT NULL,
+    opcode         INTEGER NOT NULL,
+    payload        BLOB,
+    timestamp      INTEGER NOT NULL,
+    FOREIGN KEY (transaction_id) REFERENCES requests(id) ON DELETE CASCADE
+);`
+
 // AllTables is the ordered list of DDL statements to apply during DB init.
 // Order matters for foreign key dependencies.
 var AllTables = []string{
@@ -50,4 +61,5 @@ var AllTables = []string{
 	CreateResponsesTable,
 	CreateBreakpointsTable,
 	CreatePluginsTable,
+	CreateWebSocketFramesTable,
 }

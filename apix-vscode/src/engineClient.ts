@@ -12,6 +12,7 @@ import {
     BreakpointList,
     HttpResponse,
     PluginInfo,
+    WebSocketFrame,
 } from './types';
 
 const PROTO_PATH = path.resolve(__dirname, '../../proto/apix.proto');
@@ -239,6 +240,27 @@ export class EngineClient {
             });
             stream.on('error', (err: Error) => reject(err));
             stream.on('end', () => resolve([results, cancel]));
+        });
+    }
+
+    /** Fetch stored WebSocket frames for a captured upgrade request. */
+    async getWebSocketFrames(transactionId: string): Promise<WebSocketFrame[]> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            const stream: grpc.ClientReadableStream<any> = this.stub.getWebSocketFrames({ transactionId }, this.metadata);
+            const results: WebSocketFrame[] = [];
+            stream.on('data', (raw: any) => {
+                const payload = Buffer.from(raw.payload || []).toString('utf8');
+                results.push({
+                    transactionId: raw.transactionId || '',
+                    direction: raw.direction || '',
+                    opcode: raw.opcode || 0,
+                    payload,
+                    timestampMs: raw.timestampMs || 0,
+                });
+            });
+            stream.on('error', (err: Error) => reject(err));
+            stream.on('end', () => resolve(results));
         });
     }
 

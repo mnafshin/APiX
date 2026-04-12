@@ -138,6 +138,38 @@ func TestStoreTransactionWithResponse(t *testing.T) {
 	}
 }
 
+func TestStoreWebSocketFrame(t *testing.T) {
+	t.Parallel()
+	e := newTestEngine(t)
+
+	tx := makeTransaction("ws-store-1", "GET", "ws://example.com/socket")
+	if err := e.StoreTransaction(tx); err != nil {
+		t.Fatalf("StoreTransaction: %v", err)
+	}
+
+	frame := &proxy.WebSocketFrame{
+		TransactionID: "ws-store-1",
+		Direction:     "client",
+		Opcode:        1,
+		Payload:       []byte("hello"),
+		Timestamp:     time.Unix(1700000000, 0).UTC(),
+	}
+	if err := e.StoreWebSocketFrame(frame); err != nil {
+		t.Fatalf("StoreWebSocketFrame: %v", err)
+	}
+
+	frames, err := e.DB().ListWebSocketFrames("ws-store-1")
+	if err != nil {
+		t.Fatalf("ListWebSocketFrames: %v", err)
+	}
+	if len(frames) != 1 {
+		t.Fatalf("expected 1 websocket frame, got %d", len(frames))
+	}
+	if string(frames[0].Payload) != "hello" || frames[0].Opcode != 1 {
+		t.Fatalf("stored websocket frame mismatch: %+v", frames[0])
+	}
+}
+
 // TestSubscribeReceivesTransaction verifies that a subscriber gets notified.
 func TestSubscribeReceivesTransaction(t *testing.T) {
 	t.Parallel()

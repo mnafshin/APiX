@@ -29,6 +29,7 @@ const (
 	Engine_ResumeRequest_FullMethodName       = "/apix.Engine/ResumeRequest"
 	Engine_ReplayRequest_FullMethodName       = "/apix.Engine/ReplayRequest"
 	Engine_GetHistory_FullMethodName          = "/apix.Engine/GetHistory"
+	Engine_GetWebSocketFrames_FullMethodName  = "/apix.Engine/GetWebSocketFrames"
 	Engine_ClearHistory_FullMethodName        = "/apix.Engine/ClearHistory"
 	Engine_ExportHAR_FullMethodName           = "/apix.Engine/ExportHAR"
 	Engine_ImportHAR_FullMethodName           = "/apix.Engine/ImportHAR"
@@ -62,6 +63,8 @@ type EngineClient interface {
 	// ----- History -----
 	// Retrieve stored request/response pairs from SQLite.
 	GetHistory(ctx context.Context, in *HistoryQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpTransaction], error)
+	// Retrieve stored WebSocket frames for a captured upgrade request.
+	GetWebSocketFrames(ctx context.Context, in *GetWebSocketFramesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WebSocketFrame], error)
 	// Clear all stored history.
 	ClearHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	// Export stored traffic as HAR 1.2 JSON.
@@ -205,6 +208,25 @@ func (c *engineClient) GetHistory(ctx context.Context, in *HistoryQuery, opts ..
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Engine_GetHistoryClient = grpc.ServerStreamingClient[HttpTransaction]
 
+func (c *engineClient) GetWebSocketFrames(ctx context.Context, in *GetWebSocketFramesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[WebSocketFrame], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Engine_ServiceDesc.Streams[3], Engine_GetWebSocketFrames_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetWebSocketFramesRequest, WebSocketFrame]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_GetWebSocketFramesClient = grpc.ServerStreamingClient[WebSocketFrame]
+
 func (c *engineClient) ClearHistory(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -263,6 +285,8 @@ type EngineServer interface {
 	// ----- History -----
 	// Retrieve stored request/response pairs from SQLite.
 	GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error
+	// Retrieve stored WebSocket frames for a captured upgrade request.
+	GetWebSocketFrames(*GetWebSocketFramesRequest, grpc.ServerStreamingServer[WebSocketFrame]) error
 	// Clear all stored history.
 	ClearHistory(context.Context, *Empty) (*Empty, error)
 	// Export stored traffic as HAR 1.2 JSON.
@@ -308,6 +332,9 @@ func (UnimplementedEngineServer) ReplayRequest(context.Context, *ReplaySpec) (*H
 }
 func (UnimplementedEngineServer) GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error {
 	return status.Errorf(codes.Unimplemented, "method GetHistory not implemented")
+}
+func (UnimplementedEngineServer) GetWebSocketFrames(*GetWebSocketFramesRequest, grpc.ServerStreamingServer[WebSocketFrame]) error {
+	return status.Errorf(codes.Unimplemented, "method GetWebSocketFrames not implemented")
 }
 func (UnimplementedEngineServer) ClearHistory(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClearHistory not implemented")
@@ -498,6 +525,17 @@ func _Engine_GetHistory_Handler(srv interface{}, stream grpc.ServerStream) error
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Engine_GetHistoryServer = grpc.ServerStreamingServer[HttpTransaction]
 
+func _Engine_GetWebSocketFrames_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetWebSocketFramesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EngineServer).GetWebSocketFrames(m, &grpc.GenericServerStream[GetWebSocketFramesRequest, WebSocketFrame]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Engine_GetWebSocketFramesServer = grpc.ServerStreamingServer[WebSocketFrame]
+
 func _Engine_ClearHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
@@ -614,6 +652,11 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "GetHistory",
 			Handler:       _Engine_GetHistory_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetWebSocketFrames",
+			Handler:       _Engine_GetWebSocketFrames_Handler,
 			ServerStreams: true,
 		},
 	},

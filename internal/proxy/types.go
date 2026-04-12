@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/pkg/plugins"
@@ -19,6 +20,8 @@ type ProxyResponse = plugins.ProxyResponse
 type TrafficEngine interface {
 	// StoreTransaction persists and publishes a completed HTTP transaction.
 	StoreTransaction(tx *Transaction) error
+	// StoreWebSocketFrame persists a relayed WebSocket frame.
+	StoreWebSocketFrame(frame *WebSocketFrame) error
 	// PauseRequest holds a request at a breakpoint and blocks until resumed.
 	// Returns the (possibly modified) request and the resume action.
 	PauseRequest(tx *Transaction) (*Transaction, ResumeAction, error)
@@ -51,4 +54,13 @@ type Transaction struct {
 	Response               *ProxyResponse
 	ResponseBody           []byte // buffered response body bytes captured after forwarding
 	DurationMs             int64
+}
+
+// WebSocketFrame represents a proxied WebSocket frame/message.
+type WebSocketFrame struct {
+	TransactionID string
+	Direction     string
+	Opcode        int
+	Payload       []byte
+	Timestamp     time.Time
 }

@@ -15,10 +15,11 @@ jobs:
       - name: Install buf
         uses: bufbuild/buf-action@v1
         with:
-          version: '1.18.0'
+          version: '1.35.0'
+          setup_only: true
       - name: Run buf lint
         run: |
-          buf lint pkg/api/proto
+          buf lint --path pkg/api/proto
 
   buf-breaking:
     runs-on: ubuntu-latest
@@ -28,13 +29,14 @@ jobs:
       - name: Install buf
         uses: bufbuild/buf-action@v1
         with:
-          version: '1.18.0'
+          version: '1.35.0'
+          setup_only: true
       - name: Run buf breaking check
         run: |
           # Compare against main branch for breaking changes
           git fetch origin main:refs/remotes/origin/main || true
           if git rev-parse --verify origin/main >/dev/null 2>&1; then
-            buf breaking --against=ref://origin/main:pkg/api/proto || true
+            buf breaking --against=ref://origin/main --path pkg/api/proto || true
           else
             echo "No origin/main to compare against; skipping breaking check"
           fi

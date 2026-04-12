@@ -243,6 +243,65 @@ func TestDeleteAllTransactions(t *testing.T) {
 	}
 }
 
+func TestSaveAndListWebSocketFrames(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	req := makeRequest("ws-req-1", "GET", "wss://example.com/socket")
+	if err := db.SaveRequest(req); err != nil {
+		t.Fatalf("SaveRequest: %v", err)
+	}
+
+	frames := []*WebSocketFrameRecord{
+		{
+			TransactionID: "ws-req-1",
+			Direction:     "client",
+			Opcode:        1,
+			Payload:       []byte("hello"),
+			Timestamp:     time.Unix(1700000000, 0).UTC(),
+		},
+		{
+			TransactionID: "ws-req-1",
+			Direction:     "server",
+			Opcode:        2,
+			Payload:       []byte{0x00, 0x01, 0x02},
+			Timestamp:     time.Unix(1700000001, 0).UTC(),
+		},
+		{
+			TransactionID: "ws-req-1",
+			Direction:     "server",
+			Opcode:        9,
+			Payload:       nil,
+			Timestamp:     time.Unix(1700000002, 0).UTC(),
+		},
+	}
+	for _, frame := range frames {
+		if err := db.SaveWebSocketFrame(frame); err != nil {
+			t.Fatalf("SaveWebSocketFrame: %v", err)
+		}
+		if frame.ID == "" {
+			t.Fatal("expected frame ID to be assigned")
+		}
+	}
+
+	got, err := db.ListWebSocketFrames("ws-req-1")
+	if err != nil {
+		t.Fatalf("ListWebSocketFrames: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("expected 3 websocket frames, got %d", len(got))
+	}
+	if got[0].Direction != "client" || string(got[0].Payload) != "hello" {
+		t.Fatalf("first frame mismatch: %+v", got[0])
+	}
+	if got[1].Opcode != 2 || string(got[1].Payload) != string([]byte{0x00, 0x01, 0x02}) {
+		t.Fatalf("second frame mismatch: %+v", got[1])
+	}
+	if got[2].Opcode != 9 || len(got[2].Payload) != 0 {
+		t.Fatalf("third frame mismatch: %+v", got[2])
+	}
+}
+
 func TestSaveAndListBreakpoints(t *testing.T) {
 	t.Parallel()
 	db := openTestDB(t)
@@ -344,6 +403,15 @@ func TestForeignKeyCascade(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SaveResponse: %v", err)
 	}
+	if err := db.SaveWebSocketFrame(&WebSocketFrameRecord{
+		TransactionID: "cascade-req",
+		Direction:     "client",
+		Opcode:        1,
+		Payload:       []byte("hello"),
+		Timestamp:     time.Now(),
+	}); err != nil {
+		t.Fatalf("SaveWebSocketFrame: %v", err)
+	}
 
 	// Verify response exists.
 	gotReq, gotResp, err := db.GetTransaction("cascade-req")
@@ -366,6 +434,13 @@ func TestForeignKeyCascade(t *testing.T) {
 	}
 	if gotReq != nil || gotResp != nil {
 		t.Error("expected both request and response to be deleted (cascade)")
+	}
+	frames, err := db.ListWebSocketFrames("cascade-req")
+	if err != nil {
+		t.Fatalf("ListWebSocketFrames after delete: %v", err)
+	}
+	if len(frames) != 0 {
+		t.Errorf("expected websocket frames to cascade delete, got %d", len(frames))
 	}
 }
 

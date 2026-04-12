@@ -88,6 +88,18 @@ export class TrafficPanel {
                     vscode.commands.executeCommand('apix.replayRequest', message.data.requestId);
                 }
                 break;
+            case 'loadWebSocketFrames':
+                if (message.data?.requestId) {
+                    void this.client.getWebSocketFrames(message.data.requestId)
+                        .then((frames) => this._panel.webview.postMessage({
+                            type: 'websocketFrames',
+                            data: { requestId: message.data.requestId, frames },
+                        }))
+                        .catch((err) => {
+                            void vscode.window.showErrorMessage(`APiX: Failed to load WebSocket frames — ${err?.message || err}`);
+                        });
+                }
+                break;
             case 'copyAsCurl':
                 if (message.data?.transaction) {
                     vscode.commands.executeCommand('apix.copyAsCurl', message.data.transaction);
@@ -146,6 +158,8 @@ export class TrafficPanel {
     .toolbar input:focus { outline: 1px solid var(--vscode-focusBorder); }
     .toolbar button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 13px; }
     .toolbar button:hover { background: var(--vscode-button-hoverBackground); }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-right: 6px; }
+    .badge-ws { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
     .empty { text-align: center; padding: 40px; color: var(--vscode-descriptionForeground); }
     #detail { display: none; position: fixed; top: 0; right: 0; width: 50%; height: 100%; background: var(--vscode-editor-background); border-left: 1px solid var(--vscode-panel-border); padding: 16px; overflow-y: auto; z-index: 10; box-sizing: border-box; }
     #detail.open { display: block; }
@@ -155,6 +169,11 @@ export class TrafficPanel {
     #detail .detail-actions { display: flex; gap: 8px; margin-top: 12px; }
     #detail .detail-actions button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 13px; }
     #detail .close-btn { float: right; background: transparent; color: var(--vscode-foreground); border: none; cursor: pointer; font-size: 16px; padding: 0; }
+    #detail-frames { display: none; }
+    #detail-frames.open { display: block; }
+    #ws-frame-list { display: grid; gap: 8px; }
+    .ws-frame { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; }
+    .ws-frame-meta { display: flex; gap: 8px; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -176,6 +195,10 @@ export class TrafficPanel {
     <h4>Request Body</h4><pre id="detail-req-body"></pre>
     <h4>Response Headers</h4><pre id="detail-resp-headers"></pre>
     <h4>Response Body</h4><pre id="detail-resp-body"></pre>
+    <div id="detail-frames">
+      <h4>WebSocket Frames</h4>
+      <div id="ws-frame-list"></div>
+    </div>
     <div class="detail-actions">
       <button onclick="replayRequest()">↺ Replay</button>
       <button onclick="copyAsCurl()">⎘ Copy as curl</button>
@@ -186,6 +209,7 @@ export class TrafficPanel {
     const vscode = acquireVsCodeApi();
     let transactions = [];
     let count = 0;
+    let currentFramesRequestId = '';
 
     window.addEventListener('message', function(event) {
       const msg = event.data;
@@ -194,6 +218,10 @@ export class TrafficPanel {
         transactions.push(msg.data);
         addRow(msg.data, count);
         document.getElementById('empty').style.display = 'none';
+      } else if (msg.type === 'websocketFrames') {
+        if (msg.data && msg.data.requestId === currentFramesRequestId) {
+          renderWebSocketFrames(msg.data.frames || []);
+        }
       }
     });
 
@@ -202,6 +230,7 @@ export class TrafficPanel {
       const method = (tx.request && tx.request.method) ? tx.request.method : 'GET';
       const url = (tx.request && tx.request.url) ? tx.request.url : '';
       const status = (tx.response && tx.response.statusCode) ? tx.response.statusCode : '-';
+      const isWebSocket = isWebSocketTransaction(tx);
       const methodClass = 'method-' + method.toLowerCase();
       const statusClass = (typeof status === 'number')
         ? (status >= 500 ? 'status-5xx' : status >= 400 ? 'status-4xx' : status >= 300 ? 'status-3xx' : 'status-2xx')
@@ -212,7 +241,7 @@ export class TrafficPanel {
       tr.innerHTML =
         '<td>' + num + '</td>' +
         '<td class="method ' + methodClass + '">' + escHtml(method) + '</td>' +
-        '<td title="' + escHtml(url) + '">' + escHtml(url) + '</td>' +
+        '<td title="' + escHtml(url) + '">' + (isWebSocket ? '<span class="badge badge-ws">WS</span>' : '') + escHtml(url) + '</td>' +
         '<td class="' + statusClass + '">' + escHtml(String(status)) + '</td>' +
         '<td>' + escHtml(duration) + '</td>' +
         '<td>' + escHtml(time) + '</td>';
@@ -229,7 +258,8 @@ export class TrafficPanel {
       document.getElementById('detail').classList.add('open');
       const method = (tx.request && tx.request.method) || '';
       const url = (tx.request && tx.request.url) || '';
-      document.getElementById('detail-title').textContent = method + ' ' + url;
+      const isWebSocket = isWebSocketTransaction(tx);
+      document.getElementById('detail-title').textContent = (isWebSocket ? '[WS] ' : '') + method + ' ' + url;
       document.getElementById('detail-req-headers').textContent =
         JSON.stringify((tx.request && tx.request.headers) || {}, null, 2);
       document.getElementById('detail-req-body').textContent =
@@ -238,11 +268,60 @@ export class TrafficPanel {
         JSON.stringify((tx.response && tx.response.headers) || {}, null, 2);
       document.getElementById('detail-resp-body').textContent =
         (tx.response && tx.response.body) ? String(tx.response.body) : '(empty)';
+      const frames = document.getElementById('detail-frames');
+      if (isWebSocket) {
+        currentFramesRequestId = tx.id || '';
+        frames.classList.add('open');
+        document.getElementById('ws-frame-list').textContent = 'Loading WebSocket frames...';
+        vscode.postMessage({ type: 'loadWebSocketFrames', data: { requestId: currentFramesRequestId } });
+      } else {
+        currentFramesRequestId = '';
+        frames.classList.remove('open');
+        document.getElementById('ws-frame-list').textContent = '';
+      }
       window._currentTx = tx;
     }
 
     function closeDetail() {
       document.getElementById('detail').classList.remove('open');
+    }
+
+    function isWebSocketTransaction(tx) {
+      const headers = (tx.request && tx.request.headers) || {};
+      const upgrade = headers.Upgrade || headers.upgrade || '';
+      return String(upgrade).toLowerCase() === 'websocket' || ((tx.response && tx.response.statusCode) === 101);
+    }
+
+    function opcodeLabel(opcode) {
+      switch (opcode) {
+        case 1: return 'text';
+        case 2: return 'binary';
+        case 8: return 'close';
+        case 9: return 'ping';
+        case 10: return 'pong';
+        default: return 'opcode ' + opcode;
+      }
+    }
+
+    function renderWebSocketFrames(frames) {
+      const root = document.getElementById('ws-frame-list');
+      if (!frames || frames.length === 0) {
+        root.textContent = 'No WebSocket frames captured for this connection.';
+        return;
+      }
+      root.innerHTML = frames.map(function(frame) {
+        const payload = typeof frame.payload === 'string' ? frame.payload : String(frame.payload || '');
+        const timestamp = frame.timestampMs ? new Date(frame.timestampMs).toLocaleTimeString() : '';
+        const direction = frame.direction === 'client' ? '↑ client' : '↓ server';
+        return '<div class="ws-frame">' +
+          '<div class="ws-frame-meta">' +
+          '<span>' + escHtml(direction) + '</span>' +
+          '<span>' + escHtml(opcodeLabel(frame.opcode)) + '</span>' +
+          '<span>' + escHtml(timestamp) + '</span>' +
+          '</div>' +
+          '<pre>' + escHtml(payload || '(empty)') + '</pre>' +
+          '</div>';
+      }).join('');
     }
 
     function replayRequest() {
