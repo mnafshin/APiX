@@ -72,10 +72,7 @@ build-all:
 dev: build ext-build
 
 smoke:
-	mkdir -p build
-	go build -o build/apix-engine ./cmd/apix-engine/
-	go build -o build/apix-cli ./cmd/apix-cli/
-	./build/apix-cli --help
+	sh tests/release/smoke.sh
 
 help:
 	@echo "Available targets:"
