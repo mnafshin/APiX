@@ -7,7 +7,7 @@ import (
 )
 
 func TestSampleTranscriptExistsAndParses(t *testing.T) {
-	f := "tests/mcp/fixtures/sample_transcript.json"
+	f := "fixtures/sample_transcript.json"
 	b, err := os.ReadFile(f)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)

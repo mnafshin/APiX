@@ -371,3 +371,18 @@ func TestCLIOperability(t *testing.T) {
 		t.Fatalf("completion exit=%d err=%s out=%s", exit, errOut, out)
 	}
 }
+
+func TestCLIExitCodes(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "secret-token")
+
+	exit, _, errOut := runCLI(t, "--host", stack.host, "--port", fmt.Sprintf("%d", stack.port), "status")
+	if exit != 4 || !strings.Contains(errOut, "Unauthenticated") {
+		t.Fatalf("expected unauthenticated exit 4, got %d err=%s", exit, errOut)
+	}
+
+	exit, _, errOut = runCLI(t, "--host", "127.0.0.1", "--port", "1", "status")
+	if exit != 6 {
+		t.Fatalf("expected unavailable exit 6, got %d err=%s", exit, errOut)
+	}
+}

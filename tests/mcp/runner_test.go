@@ -39,7 +39,7 @@ func normalize(v interface{}) interface{} {
 }
 
 func TestTranscriptNormalizedMatchesGolden(t *testing.T) {
-	rawA, err := os.ReadFile("tests/mcp/fixtures/sample_transcript.json")
+	rawA, err := os.ReadFile("fixtures/sample_transcript.json")
 	if err != nil {
 		t.Fatalf("read fixture A: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestTranscriptNormalizedMatchesGolden(t *testing.T) {
 	}
 	normA := normalize(a)
 
-	rawB, err := os.ReadFile("tests/mcp/fixtures/sample_transcript.normalized.json")
+	rawB, err := os.ReadFile("fixtures/sample_transcript.normalized.json")
 	if err != nil {
 		t.Fatalf("read golden fixture B: %v", err)
 	}
