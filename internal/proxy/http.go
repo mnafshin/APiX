@@ -48,7 +48,7 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 	}
 	go func() {
 		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {
 			logging.Errorf(ctx, "http proxy shutdown: %v", err)
@@ -103,7 +103,7 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	// Flush any buffered data from the hijacked reader.
 	if brw.Reader.Buffered() > 0 {
-		conn.Close()
+		_ = conn.Close()
 		logging.Warnf(ctx, "handleConnect: unexpected buffered data after hijack")
 		return
 	}
@@ -111,7 +111,7 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Respond 200 Connection established.
 	_, err = fmt.Fprint(conn, "HTTP/1.1 200 Connection established\r\n\r\n")
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return
 	}
 
@@ -149,7 +149,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
 			return
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 
 	origHeaders := r.Header.Clone()
@@ -253,7 +253,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
 		return
 	}
-	defer upResp.Body.Close()
+	defer func() { _ = upResp.Body.Close() }()
 
 	// Limit response body size to prevent OOM denial of service.
 	respBody, err := io.ReadAll(upResp.Body)

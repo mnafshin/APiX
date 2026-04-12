@@ -132,6 +132,32 @@ func (s *stringSliceFlags) Set(v string) error {
 	return nil
 }
 
+func writeLine(w io.Writer, args ...any) {
+	_, _ = fmt.Fprintln(w, args...)
+}
+
+func writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+func writeString(w io.Writer, s string) {
+	_, _ = io.WriteString(w, s)
+}
+
+func int32FromInt(v int, field string) (int32, error) {
+	if v < -1<<31 || v > 1<<31-1 {
+		return 0, status.Errorf(codes.InvalidArgument, "%s out of range for int32", field)
+	}
+	return int32(v), nil
+}
+
+func capitalizeASCII(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
 func Run(args []string, out io.Writer, errw io.Writer) int {
 	fs := flag.NewFlagSet("apix", flag.ContinueOnError)
 	fs.SetOutput(errw)
@@ -147,24 +173,24 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 	fs.StringVar(&opts.configPath, "config", "", "path to config file (default: APiX search path)")
 	fs.BoolVar(&opts.configCheck, "config-check", false, "validate config and exit (0=ok, 1=invalid)")
 	fs.Usage = func() {
-		fmt.Fprintln(errw, "Usage: apix [global flags] <command> [args]")
-		fmt.Fprintln(errw, "")
-		fmt.Fprintln(errw, "Commands:")
-		fmt.Fprintln(errw, "  status")
-		fmt.Fprintln(errw, "  plugins list")
-		fmt.Fprintln(errw, "  history list|get|clear")
-		fmt.Fprintln(errw, "  watch [traffic]")
-		fmt.Fprintln(errw, "  breakpoints list|add|delete|enable|disable")
-		fmt.Fprintln(errw, "  paused watch|forward|drop|respond")
-		fmt.Fprintln(errw, "  send")
-		fmt.Fprintln(errw, "  replay")
-		fmt.Fprintln(errw, "  cert status")
-		fmt.Fprintln(errw, "  config show")
-		fmt.Fprintln(errw, "  setup [profile]")
-		fmt.Fprintln(errw, "  completion <bash|zsh|fish>")
-		fmt.Fprintln(errw, "  doctor")
-		fmt.Fprintln(errw, "  help")
-		fmt.Fprintln(errw, "")
+		writeLine(errw, "Usage: apix [global flags] <command> [args]")
+		writeLine(errw)
+		writeLine(errw, "Commands:")
+		writeLine(errw, "  status")
+		writeLine(errw, "  plugins list")
+		writeLine(errw, "  history list|get|clear")
+		writeLine(errw, "  watch [traffic]")
+		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
+		writeLine(errw, "  paused watch|forward|drop|respond")
+		writeLine(errw, "  send")
+		writeLine(errw, "  replay")
+		writeLine(errw, "  cert status")
+		writeLine(errw, "  config show")
+		writeLine(errw, "  setup [profile]")
+		writeLine(errw, "  completion <bash|zsh|fish>")
+		writeLine(errw, "  doctor")
+		writeLine(errw, "  help")
+		writeLine(errw)
 		fs.PrintDefaults()
 	}
 
@@ -244,7 +270,7 @@ func (a *app) wrapErr(err error) int {
 			return exitCode
 		}
 	}
-	fmt.Fprintln(a.errw, err)
+	writeLine(a.errw, err)
 	return exitCode
 }
 
@@ -310,17 +336,6 @@ func (a *app) streamContext() (context.Context, context.CancelFunc) {
 	return ctx, func() {}
 }
 
-func (a *app) emit(v any) error {
-	switch a.opts.output {
-	case "json":
-		return emitJSON(a.out, v)
-	case "text":
-		return nil
-	default:
-		return fmt.Errorf("unsupported output mode %q", a.opts.output)
-	}
-}
-
 func emitJSON(out io.Writer, v any) error {
 	enc := json.NewEncoder(out)
 	enc.SetEscapeHTML(false)
@@ -342,7 +357,7 @@ func emitRootError(out io.Writer, errw io.Writer, output string, err error) {
 			return
 		}
 	}
-	fmt.Fprintln(errw, err)
+	writeLine(errw, err)
 }
 
 func emitStructuredError(w io.Writer, output string, err error, exitCode int) error {
@@ -438,7 +453,7 @@ func (a *app) cmdStatus() error {
 			"tls_enabled": resp.TlsEnabled,
 		})
 	}
-	fmt.Fprintf(a.out, "APiX engine: %s\tversion=%s\tproxy=%d\tgrpc=%d\ttls=%t\n",
+	writef(a.out, "APiX engine: %s\tversion=%s\tproxy=%d\tgrpc=%d\ttls=%t\n",
 		resp.Status, resp.Version, resp.ProxyPort, resp.GrpcPort, resp.TlsEnabled)
 	return nil
 }
@@ -470,13 +485,13 @@ func (a *app) cmdPlugins(args []string) error {
 		return emitJSON(a.out, items)
 	}
 	if len(resp.Plugins) == 0 {
-		fmt.Fprintln(a.out, "No plugins installed")
+		writeLine(a.out, "No plugins installed")
 		return nil
 	}
 	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tVERSION\tENABLED\tDESCRIPTION")
+	writeLine(tw, "NAME\tVERSION\tENABLED\tDESCRIPTION")
 	for _, p := range resp.Plugins {
-		fmt.Fprintf(tw, "%s\t%s\t%t\t%s\n", p.Name, p.Version, p.Enabled, p.Description)
+		writef(tw, "%s\t%s\t%t\t%s\n", p.Name, p.Version, p.Enabled, p.Description)
 	}
 	return tw.Flush()
 }
@@ -519,12 +534,24 @@ func (a *app) cmdHistoryList(args []string) error {
 	}
 	ctx, cancel := a.unaryContext()
 	defer cancel()
+	limit, err := int32FromInt(opts.limit, "limit")
+	if err != nil {
+		return err
+	}
+	offset, err := int32FromInt(opts.offset, "offset")
+	if err != nil {
+		return err
+	}
+	statusFilter, err := int32FromInt(opts.statusCode, "status")
+	if err != nil {
+		return err
+	}
 	stream, err := client.GetHistory(ctx, &apix.HistoryQuery{
-		Limit:        int32(opts.limit),
-		Offset:       int32(opts.offset),
+		Limit:        limit,
+		Offset:       offset,
 		UrlFilter:    opts.urlFilter,
 		MethodFilter: opts.method,
-		StatusFilter: int32(opts.statusCode),
+		StatusFilter: statusFilter,
 		SinceMs:      opts.sinceMs,
 	})
 	if err != nil {
@@ -538,17 +565,17 @@ func (a *app) cmdHistoryList(args []string) error {
 		return emitJSON(a.out, historyToJSON(items))
 	}
 	if len(items) == 0 {
-		fmt.Fprintln(a.out, "No history items")
+		writeLine(a.out, "No history items")
 		return nil
 	}
 	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
+	writeLine(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
 	for _, tx := range items {
 		statusCode := int32(0)
 		if tx.Response != nil {
 			statusCode = tx.Response.StatusCode
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
+		writef(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
 	}
 	return tw.Flush()
 }
@@ -568,7 +595,17 @@ func (a *app) cmdHistoryGet(id string, args []string) error {
 	offset := 0
 	for {
 		ctx, cancel := a.unaryContext()
-		stream, err := client.GetHistory(ctx, &apix.HistoryQuery{Limit: int32(opts.pageSize), Offset: int32(offset)})
+		limit, convErr := int32FromInt(opts.pageSize, "page-size")
+		if convErr != nil {
+			cancel()
+			return convErr
+		}
+		queryOffset, convErr := int32FromInt(offset, "offset")
+		if convErr != nil {
+			cancel()
+			return convErr
+		}
+		stream, err := client.GetHistory(ctx, &apix.HistoryQuery{Limit: limit, Offset: queryOffset})
 		if err != nil {
 			cancel()
 			return err
@@ -587,7 +624,7 @@ func (a *app) cmdHistoryGet(id string, args []string) error {
 					return emitJSON(a.out, historyItemToJSON(tx))
 				}
 				b, _ := json.MarshalIndent(historyItemToJSON(tx), "", "  ")
-				fmt.Fprintln(a.out, string(b))
+				writeLine(a.out, string(b))
 				return nil
 			}
 		}
@@ -617,7 +654,7 @@ func (a *app) cmdHistoryClear(args []string) error {
 	if a.opts.output == "json" {
 		return emitJSON(a.out, map[string]any{"cleared": true})
 	}
-	fmt.Fprintln(a.out, "History cleared")
+	writeLine(a.out, "History cleared")
 	return nil
 }
 
@@ -713,7 +750,7 @@ func (a *app) cmdWatch(args []string) error {
 				return err
 			}
 		} else {
-			fmt.Fprintf(a.out, "%s\t%s\t%s\n", msg.Id, msg.Method, msg.Url)
+			writef(a.out, "%s\t%s\t%s\n", msg.Id, msg.Method, msg.Url)
 		}
 		seen++
 		if opts.count > 0 && seen >= opts.count {
@@ -746,17 +783,17 @@ func (a *app) cmdBreakpoints(args []string) error {
 			return emitJSON(a.out, items)
 		}
 		if len(resp.Breakpoints) == 0 {
-			fmt.Fprintln(a.out, "No breakpoints configured")
+			writeLine(a.out, "No breakpoints configured")
 			return nil
 		}
 		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(tw, "ID\tENABLED\tMETHODS\tPATTERN\tLABEL")
+		writeLine(tw, "ID\tENABLED\tMETHODS\tPATTERN\tLABEL")
 		for _, bp := range resp.Breakpoints {
 			methods := strings.Join(bp.Methods, ",")
 			if methods == "" {
 				methods = "ALL"
 			}
-			fmt.Fprintf(tw, "%s\t%t\t%s\t%s\t%s\n", bp.Id, bp.Enabled, methods, bp.UrlPattern, bp.Label)
+			writef(tw, "%s\t%t\t%s\t%s\t%s\n", bp.Id, bp.Enabled, methods, bp.UrlPattern, bp.Label)
 		}
 		return tw.Flush()
 	case "add":
@@ -774,7 +811,7 @@ func (a *app) cmdBreakpoints(args []string) error {
 		if a.opts.output == "json" {
 			return emitJSON(a.out, map[string]any{"deleted": args[1]})
 		}
-		fmt.Fprintf(a.out, "Deleted breakpoint %s\n", args[1])
+		writef(a.out, "Deleted breakpoint %s\n", args[1])
 		return nil
 	case "enable", "disable":
 		if len(args) < 2 {
@@ -824,7 +861,7 @@ func (a *app) cmdBreakpointAdd(client apix.EngineClient, args []string) error {
 	if a.opts.output == "json" {
 		return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
 	}
-	fmt.Fprintf(a.out, "Added breakpoint %s\n", resp.Breakpoint.Id)
+	writef(a.out, "Added breakpoint %s\n", resp.Breakpoint.Id)
 	return nil
 }
 
@@ -854,7 +891,7 @@ func (a *app) cmdBreakpointToggle(client apix.EngineClient, id string, enabled b
 		if a.opts.output == "json" {
 			return emitJSON(a.out, breakpointToJSON(resp.Breakpoint))
 		}
-		fmt.Fprintf(a.out, "%s breakpoint %s\n", map[bool]string{true: "Enabled", false: "Disabled"}[enabled], id)
+		writef(a.out, "%s breakpoint %s\n", map[bool]string{true: "Enabled", false: "Disabled"}[enabled], id)
 		return nil
 	}
 	return status.Error(codes.NotFound, "breakpoint not found")
@@ -922,7 +959,7 @@ func (a *app) cmdPausedWatch(client apix.EngineClient, args []string) error {
 				return err
 			}
 		} else {
-			fmt.Fprintf(a.out, "%s\t%s\t%s\n", msg.RequestId, msg.Request.Method, msg.Request.Url)
+			writef(a.out, "%s\t%s\t%s\n", msg.RequestId, msg.Request.Method, msg.Request.Url)
 		}
 		seen++
 		if *count > 0 && seen >= *count {
@@ -1009,11 +1046,15 @@ func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
 	}
 	ctx, cancel := a.unaryContext()
 	defer cancel()
+	statusCode, err := int32FromInt(opts.statusCode, "status-code")
+	if err != nil {
+		return err
+	}
 	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{
 		RequestId: opts.requestID,
 		Action:    apix.ResumeAction_RESPOND,
 		ModifiedResponse: &apix.HttpResponse{
-			StatusCode: int32(opts.statusCode),
+			StatusCode: statusCode,
 			StatusText: opts.statusText,
 			Headers:    headers,
 			Body:       []byte(opts.body),
@@ -1028,7 +1069,7 @@ func (a *app) simpleResult(action, id string) error {
 	if a.opts.output == "json" {
 		return emitJSON(a.out, map[string]any{"result": action, "request_id": id})
 	}
-	fmt.Fprintf(a.out, "%s %s\n", strings.Title(action), id)
+	writef(a.out, "%s %s\n", capitalizeASCII(action), id)
 	return nil
 }
 
@@ -1117,19 +1158,19 @@ func (a *app) renderResponse(resp *apix.HttpResponse) error {
 			"body":        string(resp.Body),
 		})
 	}
-	fmt.Fprintf(a.out, "Status: %d %s\n", resp.StatusCode, resp.StatusText)
+	writef(a.out, "Status: %d %s\n", resp.StatusCode, resp.StatusText)
 	if len(resp.Headers) > 0 {
 		keys := make([]string, 0, len(resp.Headers))
 		for k := range resp.Headers {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
-		fmt.Fprintln(a.out, "Headers:")
+		writeLine(a.out, "Headers:")
 		for _, k := range keys {
-			fmt.Fprintf(a.out, "  %s: %s\n", k, resp.Headers[k])
+			writef(a.out, "  %s: %s\n", k, resp.Headers[k])
 		}
 	}
-	fmt.Fprintf(a.out, "\n%s\n", string(resp.Body))
+	writef(a.out, "\n%s\n", string(resp.Body))
 	return nil
 }
 
@@ -1141,8 +1182,8 @@ func (a *app) cmdCert(args []string) error {
 	if a.opts.output == "json" {
 		return emitJSON(a.out, info)
 	}
-	fmt.Fprintf(a.out, "CA cert: %s (%s)\n", info["cert_path"], info["cert_status"])
-	fmt.Fprintf(a.out, "CA key: %s (%s)\n", info["key_path"], info["key_status"])
+	writef(a.out, "CA cert: %s (%s)\n", info["cert_path"], info["cert_status"])
+	writef(a.out, "CA key: %s (%s)\n", info["key_path"], info["key_status"])
 	return nil
 }
 
@@ -1171,7 +1212,7 @@ func (a *app) runConfigCheck(cfgPath string) int {
 		if a.opts.output == "json" {
 			_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": true, "errors": []string{}})
 		} else {
-			fmt.Fprintf(a.out, "config ok: %s\n", cfgPath)
+			writef(a.out, "config ok: %s\n", cfgPath)
 		}
 		return 0
 	}
@@ -1186,7 +1227,7 @@ func (a *app) runConfigCheck(cfgPath string) int {
 		}
 		_ = emitJSON(a.out, map[string]any{"path": cfgPath, "valid": false, "errors": msgs})
 	} else {
-		fmt.Fprintln(a.errw, err.Error())
+		writeLine(a.errw, err.Error())
 	}
 	return 1
 }
@@ -1222,9 +1263,9 @@ func (a *app) cmdConfig(args []string) error {
 	if a.opts.output == "json" {
 		return emitJSON(a.out, payload)
 	}
-	fmt.Fprintf(a.out, "Path: %s\nValidation: %s\n", path, validation)
-	fmt.Fprintf(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
-	fmt.Fprintf(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
+	writef(a.out, "Path: %s\nValidation: %s\n", path, validation)
+	writef(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
+	writef(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
 	return nil
 }
 
@@ -1236,7 +1277,7 @@ func (a *app) cmdCompletion(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(a.out, script)
+	writeString(a.out, script)
 	return nil
 }
 
@@ -1415,38 +1456,38 @@ func (a *app) cmdSetup(args []string) error {
 	}
 
 	// Text mode: print guided walkthrough.
-	fmt.Fprintln(a.out, "=== APiX Setup ===")
-	fmt.Fprintln(a.out, "")
+	writeLine(a.out, "=== APiX Setup ===")
+	writeLine(a.out)
 
 	// Step 1: engine health
-	fmt.Fprintln(a.out, "Step 1 — Engine")
+	writeLine(a.out, "Step 1 — Engine")
 	if engineReachable {
-		fmt.Fprintf(a.out, "  ✓ Engine is running (HTTP proxy on port %s)\n", proxyPort)
+		writef(a.out, "  ✓ Engine is running (HTTP proxy on port %s)\n", proxyPort)
 	} else {
-		fmt.Fprintln(a.out, "  ✗ Engine is not reachable.")
-		fmt.Fprintln(a.out, "    Start it with:  apix-engine  (or press F5 in VS Code)")
+		writeLine(a.out, "  ✗ Engine is not reachable.")
+		writeLine(a.out, "    Start it with:  apix-engine  (or press F5 in VS Code)")
 		if engineErr != "" {
-			fmt.Fprintf(a.out, "    Error: %s\n", engineErr)
+			writef(a.out, "    Error: %s\n", engineErr)
 		}
 	}
-	fmt.Fprintln(a.out, "")
+	writeLine(a.out)
 
 	// Step 2: certificate
-	fmt.Fprintln(a.out, "Step 2 — CA Certificate")
+	writeLine(a.out, "Step 2 — CA Certificate")
 	if certReady {
-		fmt.Fprintf(a.out, "  ✓ CA certificate present at %s\n", cert["cert_path"])
+		writef(a.out, "  ✓ CA certificate present at %s\n", cert["cert_path"])
 	} else {
-		fmt.Fprintln(a.out, "  ✗ CA certificate not found.")
-		fmt.Fprintf(a.out, "    Expected at: %s\n", cert["cert_path"])
-		fmt.Fprintln(a.out, "    The engine generates the certificate on first start.")
-		fmt.Fprintln(a.out, "    To trust it for HTTPS interception, run:")
-		fmt.Fprintf(a.out, "      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s  # macOS\n", cert["cert_path"])
-		fmt.Fprintf(a.out, "      sudo cp %s /usr/local/share/ca-certificates/ && sudo update-ca-certificates          # Linux\n", cert["cert_path"])
+		writeLine(a.out, "  ✗ CA certificate not found.")
+		writef(a.out, "    Expected at: %s\n", cert["cert_path"])
+		writeLine(a.out, "    The engine generates the certificate on first start.")
+		writeLine(a.out, "    To trust it for HTTPS interception, run:")
+		writef(a.out, "      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s  # macOS\n", cert["cert_path"])
+		writef(a.out, "      sudo cp %s /usr/local/share/ca-certificates/ && sudo update-ca-certificates          # Linux\n", cert["cert_path"])
 	}
-	fmt.Fprintln(a.out, "")
+	writeLine(a.out)
 
 	// Step 3: capture profile instructions.
-	fmt.Fprintln(a.out, "Step 3 — First Capture (terminal profile)")
+	writeLine(a.out, "Step 3 — First Capture (terminal profile)")
 	if proxyPort == "" {
 		proxyPort = a.cfg.HTTPPort
 	}
@@ -1454,8 +1495,8 @@ func (a *app) cmdSetup(args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(a.out, "")
-	fmt.Fprintln(a.out, "Other profiles: run 'apix setup list' or 'apix setup <profile>'")
+	writeLine(a.out)
+	writeLine(a.out, "Other profiles: run 'apix setup list' or 'apix setup <profile>'")
 	return nil
 }
 
@@ -1478,9 +1519,9 @@ func (a *app) setupList() error {
 		}
 		return emitJSON(a.out, out)
 	}
-	fmt.Fprintln(a.out, "Available capture profiles:")
+	writeLine(a.out, "Available capture profiles:")
 	for _, p := range setupProfiles {
-		fmt.Fprintf(a.out, "  %-12s  %s\n", p.name, p.description)
+		writef(a.out, "  %-12s  %s\n", p.name, p.description)
 	}
 	return nil
 }
@@ -1498,8 +1539,8 @@ func (a *app) setupPrintProfile(name, proxyPort string) error {
 				"guide":       strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort),
 			})
 		}
-		fmt.Fprintf(a.out, "Profile: %s — %s\n\n", p.name, p.description)
-		fmt.Fprintln(a.out, strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort))
+		writef(a.out, "Profile: %s — %s\n\n", p.name, p.description)
+		writeLine(a.out, strings.ReplaceAll(p.guide, "{{.HTTPPort}}", proxyPort))
 		return nil
 	}
 	return fmt.Errorf("unknown profile %q — run 'apix setup list'", name)
@@ -1562,13 +1603,13 @@ func (a *app) cmdDoctor() error {
 		return nil
 	}
 
-	fmt.Fprintf(a.out, "Config: %s\n", configPath)
-	fmt.Fprintf(a.out, "Config validation: %s\n", configValidation)
-	fmt.Fprintf(a.out, "Cert ready: %v\n", cert["ready"])
+	writef(a.out, "Config: %s\n", configPath)
+	writef(a.out, "Config validation: %s\n", configValidation)
+	writef(a.out, "Cert ready: %v\n", cert["ready"])
 	if reachable, _ := engine["reachable"].(bool); reachable {
-		fmt.Fprintf(a.out, "Engine: reachable (%s)\n", engine["version"])
+		writef(a.out, "Engine: reachable (%s)\n", engine["version"])
 	} else {
-		fmt.Fprintf(a.out, "Engine: unreachable (%v)\n", engine["error"])
+		writef(a.out, "Engine: unreachable (%v)\n", engine["error"])
 	}
 	if reachable, _ := engine["reachable"].(bool); !reachable {
 		if msg, _ := engine["error"].(string); msg != "" {

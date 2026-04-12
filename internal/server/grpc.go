@@ -34,6 +34,13 @@ type EngineServer struct {
 	cfg          *config.Config
 }
 
+func int32FromInt(v int, field string) (int32, error) {
+	if v < -1<<31 || v > 1<<31-1 {
+		return 0, status.Errorf(codes.InvalidArgument, "%s out of range for int32", field)
+	}
+	return int32(v), nil
+}
+
 // NewEngineServer wires the gRPC server to all sub-systems.
 func NewEngineServer(eng *engine.Engine, re *replay.Engine, cfg *config.Config) *EngineServer {
 	return &EngineServer{
@@ -54,11 +61,19 @@ func (s *EngineServer) GetStatus(ctx context.Context, _ *apix.StatusRequest) (*a
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid grpc_port %q: %v", s.cfg.GRPCPort, err)
 	}
+	httpPort32, err := int32FromInt(httpPort, "http_port")
+	if err != nil {
+		return nil, err
+	}
+	grpcPort32, err := int32FromInt(grpcPort, "grpc_port")
+	if err != nil {
+		return nil, err
+	}
 	return &apix.StatusResponse{
 		Status:     "OK",
 		Version:    version.Version,
-		ProxyPort:  int32(httpPort),
-		GrpcPort:   int32(grpcPort),
+		ProxyPort:  httpPort32,
+		GrpcPort:   grpcPort32,
 		TlsEnabled: s.cfg.TLSEnabled,
 	}, nil
 }
@@ -289,7 +304,7 @@ func (s *EngineServer) ReplayRequest(ctx context.Context, req *apix.ReplaySpec) 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "replay: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -301,8 +316,12 @@ func (s *EngineServer) ReplayRequest(ctx context.Context, req *apix.ReplaySpec) 
 			hdrs[k] = vv[0]
 		}
 	}
+	statusCode, err := int32FromInt(resp.StatusCode, "replay status code")
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "replay: %v", err)
+	}
 	return &apix.HttpResponse{
-		StatusCode: int32(resp.StatusCode),
+		StatusCode: statusCode,
 		StatusText: resp.Status,
 		Headers:    hdrs,
 		Body:       body,
@@ -355,8 +374,12 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 			for k, v := range resp.Headers {
 				respHdrs[k] = v
 			}
+			statusCode, err := int32FromInt(resp.StatusCode, "response status code")
+			if err != nil {
+				return status.Errorf(codes.Internal, "list transactions: %v", err)
+			}
 			tx.Response = &apix.HttpResponse{
-				StatusCode: int32(resp.StatusCode),
+				StatusCode: statusCode,
 				StatusText: resp.StatusText,
 				Headers:    respHdrs,
 				Body:       resp.Body,
@@ -442,7 +465,7 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 	if err != nil {
 		logging.Fatalf(ctx, "gRPC listen on %s: %v", addr, err)
 	}
-	defer lis.Close()
+	defer func() { _ = lis.Close() }()
 
 	grpcServer := NewGRPCServer(cfg)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
@@ -456,7 +479,7 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 
 	go func() {
 		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		stopped := make(chan struct{})
 		go func() {

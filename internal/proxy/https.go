@@ -59,7 +59,7 @@ func (p *TLSProxy) CACertPEM() ([]byte, error) {
 
 // HandleConn performs MITM interception on a raw TCP connection destined for host.
 func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Strip port from host for cert generation (SNI requires just the hostname).
 	hostname := host
@@ -81,7 +81,7 @@ func (p *TLSProxy) HandleConn(ctx context.Context, conn net.Conn, host string) {
 		logging.Errorf(ctx, "tls proxy: handshake for %s: %v", hostname, err)
 		return
 	}
-	defer tlsConn.Close()
+	defer func() { _ = tlsConn.Close() }()
 
 	br := bufio.NewReader(tlsConn)
 
@@ -134,7 +134,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 			writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body too large: %v", err))
 			return
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
@@ -211,7 +211,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, r *http.Req
 		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", err))
 		return
 	}
-	defer upResp.Body.Close()
+	defer func() { _ = upResp.Body.Close() }()
 
 	// Apply the same body size limit to response bodies
 	upResp.Body = http.MaxBytesReader(nil, upResp.Body, maxBodyBytes)

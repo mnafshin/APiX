@@ -52,7 +52,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	if req != nil {
 		// Prefer storing the original headers captured before plugins modified them.
 		var hdrSrc http.Header
-		if tx.OriginalRequestHeaders != nil && len(tx.OriginalRequestHeaders) > 0 {
+		if len(tx.OriginalRequestHeaders) > 0 {
 			hdrSrc = tx.OriginalRequestHeaders
 		} else if req.Raw != nil {
 			hdrSrc = req.Raw.Header

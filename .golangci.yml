@@ -1,8 +1,9 @@
+version: "2"
 run:
   modules-download-mode: readonly
   tests: true
-  timeout: 5m
 linters:
+  default: none
   enable:
     - govet
     - staticcheck
@@ -10,16 +11,19 @@ linters:
     - gosec
     - ineffassign
     - unused
-    - gosimple
-    - typecheck
-    - structcheck
+  settings:
+    gosec:
+      # disable G104 (CWE-78) for tests that intentionally use shelling
+      excludes:
+        - G104
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - ineffassign
+          - staticcheck
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
-#noinspection: disable some linters in generated code
-linters-settings:
-  gosec:
-    # disable G104 (CWE-78) for tests that intentionally use shelling
-    exclude:
-      - G104

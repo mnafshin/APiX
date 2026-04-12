@@ -134,7 +134,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 	if err != nil {
 		return nil, nil, fmt.Errorf("list transactions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var reqs []*RequestRecord
 	var resps []*ResponseRecord
@@ -229,7 +229,7 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list breakpoints: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var bps []*BreakpointRecord
 	for rows.Next() {

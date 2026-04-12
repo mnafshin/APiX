@@ -106,6 +106,7 @@ func LoadConfig(path string) *Config {
 		SlowlogThresholdMs: 1000,
 	}
 
+	// #nosec G304 -- APiX intentionally loads a user-selected config path.
 	file, err := os.ReadFile(path)
 	if err != nil {
 		logging.Infof(context.Background(), "Config file not found (%s), using defaults: %v", path, err)

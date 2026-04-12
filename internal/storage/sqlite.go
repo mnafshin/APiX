@@ -41,33 +41,33 @@ func Open(path string) (*DB, error) {
 
 	// Enable WAL mode for better concurrent read performance.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enable WAL: %w", err)
 	}
 	// Improve write performance and avoid excessive fsyncs while remaining
 	// reasonably durable.
 	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("set synchronous: %w", err)
 	}
 
 	// Wait briefly for locks instead of failing immediately. This reduces
 	// transient SQLITE_BUSY errors under moderate contention.
 	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("set busy timeout: %w", err)
 	}
 
 	// Enforce foreign key constraints.
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("enable foreign keys: %w", err)
 	}
 
 	// Apply all DDL statements from schema.go.
 	for _, ddl := range AllTables {
 		if _, err := db.Exec(ddl); err != nil {
-			db.Close()
+			_ = db.Close()
 			return nil, fmt.Errorf("apply schema: %w", err)
 		}
 	}
