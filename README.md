@@ -396,7 +396,6 @@ This ordering is intentional: first make the CLI contract solid, then make it us
 | Version | Status | Release Date | Support Until | Notes |
 |---------|--------|--------------|---------------|-------|
 | v1.0.0 | **Current** | Apr 8, 2026 | Apr 8, 2027 (12 months LTS) | Production ready, all P0 fixes verified |
-| v0.2 | End-of-Life | Mar 1, 2026 | Dec 31, 2025 | Upgrade to v1.0.0 recommended |
 
 ### System Requirements
 
