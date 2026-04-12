@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -319,4 +321,53 @@ func mustRequest(t *testing.T, method, rawURL string) *http.Request {
 		t.Fatalf("http.NewRequest: %v", err)
 	}
 	return req
+}
+
+func TestCLIOperability(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "secret-token")
+
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "ca.pem")
+	keyPath := filepath.Join(dir, "ca-key.pem")
+	if err := os.WriteFile(certPath, []byte("cert"), 0o600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, []byte("key"), 0o600); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	cfgPath := filepath.Join(dir, "config.yaml")
+	cfgBody := fmt.Sprintf("grpc_port: \"%d\"\nca_cert_path: %q\nca_key_path: %q\nauth_token: %q\n", stack.port, certPath, keyPath, stack.token)
+	if err := os.WriteFile(cfgPath, []byte(cfgBody), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	exit, out, errOut := runCLI(t, stack.args("--config", cfgPath, "--output", "json", "config", "show")...)
+	if exit != 0 {
+		t.Fatalf("config show exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"path":`) {
+		t.Fatalf("config show output=%s", out)
+	}
+
+	exit, out, errOut = runCLI(t, stack.args("--config", cfgPath, "--output", "json", "cert", "status")...)
+	if exit != 0 {
+		t.Fatalf("cert status exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"ready":true`) {
+		t.Fatalf("cert status output=%s", out)
+	}
+
+	exit, out, errOut = runCLI(t, stack.args("--config", cfgPath, "--token", stack.token, "--output", "json", "doctor")...)
+	if exit != 0 {
+		t.Fatalf("doctor exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"reachable":true`) {
+		t.Fatalf("doctor output=%s", out)
+	}
+
+	exit, out, errOut = runCLI(t, "completion", "bash")
+	if exit != 0 || !strings.Contains(out, "complete -F _apix apix") {
+		t.Fatalf("completion exit=%d err=%s out=%s", exit, errOut, out)
+	}
 }

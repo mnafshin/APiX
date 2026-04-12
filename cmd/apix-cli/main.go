@@ -156,6 +156,10 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		fmt.Fprintln(errw, "  paused watch|forward|drop|respond")
 		fmt.Fprintln(errw, "  send")
 		fmt.Fprintln(errw, "  replay")
+		fmt.Fprintln(errw, "  cert status")
+		fmt.Fprintln(errw, "  config show")
+		fmt.Fprintln(errw, "  completion <bash|zsh|fish>")
+		fmt.Fprintln(errw, "  doctor")
 		fmt.Fprintln(errw, "  help")
 		fmt.Fprintln(errw, "")
 		fs.PrintDefaults()
@@ -198,6 +202,14 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return app.wrapErr(app.cmdSend(fs.Args()[1:]))
 	case "replay":
 		return app.wrapErr(app.cmdReplay(fs.Args()[1:]))
+	case "cert":
+		return app.wrapErr(app.cmdCert(fs.Args()[1:]))
+	case "config":
+		return app.wrapErr(app.cmdConfig(fs.Args()[1:]))
+	case "completion":
+		return app.wrapErr(app.cmdCompletion(fs.Args()[1:]))
+	case "doctor":
+		return app.wrapErr(app.cmdDoctor())
 	case "help":
 		fs.Usage()
 		return 0
@@ -1035,6 +1047,209 @@ func (a *app) renderResponse(resp *apix.HttpResponse) error {
 		}
 	}
 	fmt.Fprintf(a.out, "\n%s\n", string(resp.Body))
+	return nil
+}
+
+func (a *app) cmdCert(args []string) error {
+	if len(args) == 0 || args[0] != "status" {
+		return fmt.Errorf("usage: cert status")
+	}
+	info := certInfo(a.cfg)
+	if a.opts.output == "json" {
+		return emitJSON(a.out, info)
+	}
+	fmt.Fprintf(a.out, "CA cert: %s (%s)\n", info["cert_path"], info["cert_status"])
+	fmt.Fprintf(a.out, "CA key: %s (%s)\n", info["key_path"], info["key_status"])
+	return nil
+}
+
+func certInfo(cfg *config.Config) map[string]any {
+	certExists := fileExists(cfg.CACertPath)
+	keyExists := fileExists(cfg.CAKeyPath)
+	return map[string]any{
+		"cert_path":   cfg.CACertPath,
+		"cert_status": map[bool]string{true: "present", false: "missing"}[certExists],
+		"key_path":    cfg.CAKeyPath,
+		"key_status":  map[bool]string{true: "present", false: "missing"}[keyExists],
+		"ready":       certExists && keyExists,
+	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func (a *app) cmdConfig(args []string) error {
+	if len(args) == 0 || args[0] != "show" {
+		return fmt.Errorf("usage: config show")
+	}
+	path := a.opts.configPath
+	if path == "" {
+		path = config.DefaultPath()
+	}
+	validation := "ok"
+	if err := a.cfg.Validate(); err != nil {
+		validation = err.Error()
+	}
+	payload := map[string]any{
+		"path":       path,
+		"validation": validation,
+		"config": map[string]any{
+			"http_port":             a.cfg.HTTPPort,
+			"grpc_port":             a.cfg.GRPCPort,
+			"grpc_bind_address":     a.cfg.GRPCBindAddress,
+			"db_path":               a.cfg.DBPath,
+			"ca_cert_path":          a.cfg.CACertPath,
+			"ca_key_path":           a.cfg.CAKeyPath,
+			"tls_enabled":           a.cfg.TLSEnabled,
+			"auth_token_set":        a.cfg.AuthToken != "",
+			"max_body_size_mb":      a.cfg.MaxBodySizeMB,
+			"replay_skip_tls_verify": a.cfg.ReplaySkipTLSVerify,
+		},
+	}
+	if a.opts.output == "json" {
+		return emitJSON(a.out, payload)
+	}
+	fmt.Fprintf(a.out, "Path: %s\nValidation: %s\n", path, validation)
+	fmt.Fprintf(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
+	fmt.Fprintf(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
+	return nil
+}
+
+func (a *app) cmdCompletion(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: completion <bash|zsh|fish>")
+	}
+	script, err := completionScript(args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(a.out, script)
+	return nil
+}
+
+func completionScript(shell string) (string, error) {
+	const bash = `# bash completion for apix
+_apix() {
+  local cur prev words cword
+  _init_completion || return
+  local commands="status plugins history watch breakpoints paused send replay cert config completion doctor help"
+  local subcommands="list get clear add delete enable disable watch forward drop respond show status"
+  COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
+}
+complete -F _apix apix
+`
+	const zsh = `#compdef apix
+_apix() {
+  local -a commands
+  commands=(
+    'status:Get engine status'
+    'plugins:Plugin commands'
+    'history:History commands'
+    'watch:Watch traffic'
+    'breakpoints:Breakpoint commands'
+    'paused:Paused request commands'
+    'send:Send a raw request'
+    'replay:Replay a stored request'
+    'cert:Certificate commands'
+    'config:Configuration commands'
+    'completion:Generate shell completion'
+    'doctor:Run diagnostics'
+    'help:Show help'
+  )
+  _describe 'command' commands
+}
+_apix "$@"
+`
+	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send replay cert config completion doctor help"
+`
+	switch shell {
+	case "bash":
+		return bash, nil
+	case "zsh":
+		return zsh, nil
+	case "fish":
+		return fish, nil
+	default:
+		return "", fmt.Errorf("unsupported shell %q", shell)
+	}
+}
+
+func (a *app) cmdDoctor() error {
+	configPath := a.opts.configPath
+	if configPath == "" {
+		configPath = config.DefaultPath()
+	}
+	configValidation := "ok"
+	if err := a.cfg.Validate(); err != nil {
+		configValidation = err.Error()
+	}
+	cert := certInfo(a.cfg)
+	engine := map[string]any{
+		"reachable": false,
+	}
+	client, connErr := a.clientConn()
+	if connErr == nil {
+		ctx, cancel := a.unaryContext()
+		resp, err := client.GetStatus(ctx, &apix.StatusRequest{})
+		cancel()
+		if err == nil {
+			engine = map[string]any{
+				"reachable":    true,
+				"status":       resp.Status,
+				"version":      resp.Version,
+				"proxy_port":   resp.ProxyPort,
+				"grpc_port":    resp.GrpcPort,
+				"tls_enabled":  resp.TlsEnabled,
+				"connect_host": a.opts.host,
+			}
+		} else {
+			engine["error"] = err.Error()
+		}
+	} else {
+		engine["error"] = connErr.Error()
+	}
+
+	payload := map[string]any{
+		"config_path":       configPath,
+		"config_validation": configValidation,
+		"cert":              cert,
+		"engine":            engine,
+	}
+	if a.opts.output == "json" {
+		if err := emitJSON(a.out, payload); err != nil {
+			return err
+		}
+		if reachable, _ := engine["reachable"].(bool); !reachable {
+			if msg, _ := engine["error"].(string); msg != "" {
+				return status.Error(codes.Unavailable, msg)
+			}
+			return status.Error(codes.Unavailable, "engine unreachable")
+		}
+		if configValidation != "ok" {
+			return errors.New(configValidation)
+		}
+		return nil
+	}
+
+	fmt.Fprintf(a.out, "Config: %s\n", configPath)
+	fmt.Fprintf(a.out, "Config validation: %s\n", configValidation)
+	fmt.Fprintf(a.out, "Cert ready: %v\n", cert["ready"])
+	if reachable, _ := engine["reachable"].(bool); reachable {
+		fmt.Fprintf(a.out, "Engine: reachable (%s)\n", engine["version"])
+	} else {
+		fmt.Fprintf(a.out, "Engine: unreachable (%v)\n", engine["error"])
+	}
+	if reachable, _ := engine["reachable"].(bool); !reachable {
+		if msg, _ := engine["error"].(string); msg != "" {
+			return status.Error(codes.Unavailable, msg)
+		}
+		return status.Error(codes.Unavailable, "engine unreachable")
+	}
+	if configValidation != "ok" {
+		return errors.New(configValidation)
+	}
 	return nil
 }
 

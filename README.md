@@ -14,7 +14,7 @@
 
 ## What is APiX?
 
-APiX is an API debugging toolkit that runs as a VS Code extension backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behaviour with plugins — all without leaving your editor. The next major migration is a first-class CLI built on the same gRPC engine API.
+APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behavior with plugins. It now ships both a VS Code extension and a contract-first CLI on the same gRPC engine API.
 
 ## Features
 
@@ -329,13 +329,13 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - [ ] Additional logging/debugging options
 
 ### v1.1 (Minor - ~4-6 weeks)
-- [ ] Contract-first CLI foundation (`cmd/apix-cli`, shared transport/auth config, stable flags)
-- [ ] AI-ready output contracts (`--output json`, NDJSON streams, stable exit codes)
-- [ ] Initial CLI read flows (`version`, `status`, `plugins`)
+- [x] Contract-first CLI foundation (`cmd/apix-cli`, shared transport/auth config, stable flags)
+- [x] AI-ready output contracts (`--output json`, NDJSON streams, stable exit codes)
+- [x] Initial CLI read flows (`status`, `plugins`, `history`, `watch`)
 
 ### v1.2 (Minor - ~6-8 weeks)
-- [ ] Core CLI terminal workflows (`history`, `watch`, breakpoints, paused request actions, replay/send)
-- [ ] CLI operator tooling (`doctor`, certificate status/help, shell completion)
+- [x] Core CLI terminal workflows (`history`, `watch`, breakpoints, paused request actions, replay/send)
+- [x] CLI operator tooling (`doctor`, certificate status/help, shell completion)
 - [ ] History management and export/import foundations
 - [ ] Breakpoint conditions (match on headers, body, status code)
 - [ ] HAR export/import (session persistence)
@@ -368,7 +368,7 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 
 ## CLI Direction
 
-APiX will keep **gRPC as the engine control plane** for both the VS Code extension and the upcoming CLI. That remains the right backend boundary: one API surface for streaming, auth, remote access, and feature parity.
+APiX keeps **gRPC as the engine control plane** for both the VS Code extension and the CLI. That remains the right backend boundary: one API surface for streaming, auth, remote access, and feature parity.
 
 The CLI will add a separate **user contract**, not a separate backend protocol. The first milestone is a terminal workflow that is:
 
@@ -382,9 +382,9 @@ If browser-native or third-party HTTP integrations become a primary requirement 
 
 APiX's recommended rollout sequence is:
 
-1. **CLI foundation** — build `cmd/apix-cli`, shared transport/auth config, JSON output, NDJSON streams, and stable exit codes
-2. **Core terminal workflows** — add `history`, `watch`, breakpoint management, paused request actions, `replay`, `send`, and operator tooling
-3. **Agent-ready workflows** — add declarative rules, request composition, import/export portability, and MCP integration
+1. **CLI foundation** — shipped with shared transport/auth config, JSON output, NDJSON streams, and stable exit codes
+2. **Core terminal workflows** — shipped with `history`, `watch`, breakpoint management, paused request actions, `replay`, `send`, and operator tooling
+3. **Agent-ready workflows** — next: add declarative rules, request composition, import/export portability, and MCP integration
 4. **Protocol expansion** — add WebSocket, broader HTTP/2 visibility, and staged HTTP/3 support
 
 This ordering is intentional: first make the CLI contract solid, then make it useful without the extension, then make it automatable for agents, and only then broaden protocol coverage.
@@ -451,7 +451,7 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 
 ### High memory usage
 - Clear traffic history: APiX UI → right-click → Clear History
-- CLI support for history management is planned as part of the upcoming CLI migration
+- CLI support for history management is available via `apix history list|get|clear`
 - Reduce retention: set `history_max_size_mb` in config.yaml
 
 ### Certificate validation errors
@@ -479,4 +479,3 @@ APiX exposes Prometheus-format metrics at `/metrics` when metrics are enabled. T
 ## Project status and claims
 
 The README aims to represent shipped functionality versus roadmap items clearly. Shipped features are those implemented in the default branch; roadmap items are noted in docs/ and the issue tracker. For an up-to-date list of implemented features, see the "Features" section below and check the issue tracker for open RFCs and roadmap items.
-
