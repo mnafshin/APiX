@@ -75,10 +75,21 @@ jobs:
           name: vsix
           path: apix-vscode/*.vsix
 
+  smoke:
+    name: Smoke built engine and CLI flow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Run release smoke
+        run: make smoke
+
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-binaries, build-extension]
+    needs: [build-binaries, build-extension, smoke]
     steps:
       - uses: actions/download-artifact@v4
         with:
