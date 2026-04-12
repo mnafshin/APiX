@@ -1,0 +1,44 @@
+{
+  "transcript": [
+    {
+      "role": "user",
+      "type": "tool_call",
+      "tool": "set_breakpoint",
+      "arguments": { "url_pattern": "/api/checkout", "method": "POST" }
+    },
+    {
+      "role": "assistant",
+      "type": "tool_result",
+      "tool": "set_breakpoint",
+      "content": {
+        "status": "ok",
+        "rule_id": "bp-001",
+        "url_pattern": "/api/checkout",
+        "method": "POST",
+        "enabled": true
+      }
+    },
+    {
+      "role": "user",
+      "type": "tool_call",
+      "tool": "resume_request",
+      "arguments": {
+        "request_id": "req-001",
+        "action": "respond",
+        "response_status": 200,
+        "response_body": "{\"order_id\": \"test-order\"}"
+      }
+    },
+    {
+      "role": "assistant",
+      "type": "tool_result",
+      "tool": "resume_request",
+      "content": {
+        "status": "ok",
+        "action_taken": "respond",
+        "response_status": 200
+      }
+    }
+  ],
+  "metadata": { "version": "1", "workflow": "breakpoint_and_respond" }
+}

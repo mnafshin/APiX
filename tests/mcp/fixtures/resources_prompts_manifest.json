@@ -1,0 +1,51 @@
+{
+  "resources": [
+    {
+      "uri": "apix://history",
+      "name": "Captured Traffic History",
+      "description": "All HTTP transactions captured by the APiX proxy, stored in SQLite.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "apix://breakpoints",
+      "name": "Breakpoint Rules",
+      "description": "Active breakpoint rules that pause matching requests.",
+      "mimeType": "application/json"
+    },
+    {
+      "uri": "apix://plugins",
+      "name": "Loaded Plugins",
+      "description": "Currently loaded APiX plugins and their configurations.",
+      "mimeType": "application/json"
+    }
+  ],
+  "prompts": [
+    {
+      "name": "debug_api",
+      "description": "Guide the agent through a complete API debugging session: capture traffic, inspect a request, and suggest fixes.",
+      "arguments": [
+        {
+          "name": "target_url",
+          "description": "The base URL of the API to debug.",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "replay_and_compare",
+      "description": "Replay a captured request with modified parameters and compare the responses.",
+      "arguments": [
+        {
+          "name": "request_id",
+          "description": "ID of the request to replay.",
+          "required": true
+        },
+        {
+          "name": "override_body",
+          "description": "New request body JSON to use in the replay.",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
