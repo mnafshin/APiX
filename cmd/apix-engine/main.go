@@ -65,6 +65,34 @@ func main() {
 		}()
 	}
 
+	// Always start the health endpoint (unless disabled via empty health_port).
+	if cfg.HealthPort != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mux := http.NewServeMux()
+			mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`{"status":"ok"}`))
+			})
+			addr := ":" + cfg.HealthPort
+			srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+			go func() {
+				<-ctx.Done()
+				shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if err := srv.Shutdown(shutCtx); err != nil {
+					logging.Errorf(ctx, "health server shutdown: %v", err)
+				}
+			}()
+			logging.Infof(ctx, "health endpoint listening on %s/healthz", addr)
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logging.Errorf(ctx, "health server error: %v", err)
+			}
+		}()
+	}
+
 	// If invoked with --config-check bail out after validating the config.
 	if *configCheck {
 		if err := cfg.Validate(); err != nil {
@@ -86,6 +114,11 @@ func main() {
 			logging.Warnf(ctx, "close database: %v", err)
 		}
 	}()
+
+	// Start periodic VACUUM when configured (default: every 24 h).
+	if cfg.VacuumIntervalHours > 0 {
+		db.StartPeriodicVacuum(ctx, time.Duration(cfg.VacuumIntervalHours)*time.Hour)
+	}
 
 	// 3. Create CertAuthority.
 	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)

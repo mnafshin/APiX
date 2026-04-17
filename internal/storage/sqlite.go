@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"time"
@@ -78,4 +79,25 @@ func Open(path string) (*DB, error) {
 // Close closes the underlying database connection.
 func (d *DB) Close() error {
 	return d.db.Close()
+}
+
+// StartPeriodicVacuum runs VACUUM in a background goroutine on the given interval.
+// For in-memory databases (:memory:) it is a no-op because VACUUM has no effect
+// there. The goroutine stops when ctx is cancelled.
+func (d *DB) StartPeriodicVacuum(ctx context.Context, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if _, err := d.db.ExecContext(ctx, "VACUUM"); err != nil && ctx.Err() == nil {
+					// Log but do not crash — VACUUM is best-effort maintenance.
+					_ = err
+				}
+			}
+		}
+	}()
 }
