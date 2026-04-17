@@ -17,7 +17,12 @@ type Config struct {
 	CACertPath                       string `yaml:"ca_cert_path"`
 	CAKeyPath                        string `yaml:"ca_key_path"`
 	TLSEnabled                       bool   `yaml:"tls_enabled"`
-	AuthToken                        string `yaml:"auth_token"`
+	// GRPCCertPath and GRPCKeyPath are the TLS certificate and private key for
+	// the gRPC server when tls_enabled is true. These are separate from the MITM
+	// proxy CA cert/key (CACertPath/CAKeyPath). Required when tls_enabled is true.
+	GRPCCertPath string `yaml:"grpc_cert_path"`
+	GRPCKeyPath  string `yaml:"grpc_key_path"`
+	AuthToken    string `yaml:"auth_token"`
 	MaxIdleConnsPerHost              int    `yaml:"max_idle_conns_per_host"`
 	IdleConnTimeoutSec               int    `yaml:"idle_conn_timeout_sec"`
 	DialTimeoutSec                   int    `yaml:"dial_timeout_sec"`
