@@ -7,7 +7,7 @@
 ![Release](https://img.shields.io/badge/release-v1.0.0-green.svg)
 ![Build](https://github.com/mnafshin/apix/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
-![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)
+![Go](https://img.shields.io/badge/go-1.24+-00ADD8.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.0+-3178C6.svg)
 ![VS Code](https://img.shields.io/badge/vscode-%5E1.85-007ACC.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
@@ -27,7 +27,7 @@ APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP
 - 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
 - 💾 **SQLite persistent storage** — traffic history survives restarts
 - 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
-- 🌐 **Works in browser** (vscode.dev) via remote engine over TLS
+- 🌐 **Browser support** (vscode.dev) via remote engine over TLS — _planned, see #11_
 - 📦 **Cross-platform** — macOS, Linux, Windows
 
 ## Quick Start
@@ -69,10 +69,12 @@ npx vsce package
 code --install-extension apix-1.0.0.vsix
 ```
 
-**Option 3: Docker**
+**Option 3: Docker** _(image not yet published — build from source below)_
 
 ```bash
-docker run -p 8080:8080 -p 9090:9090 mnafshin/apix:1.0.0
+# Build the image locally:
+docker build -t apix:local -f build/Dockerfile .
+docker run -p 8080:8080 -p 9090:9090 apix:local
 ```
 
 **Option 4: Build from Source**
