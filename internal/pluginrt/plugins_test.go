@@ -220,3 +220,75 @@ func TestRunResponseChain(t *testing.T) {
 		t.Error("resp-plugin-2 header not applied")
 	}
 }
+
+func TestRunRequest_PanicRecovery(t *testing.T) {
+rt := NewRuntime()
+panicPlugin := &mockPlugin{
+name: "panic-request-plugin",
+onRequestFn: func(_ context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+panic("simulated plugin panic in OnRequest")
+},
+}
+if err := rt.Register(panicPlugin); err != nil {
+t.Fatalf("Register: %v", err)
+}
+
+req := newProxyRequest("GET", "https://example.com")
+_, err := rt.RunRequest(context.Background(), req)
+if err == nil {
+t.Fatal("expected error from panic recovery, got nil")
+}
+if !strings.Contains(err.Error(), "panic") {
+t.Errorf("expected error to contain 'panic', got: %v", err)
+}
+}
+
+func TestRunResponse_PanicRecovery(t *testing.T) {
+rt := NewRuntime()
+panicPlugin := &mockPlugin{
+name: "panic-response-plugin",
+onResponseFn: func(_ context.Context, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (*plugins.ProxyResponse, error) {
+panic("simulated plugin panic in OnResponse")
+},
+}
+if err := rt.Register(panicPlugin); err != nil {
+t.Fatalf("Register: %v", err)
+}
+
+req := newProxyRequest("GET", "https://example.com")
+resp := newProxyResponse(200)
+_, err := rt.RunResponse(context.Background(), req, resp)
+if err == nil {
+t.Fatal("expected error from panic recovery, got nil")
+}
+if !strings.Contains(err.Error(), "panic") {
+t.Errorf("expected error to contain 'panic', got: %v", err)
+}
+}
+
+func TestRunRequest_PanicDoesNotAffectOtherPlugins_ShortCircuits(t *testing.T) {
+rt := NewRuntime()
+panicPlugin := &mockPlugin{
+name: "panic-plugin",
+onRequestFn: func(_ context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+panic("crash")
+},
+}
+afterPlugin := &mockPlugin{
+name: "after-plugin",
+onRequestFn: func(_ context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+clone := req
+clone.Headers.Set("X-After", "true")
+return clone, nil
+},
+}
+_ = rt.Register(panicPlugin)
+_ = rt.Register(afterPlugin)
+
+req := newProxyRequest("GET", "https://example.com")
+_, err := rt.RunRequest(context.Background(), req)
+// Panic in first plugin should short-circuit; error returned
+if err == nil {
+t.Fatal("expected error from panic")
+}
+}
