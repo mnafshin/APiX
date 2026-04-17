@@ -49,6 +49,10 @@ type Config struct {
 	// that always serves GET /healthz → 200 {"status":"ok"}. Set to "" to
 	// disable. Default: "9092".
 	HealthPort         string `yaml:"health_port"`
+	// VacuumIntervalHours is how often (in hours) to run SQLite VACUUM to
+	// reclaim free pages and defragment the database. 0 disables periodic
+	// VACUUM. Default: 24 (once per day).
+	VacuumIntervalHours int `yaml:"vacuum_interval_hours"`
 	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
 
 	// Plugin paths — each entry is a path to a plugin shared library or
@@ -117,10 +121,11 @@ func LoadConfig(path string) *Config {
 		MaxBodySizeMB:                    32,
 		BreakpointPauseTimeoutSec:        120,
 		// Observability defaults
-		MetricsEnabled:     false,
-		MetricsPort:        "9091",
-		HealthPort:         "9092",
-		SlowlogThresholdMs: 1000,
+		MetricsEnabled:      false,
+		MetricsPort:         "9091",
+		HealthPort:          "9092",
+		VacuumIntervalHours: 24,
+		SlowlogThresholdMs:  1000,
 	}
 
 	// #nosec G304 -- APiX intentionally loads a user-selected config path.
