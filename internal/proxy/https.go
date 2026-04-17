@@ -80,6 +80,7 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{*cert},
+		MinVersion:   tls.VersionTLS12,
 	}
 	tlsConn := tls.Server(&bufferedConn{Conn: conn, reader: br}, tlsCfg)
 	if err := tlsConn.Handshake(); err != nil {

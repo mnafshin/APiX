@@ -62,4 +62,9 @@ var AllTables = []string{
 	CreateBreakpointsTable,
 	CreatePluginsTable,
 	CreateWebSocketFramesTable,
+	// Indexes — created after tables so IF NOT EXISTS is safe on re-open.
+	`CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_requests_method    ON requests(method)`,
+	`CREATE INDEX IF NOT EXISTS idx_requests_url       ON requests(url)`,
+	`CREATE INDEX IF NOT EXISTS idx_ws_frames_txid     ON ws_frames(transaction_id)`,
 }

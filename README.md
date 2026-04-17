@@ -7,7 +7,7 @@
 ![Release](https://img.shields.io/badge/release-v1.0.0-green.svg)
 ![Build](https://github.com/mnafshin/apix/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
-![Go](https://img.shields.io/badge/go-1.25+-00ADD8.svg)
+![Go](https://img.shields.io/badge/go-1.24+-00ADD8.svg)
 ![TypeScript](https://img.shields.io/badge/typescript-5.0+-3178C6.svg)
 ![VS Code](https://img.shields.io/badge/vscode-%5E1.85-007ACC.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
@@ -27,7 +27,7 @@ APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP
 - 🧩 **Plugin system** — HeaderEditor, MockResponse, EnvSubst (and custom)
 - 💾 **SQLite persistent storage** — traffic history survives restarts
 - 🖥️ **VS Code extension** — traffic inspector and breakpoints view in the sidebar
-- 🌐 **Works in browser** (vscode.dev) via remote engine over TLS
+- 🌐 **Browser support** (vscode.dev) via remote engine over TLS — _planned, see #11_
 - 📦 **Cross-platform** — macOS, Linux, Windows
 
 ## Quick Start
@@ -69,10 +69,12 @@ npx vsce package
 code --install-extension apix-1.0.0.vsix
 ```
 
-**Option 3: Docker**
+**Option 3: Docker** _(image not yet published — build from source below)_
 
 ```bash
-docker run -p 8080:8080 -p 9090:9090 mnafshin/apix:1.0.0
+# Build the image locally:
+docker build -t apix:local -f build/Dockerfile .
+docker run -p 8080:8080 -p 9090:9090 apix:local
 ```
 
 **Option 4: Build from Source**
@@ -444,23 +446,25 @@ This ordering is intentional: first make the CLI contract solid, then make it us
 
 | Version | Status | Release Date | Support Until | Notes |
 |---------|--------|--------------|---------------|-------|
-| v1.0.0 | **Current** | Apr 8, 2026 | Apr 8, 2027 (12 months LTS) | Production ready, all P0 fixes verified |
+| v1.0.0 | **Current** | Apr 8, 2026 | Apr 8, 2027 (12 months LTS) | Initial release; suited for development use — not yet battle-tested at scale |
 
 ### System Requirements
 
-- **Go**: 1.25+
+- **Go**: 1.24+
 - **VS Code**: 1.85+
 - **Python**: (Optional) 3.8+ for plugin development
 - **Platforms**: macOS (10.14+), Linux (glibc 2.29+), Windows (10+)
 
 ## Performance Characteristics
 
-- **Max concurrent connections**: 1000 (configurable)
-- **Max request size**: 1 GB (configurable)
-- **Request history**: SQLite-backed (unlimited by default)
-- **Memory footprint**: ~50 MB baseline + traffic size
-- **Latency overhead**: <5ms per intercepted request (local proxy)
-- **Throughput**: ~5,000 req/s on Intel i7
+> ⚠️ The figures below are informal estimates. No automated benchmarks have been run yet; actual performance depends on payload size, host hardware, and concurrency. See [#169](https://github.com/mnafshin/APiX/issues/169) for the tracking issue.
+
+- **Max concurrent connections**: 1000 (configurable via OS and Go runtime)
+- **Max request size**: 1 GB (configurable via `max_body_size_mb`)
+- **Request history**: SQLite-backed (no hard limit by default)
+- **Memory footprint**: ~50 MB baseline + buffered body size
+- **Latency overhead**: typically a few milliseconds on local loopback (not benchmarked)
+- **Throughput**: not formally benchmarked; proxy adds minimal overhead for typical dev workloads
 
 ## Comparison with Alternatives
 

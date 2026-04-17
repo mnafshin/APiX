@@ -3,7 +3,7 @@
 ## Getting Started
 
 **Prerequisites:**
-- Go 1.25+
+- Go 1.24+
 - Node.js 20+
 - `protoc` + `protoc-gen-go` + `protoc-gen-go-grpc` (for proto changes only)
 

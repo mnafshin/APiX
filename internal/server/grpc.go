@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
@@ -22,6 +23,7 @@ import (
 	"github.com/mnafshin/apix/pkg/version"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
@@ -517,13 +519,16 @@ func authStreamInterceptor(token string) grpc.StreamServerInterceptor {
 }
 
 // NewGRPCServer creates a new *grpc.Server configured with auth interceptors
-// derived from cfg.AuthToken. When AuthToken is empty, calls are allowed
-// without credentials (local desktop mode).
-func NewGRPCServer(cfg *config.Config) *grpc.Server {
-	return grpc.NewServer(
+// derived from cfg.AuthToken. When cfg.TLSEnabled is true the server is wrapped
+// with TLS credentials loaded from cfg.GRPCCertPath and cfg.GRPCKeyPath.
+// When AuthToken is empty, calls are allowed without credentials (local desktop mode).
+func NewGRPCServer(cfg *config.Config, extraOpts ...grpc.ServerOption) *grpc.Server {
+	opts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(logging.UnaryServerInterceptor(), authUnaryInterceptor(cfg.AuthToken)),
 		grpc.ChainStreamInterceptor(logging.StreamServerInterceptor(), authStreamInterceptor(cfg.AuthToken)),
-	)
+	}
+	opts = append(opts, extraOpts...)
+	return grpc.NewServer(opts...)
 }
 
 // StartGRPCServer starts the gRPC server and blocks until ctx is cancelled.
@@ -535,7 +540,21 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 	}
 	defer func() { _ = lis.Close() }()
 
-	grpcServer := NewGRPCServer(cfg)
+	var serverOpts []grpc.ServerOption
+	if cfg.TLSEnabled {
+		cert, err := tls.LoadX509KeyPair(cfg.GRPCCertPath, cfg.GRPCKeyPath)
+		if err != nil {
+			logging.Fatalf(ctx, "gRPC TLS: failed to load cert %q and key %q: %v — check grpc_cert_path and grpc_key_path in config", cfg.GRPCCertPath, cfg.GRPCKeyPath, err)
+		}
+		tlsCfg := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+		logging.Infof(ctx, "gRPC TLS enabled (cert: %s)", cfg.GRPCCertPath)
+	}
+
+	grpcServer := NewGRPCServer(cfg, serverOpts...)
 	apix.RegisterEngineServer(grpcServer, NewEngineServer(eng, re, cfg))
 
 	// Enable reflection only in unauthenticated (local development) mode.

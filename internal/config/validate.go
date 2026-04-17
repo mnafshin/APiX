@@ -91,6 +91,18 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	if c.TLSEnabled && c.AuthToken == "" {
 		errs = append(errs, fmt.Errorf("tls_enabled is true but auth_token is empty — set APIX_AUTH_TOKEN or auth_token in config for secure operation"))
 	}
+	if c.TLSEnabled {
+		if c.GRPCCertPath == "" {
+			errs = append(errs, fmt.Errorf("tls_enabled is true but grpc_cert_path is empty — provide the gRPC server TLS certificate path"))
+		} else if _, err := os.Stat(c.GRPCCertPath); os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("grpc_cert_path %q does not exist — check the path or generate a server certificate", c.GRPCCertPath))
+		}
+		if c.GRPCKeyPath == "" {
+			errs = append(errs, fmt.Errorf("tls_enabled is true but grpc_key_path is empty — provide the gRPC server TLS private key path"))
+		} else if _, err := os.Stat(c.GRPCKeyPath); os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("grpc_key_path %q does not exist — check the path or generate a server key", c.GRPCKeyPath))
+		}
+	}
 
 	// ── Plugin paths ───────────────────────────────────────────────────────
 	for i, p := range c.PluginPaths {

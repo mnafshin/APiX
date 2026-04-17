@@ -476,8 +476,10 @@ func TestPauseRequestContextCancelled(t *testing.T) {
 
 	select {
 	case r := <-resultCh:
-		if r.err == nil {
-			t.Error("expected error from context cancellation, got nil")
+		// Context cancellation now causes a silent forward (no error) so the
+		// request is not dropped when the client disconnects or a pause timeout fires.
+		if r.action != proxy.ResumeForward {
+			t.Errorf("expected ResumeForward on context cancel, got %v", r.action)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for PauseRequest to return after context cancel")

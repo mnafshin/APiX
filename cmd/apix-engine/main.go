@@ -110,7 +110,7 @@ func main() {
 	}
 
 	// 6. Create Engine.
-	eng := engine.New(db, bpManager, pluginRT)
+	eng := engine.NewWithConfig(db, bpManager, pluginRT, cfg)
 
 	// 7. Create replay Engine with TLS config from settings.
 	replayEng := replay.NewEngine(db, &replay.ClientConfig{
