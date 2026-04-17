@@ -35,6 +35,12 @@ type Config struct {
 	HTTPIdleTimeout                  int    `yaml:"http_idle_timeout_sec"`
 	MaxBodySizeMB                    int    `yaml:"max_body_size_mb"`
 	ReplaySkipTLSVerify              bool   `yaml:"replay_skip_tls_verify"`
+	// BreakpointPauseTimeoutSec is the maximum number of seconds a request will
+	// be held at a breakpoint waiting for a resume decision. When the timeout
+	// expires the request is forwarded unchanged. 0 means no timeout (wait
+	// indefinitely — the request context deadline or a client disconnect will
+	// still unblock it). Default: 120.
+	BreakpointPauseTimeoutSec int `yaml:"breakpoint_pause_timeout_sec"`
 
 	// Observability
 	MetricsEnabled     bool   `yaml:"metrics_enabled"`
@@ -105,6 +111,7 @@ func LoadConfig(path string) *Config {
 		HTTPWriteTimeout:                 120,
 		HTTPIdleTimeout:                  120,
 		MaxBodySizeMB:                    32,
+		BreakpointPauseTimeoutSec:        120,
 		// Observability defaults
 		MetricsEnabled:     false,
 		MetricsPort:        "9091",

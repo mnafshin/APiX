@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mnafshin/apix/internal/breakpoints"
+	"github.com/mnafshin/apix/internal/config"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/storage"
@@ -21,11 +22,12 @@ import (
 // Engine is the central coordinator for APiX. It implements proxy.TrafficEngine
 // and provides helpers for all gRPC handlers.
 type Engine struct {
-	mu          sync.Mutex
-	db          *storage.DB
-	bpManager   *breakpoints.Manager
-	pluginRT    *pluginrt.Runtime
-	subscribers map[chan *apix.HttpRequest]struct{}
+	mu               sync.Mutex
+	db               *storage.DB
+	bpManager        *breakpoints.Manager
+	pluginRT         *pluginrt.Runtime
+	subscribers      map[chan *apix.HttpRequest]struct{}
+	pauseTimeoutSec  int // 0 = no timeout
 }
 
 // New creates a new Engine wiring together all sub-systems.
@@ -36,6 +38,16 @@ func New(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *
 		pluginRT:    rt,
 		subscribers: make(map[chan *apix.HttpRequest]struct{}),
 	}
+}
+
+// NewWithConfig creates a new Engine using per-configuration settings such as
+// the breakpoint pause timeout.
+func NewWithConfig(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
+	e := New(db, bpManager, rt)
+	if cfg != nil {
+		e.pauseTimeoutSec = cfg.BreakpointPauseTimeoutSec
+	}
+	return e
 }
 
 // ----- proxy.TrafficEngine implementation -----
@@ -144,6 +156,8 @@ func (e *Engine) StoreWebSocketFrame(frame *proxy.WebSocketFrame) error {
 // PauseRequest holds a request at a breakpoint until resumed.
 // It first evaluates whether any enabled rule matches; if none matches the
 // request is forwarded immediately without blocking.
+// When e.pauseTimeoutSec > 0, the pause is bounded by a deadline; on
+// expiry the request is forwarded unchanged.
 func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.ResumeAction, error) {
 	if tx.Request == nil || tx.Request.Raw == nil {
 		return tx, proxy.ResumeForward, nil
@@ -154,10 +168,18 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 		return tx, proxy.ResumeForward, nil
 	}
 
+	pauseCtx := tx.Request.Raw.Context()
+	var cancelPause context.CancelFunc
+	if e.pauseTimeoutSec > 0 {
+		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(e.pauseTimeoutSec)*time.Second)
+		defer cancelPause()
+	}
+
 	entry := breakpoints.NewPausedEntry(tx.ID, bpID, tx.Request.Raw)
-	decision, err := e.bpManager.Pause(tx.Request.Raw.Context(), entry)
+	decision, err := e.bpManager.Pause(pauseCtx, entry)
 	if err != nil {
-		return tx, proxy.ResumeForward, fmt.Errorf("pause request: %w", err)
+		// Timeout or context cancellation: forward unchanged rather than dropping.
+		return tx, proxy.ResumeForward, nil
 	}
 	if decision == nil {
 		return tx, proxy.ResumeForward, nil
