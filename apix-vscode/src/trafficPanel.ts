@@ -153,11 +153,16 @@ export class TrafficPanel {
     .status-3xx { color: var(--vscode-charts-blue); }
     .status-4xx { color: var(--vscode-charts-orange); }
     .status-5xx { color: var(--vscode-charts-red); }
-    .toolbar { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-    .toolbar input { flex: 1; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 4px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
-    .toolbar input:focus { outline: 1px solid var(--vscode-focusBorder); }
-    .toolbar button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 13px; }
-    .toolbar button:hover { background: var(--vscode-button-hoverBackground); }
+    .filter-bar { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .filter-row { display: flex; gap: 6px; align-items: center; }
+    .filter-row input, .filter-row select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 4px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
+    .filter-row input:focus, .filter-row select:focus { outline: 1px solid var(--vscode-focusBorder); }
+    .filter-url, .filter-body, .filter-ct { flex: 1; min-width: 60px; }
+    .filter-status { width: 120px; }
+    .filter-dur { width: 70px; }
+    .filter-sep { color: var(--vscode-descriptionForeground); font-size: 13px; }
+    .filter-row button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 13px; }
+    .filter-row button:hover { background: var(--vscode-button-hoverBackground); }
     .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-right: 6px; }
     .badge-ws { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
     .empty { text-align: center; padding: 40px; color: var(--vscode-descriptionForeground); }
@@ -177,9 +182,27 @@ export class TrafficPanel {
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <input type="text" id="filter" placeholder="Filter by URL, method, or status..." />
-    <button onclick="clearAll()">Clear</button>
+  <div class="filter-bar">
+    <div class="filter-row">
+      <input type="text" id="filter" class="filter-url" placeholder="Filter by URL..." title="Filter by URL substring" />
+      <select id="filter-method" title="Filter by HTTP method">
+        <option value="">All Methods</option>
+        <option value="GET">GET</option>
+        <option value="POST">POST</option>
+        <option value="PUT">PUT</option>
+        <option value="DELETE">DELETE</option>
+        <option value="PATCH">PATCH</option>
+      </select>
+      <input type="text" id="filter-status" class="filter-status" placeholder="Status (2xx, 200)" title="Filter by status code or range (e.g. 2xx, 4xx, 404)" />
+      <button onclick="clearAll()">Clear</button>
+    </div>
+    <div class="filter-row">
+      <input type="text" id="filter-ct" class="filter-ct" placeholder="Content-Type…" title="Filter by response Content-Type substring" />
+      <input type="number" id="filter-dur-min" class="filter-dur" placeholder="Min ms" title="Minimum duration (ms)" />
+      <span class="filter-sep">–</span>
+      <input type="number" id="filter-dur-max" class="filter-dur" placeholder="Max ms" title="Maximum duration (ms)" />
+      <input type="text" id="filter-body" class="filter-body" placeholder="Body search…" title="Search in request or response body" />
+    </div>
   </div>
   <table>
     <thead>
@@ -245,6 +268,7 @@ export class TrafficPanel {
         '<td class="' + statusClass + '">' + escHtml(String(status)) + '</td>' +
         '<td>' + escHtml(duration) + '</td>' +
         '<td>' + escHtml(time) + '</td>';
+      tr.setAttribute('data-tx-index', String(num - 1));
       tr.onclick = function() { showDetail(tx); };
       tbody.prepend(tr);
       applyFilter();
@@ -349,17 +373,56 @@ export class TrafficPanel {
     }
 
     function applyFilter() {
-      const q = document.getElementById('filter').value.toLowerCase();
-      if (!q) {
-        document.querySelectorAll('#traffic tr').forEach(function(tr) { tr.style.display = ''; });
-        return;
-      }
+      const q = (document.getElementById('filter').value || '').toLowerCase();
+      const method = document.getElementById('filter-method').value;
+      const status = (document.getElementById('filter-status').value || '').trim().toLowerCase();
+      const ctFilter = (document.getElementById('filter-ct').value || '').toLowerCase();
+      const durMinVal = document.getElementById('filter-dur-min').value;
+      const durMaxVal = document.getElementById('filter-dur-max').value;
+      const durMin = durMinVal !== '' ? Number(durMinVal) : null;
+      const durMax = durMaxVal !== '' ? Number(durMaxVal) : null;
+      const bodySearch = (document.getElementById('filter-body').value || '').toLowerCase();
+
       document.querySelectorAll('#traffic tr').forEach(function(tr) {
-        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+        const idxAttr = tr.getAttribute('data-tx-index');
+        if (idxAttr === null) { tr.style.display = ''; return; }
+        const tx = transactions[parseInt(idxAttr, 10)];
+        if (!tx) { tr.style.display = ''; return; }
+
+        const txMethod = (tx.request && tx.request.method) || '';
+        const txUrl = (tx.request && tx.request.url) || '';
+        const txStatus = (tx.response && tx.response.statusCode) || 0;
+        const txDur = tx.durationMs || 0;
+        const txRespHeaders = (tx.response && tx.response.headers) || {};
+        const txCt = (txRespHeaders['content-type'] || txRespHeaders['Content-Type'] || '').toLowerCase();
+        const txReqBody = ((tx.request && tx.request.body) || '').toLowerCase();
+        const txRespBody = ((tx.response && tx.response.body) || '').toLowerCase();
+
+        if (q && !txUrl.toLowerCase().includes(q)) { tr.style.display = 'none'; return; }
+        if (method && txMethod !== method) { tr.style.display = 'none'; return; }
+        if (status) {
+          if (/^\dxx$/.test(status)) {
+            const prefix = parseInt(status[0], 10);
+            if (Math.floor(txStatus / 100) !== prefix) { tr.style.display = 'none'; return; }
+          } else if (/^\d+$/.test(status)) {
+            if (String(txStatus) !== status) { tr.style.display = 'none'; return; }
+          }
+        }
+        if (ctFilter && !txCt.includes(ctFilter)) { tr.style.display = 'none'; return; }
+        if (durMin !== null && txDur < durMin) { tr.style.display = 'none'; return; }
+        if (durMax !== null && txDur > durMax) { tr.style.display = 'none'; return; }
+        if (bodySearch && !txReqBody.includes(bodySearch) && !txRespBody.includes(bodySearch)) { tr.style.display = 'none'; return; }
+        tr.style.display = '';
       });
     }
 
     document.getElementById('filter').addEventListener('input', applyFilter);
+    document.getElementById('filter-method').addEventListener('change', applyFilter);
+    document.getElementById('filter-status').addEventListener('input', applyFilter);
+    document.getElementById('filter-ct').addEventListener('input', applyFilter);
+    document.getElementById('filter-dur-min').addEventListener('input', applyFilter);
+    document.getElementById('filter-dur-max').addEventListener('input', applyFilter);
+    document.getElementById('filter-body').addEventListener('input', applyFilter);
   </script>
 </body>
 </html>`;

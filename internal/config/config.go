@@ -55,6 +55,11 @@ type Config struct {
 	VacuumIntervalHours int `yaml:"vacuum_interval_hours"`
 	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
 
+	// GRPCRateLimitPerSec is the maximum number of gRPC unary calls allowed
+	// per peer address per second. Stream RPCs count as 1 call on open.
+	// 0 disables rate limiting (local desktop mode default).
+	GRPCRateLimitPerSec int `yaml:"grpc_rate_limit_per_sec"`
+
 	// Plugin paths — each entry is a path to a plugin shared library or
 	// script. Validated at startup via --config-check.
 	PluginPaths []string `yaml:"plugin_paths"`
@@ -125,6 +130,7 @@ func LoadConfig(path string) *Config {
 		MetricsPort:         "9091",
 		HealthPort:          "9092",
 		VacuumIntervalHours: 24,
+		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
 	}
 
