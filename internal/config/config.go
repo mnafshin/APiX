@@ -45,6 +45,10 @@ type Config struct {
 	// Observability
 	MetricsEnabled     bool   `yaml:"metrics_enabled"`
 	MetricsPort        string `yaml:"metrics_port"`
+	// HealthPort is the TCP port for the lightweight HTTP health endpoint
+	// that always serves GET /healthz → 200 {"status":"ok"}. Set to "" to
+	// disable. Default: "9092".
+	HealthPort         string `yaml:"health_port"`
 	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
 
 	// Plugin paths — each entry is a path to a plugin shared library or
@@ -115,6 +119,7 @@ func LoadConfig(path string) *Config {
 		// Observability defaults
 		MetricsEnabled:     false,
 		MetricsPort:        "9091",
+		HealthPort:         "9092",
 		SlowlogThresholdMs: 1000,
 	}
 
