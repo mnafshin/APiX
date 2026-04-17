@@ -19,15 +19,16 @@ type Manager struct {
 	rules       map[string]*BreakpointRule // id → rule
 	compiled    map[string]*regexp.Regexp  // id → compiled URLPattern
 	pausedReqs  map[string]*PausedEntry    // request_id → entry
-	subscribers []chan *PausedEntry        // streams watching for paused requests
+	subscribers map[chan *PausedEntry]struct{}
 }
 
 // NewManager creates an empty breakpoint manager.
 func NewManager() *Manager {
 	return &Manager{
-		rules:      make(map[string]*BreakpointRule),
-		compiled:   make(map[string]*regexp.Regexp),
-		pausedReqs: make(map[string]*PausedEntry),
+		rules:       make(map[string]*BreakpointRule),
+		compiled:    make(map[string]*regexp.Regexp),
+		pausedReqs:  make(map[string]*PausedEntry),
+		subscribers: make(map[chan *PausedEntry]struct{}),
 	}
 }
 
@@ -182,8 +183,10 @@ func (m *Manager) Pause(ctx context.Context, entry *PausedEntry) (*ResumeDecisio
 	m.pausedReqs[entry.RequestID] = entry
 
 	// Snapshot subscribers while holding the lock.
-	subs := make([]chan *PausedEntry, len(m.subscribers))
-	copy(subs, m.subscribers)
+	subs := make([]chan *PausedEntry, 0, len(m.subscribers))
+	for ch := range m.subscribers {
+		subs = append(subs, ch)
+	}
 	m.mu.Unlock()
 
 	// Broadcast to all subscribers (non-blocking).
@@ -228,20 +231,17 @@ func (m *Manager) Resume(requestID string, decision *ResumeDecision) error {
 func (m *Manager) Subscribe() chan *PausedEntry {
 	ch := make(chan *PausedEntry, 16)
 	m.mu.Lock()
-	m.subscribers = append(m.subscribers, ch)
+	m.subscribers[ch] = struct{}{}
 	m.mu.Unlock()
 	return ch
 }
 
-// Unsubscribe removes and closes a subscriber channel.
+// Unsubscribe removes and closes a subscriber channel. O(1) via map lookup.
 func (m *Manager) Unsubscribe(ch chan *PausedEntry) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for i, sub := range m.subscribers {
-		if sub == ch {
-			m.subscribers = append(m.subscribers[:i], m.subscribers[i+1:]...)
-			close(ch)
-			return
-		}
+	if _, ok := m.subscribers[ch]; ok {
+		delete(m.subscribers, ch)
+		close(ch)
 	}
 }

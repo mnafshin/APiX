@@ -25,15 +25,16 @@ type Engine struct {
 	db          *storage.DB
 	bpManager   *breakpoints.Manager
 	pluginRT    *pluginrt.Runtime
-	subscribers []chan *apix.HttpRequest
+	subscribers map[chan *apix.HttpRequest]struct{}
 }
 
 // New creates a new Engine wiring together all sub-systems.
 func New(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *Engine {
 	return &Engine{
-		db:        db,
-		bpManager: bpManager,
-		pluginRT:  rt,
+		db:          db,
+		bpManager:   bpManager,
+		pluginRT:    rt,
+		subscribers: make(map[chan *apix.HttpRequest]struct{}),
 	}
 }
 
@@ -91,8 +92,10 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Timestamp: time.Now().UnixMilli(),
 		}
 		e.mu.Lock()
-		subscribers := make([]chan *apix.HttpRequest, len(e.subscribers))
-		copy(subscribers, e.subscribers)
+		subscribers := make([]chan *apix.HttpRequest, 0, len(e.subscribers))
+		for ch := range e.subscribers {
+			subscribers = append(subscribers, ch)
+		}
 		e.mu.Unlock()
 		for _, sub := range subscribers {
 			select {
@@ -200,21 +203,18 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 func (e *Engine) Subscribe() chan *apix.HttpRequest {
 	ch := make(chan *apix.HttpRequest, 32)
 	e.mu.Lock()
-	e.subscribers = append(e.subscribers, ch)
+	e.subscribers[ch] = struct{}{}
 	e.mu.Unlock()
 	return ch
 }
 
-// Unsubscribe removes and closes a subscriber channel.
+// Unsubscribe removes and closes a subscriber channel. O(1) via map lookup.
 func (e *Engine) Unsubscribe(ch chan *apix.HttpRequest) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	for i, sub := range e.subscribers {
-		if sub == ch {
-			e.subscribers = append(e.subscribers[:i], e.subscribers[i+1:]...)
-			close(ch)
-			return
-		}
+	if _, ok := e.subscribers[ch]; ok {
+		delete(e.subscribers, ch)
+		close(ch)
 	}
 }
 
