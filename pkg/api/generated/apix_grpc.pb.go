@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Engine_GetStatus_FullMethodName           = "/apix.Engine/GetStatus"
+	Engine_GetVersion_FullMethodName          = "/apix.Engine/GetVersion"
 	Engine_CaptureTraffic_FullMethodName      = "/apix.Engine/CaptureTraffic"
 	Engine_ListPlugins_FullMethodName         = "/apix.Engine/ListPlugins"
 	Engine_SetBreakpoint_FullMethodName       = "/apix.Engine/SetBreakpoint"
@@ -41,6 +42,11 @@ const (
 type EngineClient interface {
 	// ----- Health -----
 	GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	// GetVersion returns the engine's API version and compatibility contract.
+	// Clients should call this on connect and compare api_version against their
+	// own expectation. The min_client_version field indicates the oldest client
+	// version still compatible with the running engine.
+	GetVersion(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error)
 	// ----- Traffic capture -----
 	// Stream all captured HTTP requests in real time.
 	CaptureTraffic(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpRequest], error)
@@ -85,6 +91,16 @@ func (c *engineClient) GetStatus(ctx context.Context, in *StatusRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StatusResponse)
 	err := c.cc.Invoke(ctx, Engine_GetStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) GetVersion(ctx context.Context, in *VersionRequest, opts ...grpc.CallOption) (*VersionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VersionResponse)
+	err := c.cc.Invoke(ctx, Engine_GetVersion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,6 +279,11 @@ func (c *engineClient) ImportHAR(ctx context.Context, in *ImportHARRequest, opts
 type EngineServer interface {
 	// ----- Health -----
 	GetStatus(context.Context, *StatusRequest) (*StatusResponse, error)
+	// GetVersion returns the engine's API version and compatibility contract.
+	// Clients should call this on connect and compare api_version against their
+	// own expectation. The min_client_version field indicates the oldest client
+	// version still compatible with the running engine.
+	GetVersion(context.Context, *VersionRequest) (*VersionResponse, error)
 	// ----- Traffic capture -----
 	// Stream all captured HTTP requests in real time.
 	CaptureTraffic(*CaptureRequest, grpc.ServerStreamingServer[HttpRequest]) error
@@ -305,6 +326,9 @@ type UnimplementedEngineServer struct{}
 
 func (UnimplementedEngineServer) GetStatus(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedEngineServer) GetVersion(context.Context, *VersionRequest) (*VersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
 }
 func (UnimplementedEngineServer) CaptureTraffic(*CaptureRequest, grpc.ServerStreamingServer[HttpRequest]) error {
 	return status.Errorf(codes.Unimplemented, "method CaptureTraffic not implemented")
@@ -380,6 +404,24 @@ func _Engine_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(EngineServer).GetStatus(ctx, req.(*StatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VersionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).GetVersion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_GetVersion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).GetVersion(ctx, req.(*VersionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -600,6 +642,10 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _Engine_GetStatus_Handler,
+		},
+		{
+			MethodName: "GetVersion",
+			Handler:    _Engine_GetVersion_Handler,
 		},
 		{
 			MethodName: "ListPlugins",

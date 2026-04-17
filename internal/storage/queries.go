@@ -117,7 +117,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 		args = append(args, statusFilter)
 	}
 	if bodyFilter != "" {
-		whereClauses = append(whereClauses, "(r.body LIKE ? OR resp.body LIKE ?)")
+		whereClauses = append(whereClauses, "(CAST(r.body AS TEXT) LIKE ? OR CAST(resp.body AS TEXT) LIKE ?)")
 		pattern := "%" + bodyFilter + "%"
 		args = append(args, pattern, pattern)
 	}
