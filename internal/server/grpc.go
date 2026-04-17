@@ -522,10 +522,19 @@ func authStreamInterceptor(token string) grpc.StreamServerInterceptor {
 // derived from cfg.AuthToken. When cfg.TLSEnabled is true the server is wrapped
 // with TLS credentials loaded from cfg.GRPCCertPath and cfg.GRPCKeyPath.
 // When AuthToken is empty, calls are allowed without credentials (local desktop mode).
+// When cfg.GRPCRateLimitPerSec > 0, per-peer token-bucket rate limiting is applied.
 func NewGRPCServer(cfg *config.Config, extraOpts ...grpc.ServerOption) *grpc.Server {
 	opts := []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(logging.UnaryServerInterceptor(), authUnaryInterceptor(cfg.AuthToken)),
-		grpc.ChainStreamInterceptor(logging.StreamServerInterceptor(), authStreamInterceptor(cfg.AuthToken)),
+		grpc.ChainUnaryInterceptor(
+			logging.UnaryServerInterceptor(),
+			rateLimitUnaryInterceptor(cfg.GRPCRateLimitPerSec),
+			authUnaryInterceptor(cfg.AuthToken),
+		),
+		grpc.ChainStreamInterceptor(
+			logging.StreamServerInterceptor(),
+			rateLimitStreamInterceptor(cfg.GRPCRateLimitPerSec),
+			authStreamInterceptor(cfg.AuthToken),
+		),
 	}
 	opts = append(opts, extraOpts...)
 	return grpc.NewServer(opts...)
