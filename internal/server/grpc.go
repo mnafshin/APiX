@@ -81,6 +81,18 @@ func (s *EngineServer) GetStatus(ctx context.Context, _ *apix.StatusRequest) (*a
 	}, nil
 }
 
+// GetVersion returns the engine's API version and compatibility information.
+// Clients should call this on connect and compare api_version against their
+// own expectation. The min_client_version field indicates the oldest client
+// version still fully compatible with the running engine.
+func (s *EngineServer) GetVersion(_ context.Context, _ *apix.VersionRequest) (*apix.VersionResponse, error) {
+	return &apix.VersionResponse{
+		EngineVersion:    version.Version,
+		ApiVersion:       "1.0.0",
+		MinClientVersion: "1.0.0",
+	}, nil
+}
+
 // ----- Traffic capture -----
 
 func (s *EngineServer) CaptureTraffic(_ *apix.CaptureRequest, stream grpc.ServerStreamingServer[apix.HttpRequest]) error {

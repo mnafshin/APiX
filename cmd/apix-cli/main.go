@@ -460,6 +460,30 @@ func (a *app) cmdStatus() error {
 	return nil
 }
 
+// cmdVersion calls GetVersion and prints the engine API version + compatibility info.
+func (a *app) cmdVersion() error {
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.GetVersion(ctx, &apix.VersionRequest{})
+	if err != nil {
+		return err
+	}
+	if a.opts.output == "json" {
+		return emitJSON(a.out, map[string]any{
+			"engine_version":     resp.EngineVersion,
+			"api_version":        resp.ApiVersion,
+			"min_client_version": resp.MinClientVersion,
+		})
+	}
+	writef(a.out, "engine=%s  api=%s  min_client=%s\n",
+		resp.EngineVersion, resp.ApiVersion, resp.MinClientVersion)
+	return nil
+}
+
 func (a *app) cmdPlugins(args []string) error {
 	if len(args) == 0 || args[0] != "list" {
 		return fmt.Errorf("usage: plugins list")

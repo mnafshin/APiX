@@ -185,6 +185,11 @@ message ImportHARResponse {
 service Engine {
   // ----- Health -----
   rpc GetStatus(StatusRequest) returns (StatusResponse);
+  // GetVersion returns the engine's API version and compatibility contract.
+  // Clients should call this on connect and compare api_version against their
+  // own expectation. The min_client_version field indicates the oldest client
+  // version still compatible with the running engine.
+  rpc GetVersion(VersionRequest) returns (VersionResponse);
 
   // ----- Traffic capture -----
   // Stream all captured HTTP requests in real time.

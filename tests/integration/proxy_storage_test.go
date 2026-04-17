@@ -175,7 +175,7 @@ func TestIntegration_ProxyStoresCorrectFields(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the transaction is in storage with correct fields.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestIntegration_ProxyPreservesStatusCodes(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 
 			// Read stored transaction from DB.
-			records, _, err := stack.db.ListTransactions(100, 0, "", "", 0)
+			records, _, err := stack.db.ListTransactions(100, 0, "", "", 0, "")
 			if err != nil {
 				t.Fatalf("ListTransactions: %v", err)
 			}
@@ -324,7 +324,7 @@ func TestIntegration_ConcurrentProxyWrites(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	// Verify all requests were stored.
-	records, _, err := stack.db.ListTransactions(int(n*2), 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(int(n*2), 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestIntegration_ModifiedRequestStored(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify the stored request shows the modified path.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestIntegration_ReplayRoundTrip(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Retrieve the stored transaction ID.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -507,7 +507,7 @@ func TestIntegration_ReplayWithHeaderOverride(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Retrieve the stored transaction.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestIntegration_ReplayPOSTWithBody(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Retrieve the stored transaction.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -672,7 +672,7 @@ func TestIntegration_ReplayConsistency(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Retrieve the stored transaction.
-	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	records, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
