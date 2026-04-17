@@ -446,23 +446,25 @@ This ordering is intentional: first make the CLI contract solid, then make it us
 
 | Version | Status | Release Date | Support Until | Notes |
 |---------|--------|--------------|---------------|-------|
-| v1.0.0 | **Current** | Apr 8, 2026 | Apr 8, 2027 (12 months LTS) | Production ready, all P0 fixes verified |
+| v1.0.0 | **Current** | Apr 8, 2026 | Apr 8, 2027 (12 months LTS) | Initial release; suited for development use — not yet battle-tested at scale |
 
 ### System Requirements
 
-- **Go**: 1.25+
+- **Go**: 1.24+
 - **VS Code**: 1.85+
 - **Python**: (Optional) 3.8+ for plugin development
 - **Platforms**: macOS (10.14+), Linux (glibc 2.29+), Windows (10+)
 
 ## Performance Characteristics
 
-- **Max concurrent connections**: 1000 (configurable)
-- **Max request size**: 1 GB (configurable)
-- **Request history**: SQLite-backed (unlimited by default)
-- **Memory footprint**: ~50 MB baseline + traffic size
-- **Latency overhead**: <5ms per intercepted request (local proxy)
-- **Throughput**: ~5,000 req/s on Intel i7
+> ⚠️ The figures below are informal estimates. No automated benchmarks have been run yet; actual performance depends on payload size, host hardware, and concurrency. See [#169](https://github.com/mnafshin/APiX/issues/169) for the tracking issue.
+
+- **Max concurrent connections**: 1000 (configurable via OS and Go runtime)
+- **Max request size**: 1 GB (configurable via `max_body_size_mb`)
+- **Request history**: SQLite-backed (no hard limit by default)
+- **Memory footprint**: ~50 MB baseline + buffered body size
+- **Latency overhead**: typically a few milliseconds on local loopback (not benchmarked)
+- **Throughput**: not formally benchmarked; proxy adds minimal overhead for typical dev workloads
 
 ## Comparison with Alternatives
 
