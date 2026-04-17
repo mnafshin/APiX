@@ -3,7 +3,7 @@
   "displayName": "APiX - API Debugger",
   "description": "Intercept, inspect, and debug HTTP/HTTPS traffic directly in VS Code",
   "version": "1.0.0",
-  "publisher": "apix",
+  "publisher": "mnafshin",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -238,6 +238,7 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "package": "vsce package",
+    "publish": "vsce publish",
     "lint": "eslint src --ext ts",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js"

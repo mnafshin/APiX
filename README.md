@@ -57,15 +57,24 @@ chmod +x apix-engine && ./apix-engine
 # Download: https://github.com/mnafshin/APiX/releases/download/v1.0.0/apix-engine-windows-amd64.exe
 ```
 
-**Option 2: VS Code Extension**
+**Option 2: Go Install (CLI users)**
 
-Search for "APiX" in the VS Code Marketplace (coming soon) or install the `.vsix` file manually:
+If you have Go 1.21+ installed, you can install the engine and CLI directly:
+
+```bash
+go install github.com/mnafshin/apix/cmd/apix-engine@latest
+go install github.com/mnafshin/apix/cmd/apix-cli@latest
+```
+
+**Option 3: VS Code Extension**
+
+Search for **APiX** by `mnafshin` in the VS Code Marketplace, or install the `.vsix` file manually:
 
 ```bash
 cd apix-vscode
 npm install
 npm run compile
-npx vsce package
+npm run package
 code --install-extension apix-1.0.0.vsix
 ```
 

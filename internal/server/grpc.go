@@ -340,7 +340,7 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 	}
 	reqs, resps, err := s.engine.DB().ListTransactions(
 		limit, int(req.Offset),
-		req.UrlFilter, req.MethodFilter, int(req.StatusFilter),
+		req.UrlFilter, req.MethodFilter, int(req.StatusFilter), req.BodyFilter,
 	)
 	if err != nil {
 		return status.Errorf(codes.Internal, "list transactions: %v", err)
