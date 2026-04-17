@@ -319,14 +319,20 @@ sudo journalctl -u apix -n 50
 
 ---
 
-## Remote Engine (vscode.dev)
+## Remote Engine (vscode.dev) — Planned
 
-For use in vscode.dev (browser), run engine on a server:
+> **Note:** Remote engine support (for vscode.dev and browser-based VS Code) is not yet implemented.
+> The `APiX: Connect to Remote` command does not exist in the current extension.
+> This feature is tracked in [issue #11](https://github.com/mnafshin/APiX/issues/11).
 
-1. Start engine with TLS:
+The engine will eventually support remote connections over TLS for use in vscode.dev. The planned configuration will look like:
+
+1. Start engine with TLS (future):
    ```yaml
    # config.yaml
    tls_enabled: true
+   grpc_cert_path: "/etc/apix/grpc-server.pem"
+   grpc_key_path: "/etc/apix/grpc-server-key.pem"
    ca_cert_path: "/etc/apix/ca.pem"
    ca_key_path: "/etc/apix/ca-key.pem"
    auth_token: "your-secret-token"
@@ -334,11 +340,9 @@ For use in vscode.dev (browser), run engine on a server:
 
 2. Configure firewall to allow gRPC on port 9090
 
-3. In VS Code / vscode.dev:
+3. In VS Code / vscode.dev _(once #11 is shipped)_:
    - APiX: Connect to Remote → `https://your-server:9090`
    - Enter auth token
-
-See [Remote Engine Setup](#remote-engine-setup) for detailed TLS configuration.
 
 ---
 
