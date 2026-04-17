@@ -460,11 +460,34 @@ This ordering is intentional: first make the CLI contract solid, then make it us
 > ⚠️ The figures below are informal estimates. No automated benchmarks have been run yet; actual performance depends on payload size, host hardware, and concurrency. See [#169](https://github.com/mnafshin/APiX/issues/169) for the tracking issue.
 
 - **Max concurrent connections**: 1000 (configurable via OS and Go runtime)
-- **Max request size**: 1 GB (configurable via `max_body_size_mb`)
+- **Max request size per body**: controlled by `max_body_size_mb` (default 32 MB)
 - **Request history**: SQLite-backed (no hard limit by default)
-- **Memory footprint**: ~50 MB baseline + buffered body size
+- **Memory footprint**: ~50 MB baseline + buffered body size (see Memory Model below)
 - **Latency overhead**: typically a few milliseconds on local loopback (not benchmarked)
 - **Throughput**: not formally benchmarked; proxy adds minimal overhead for typical dev workloads
+
+### Memory Model
+
+APiX buffers **entire request and response bodies** into memory via `io.ReadAll`. This is required for body inspection, plugin mutation, replay, and storage — but it has aggregate memory implications you should understand before deploying at scale:
+
+| Scenario | Memory per request | 100 concurrent requests |
+|---|---|---|
+| Default (`max_body_size_mb: 32`) | up to 64 MB (req + resp) | up to 6.4 GB peak |
+| Small API traffic (`max_body_size_mb: 1`) | up to 2 MB | up to 200 MB peak |
+| Recommended dev default | `max_body_size_mb: 10` | up to 2 GB peak |
+
+**Key points:**
+- Both the **request body** (`internal/proxy/http.go`, `https.go`) and the **response body** are buffered simultaneously for each in-flight request.
+- The `max_body_size_mb` limit is **per individual body** (not per transaction). Each transaction may buffer up to `2 × max_body_size_mb` while in flight (request + response).
+- Bodies are stored in SQLite after capture, consuming additional disk. There is no automatic retention expiry by default — use `ClearHistory` or set a periodic vacuum interval.
+- Setting `max_body_size_mb: 0` disables the size limit entirely (dangerous in high-traffic environments).
+
+**Tuning recommendations:**
+```yaml
+# config.yaml — for high-concurrency or memory-constrained environments
+max_body_size_mb: 5       # 5 MB per body; 10 MB per transaction peak
+vacuum_interval_hours: 6  # reclaim SQLite space every 6 hours
+```
 
 ## Comparison with Alternatives
 
@@ -506,7 +529,9 @@ APiX **does not collect telemetry** or send data externally. All traffic stays o
 - Export traffic to HAR before clearing history when you need to archive a session
 - Clear traffic history: APiX UI → right-click → Clear History
 - CLI support for history management is available via `apix history list|get|clear`
-- Lower `max_body_size_mb` in `config.yaml` if large buffered bodies are not needed
+- **Lower `max_body_size_mb`** in `config.yaml` — this is the most impactful setting. Default is 32 MB per body; at 100 concurrent requests, peak memory is `2 × max_body_size_mb × concurrent_requests`. Set to `5` or `10` for typical use.
+- Enable periodic VACUUM: set `vacuum_interval_hours: 6` in `config.yaml` to reclaim SQLite disk space
+- See [Memory Model](#memory-model) for a detailed breakdown of how bodies are buffered
 
 ### Certificate validation errors
 - For testing: set `replay_skip_tls_verify: true` in `config.yaml`
