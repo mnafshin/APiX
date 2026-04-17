@@ -158,7 +158,7 @@ func TestHTTPProxy_BasicRequest(t *testing.T) {
 
 	// StoreTransaction is synchronous inside handleHTTP, so the DB row is
 	// already committed by the time client.Get returns.
-	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "", 0)
+	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("list transactions: %v", err)
 	}
@@ -302,7 +302,7 @@ func TestHTTPProxy_PostBodyStoredAndReplayed(t *testing.T) {
 	}
 
 	// Verify the body was persisted in storage.
-	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0)
+	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0, "")
 	if err != nil {
 		t.Fatalf("list transactions: %v", err)
 	}

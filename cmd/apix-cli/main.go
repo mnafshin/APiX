@@ -226,6 +226,8 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 	switch fs.Arg(0) {
 	case "status":
 		return app.wrapErr(app.cmdStatus())
+	case "version":
+		return app.wrapErr(app.cmdVersion())
 	case "plugins":
 		return app.wrapErr(app.cmdPlugins(fs.Args()[1:]))
 	case "history":

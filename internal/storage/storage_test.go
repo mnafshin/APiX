@@ -169,7 +169,7 @@ func TestListTransactions(t *testing.T) {
 	}
 
 	t.Run("limit", func(t *testing.T) {
-		reqs, _, err := db.ListTransactions(2, 0, "", "", 0)
+		reqs, _, err := db.ListTransactions(2, 0, "", "", 0, "")
 		if err != nil {
 			t.Fatalf("ListTransactions: %v", err)
 		}
@@ -179,7 +179,7 @@ func TestListTransactions(t *testing.T) {
 	})
 
 	t.Run("offset", func(t *testing.T) {
-		reqs, _, err := db.ListTransactions(100, 3, "", "", 0)
+		reqs, _, err := db.ListTransactions(100, 3, "", "", 0, "")
 		if err != nil {
 			t.Fatalf("ListTransactions: %v", err)
 		}
@@ -189,7 +189,7 @@ func TestListTransactions(t *testing.T) {
 	})
 
 	t.Run("url_filter", func(t *testing.T) {
-		reqs, _, err := db.ListTransactions(100, 0, "example.com", "", 0)
+		reqs, _, err := db.ListTransactions(100, 0, "example.com", "", 0, "")
 		if err != nil {
 			t.Fatalf("ListTransactions: %v", err)
 		}
@@ -199,7 +199,7 @@ func TestListTransactions(t *testing.T) {
 	})
 
 	t.Run("method_filter", func(t *testing.T) {
-		reqs, _, err := db.ListTransactions(100, 0, "", "GET", 0)
+		reqs, _, err := db.ListTransactions(100, 0, "", "GET", 0, "")
 		if err != nil {
 			t.Fatalf("ListTransactions: %v", err)
 		}
@@ -209,7 +209,7 @@ func TestListTransactions(t *testing.T) {
 	})
 
 	t.Run("status_filter", func(t *testing.T) {
-		reqs, _, err := db.ListTransactions(100, 0, "", "", 200)
+		reqs, _, err := db.ListTransactions(100, 0, "", "", 200, "")
 		if err != nil {
 			t.Fatalf("ListTransactions: %v", err)
 		}
@@ -234,7 +234,7 @@ func TestDeleteAllTransactions(t *testing.T) {
 		t.Fatalf("DeleteAllTransactions: %v", err)
 	}
 
-	reqs, _, err := db.ListTransactions(100, 0, "", "", 0)
+	reqs, _, err := db.ListTransactions(100, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestListTransactions_Pagination(t *testing.T) {
 	}
 
 	// Page 1: limit=5, offset=0 → 5 records.
-	page1, _, err := db.ListTransactions(5, 0, "", "", 0)
+	page1, _, err := db.ListTransactions(5, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("page 1: %v", err)
 	}
@@ -474,7 +474,7 @@ func TestListTransactions_Pagination(t *testing.T) {
 	}
 
 	// Page 2: limit=5, offset=5 → 5 records.
-	page2, _, err := db.ListTransactions(5, 5, "", "", 0)
+	page2, _, err := db.ListTransactions(5, 5, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("page 2: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestListTransactions_Pagination(t *testing.T) {
 	}
 
 	// Page 3: limit=5, offset=10 → remaining 5.
-	page3, _, err := db.ListTransactions(5, 10, "", "", 0)
+	page3, _, err := db.ListTransactions(5, 10, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("page 3: %v", err)
 	}
@@ -594,7 +594,7 @@ func TestListTransactions_MethodFilter(t *testing.T) {
 		}
 	}
 
-	results, _, err := db.ListTransactions(10, 0, "", "POST", 0)
+	results, _, err := db.ListTransactions(10, 0, "", "POST", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -668,9 +668,54 @@ func BenchmarkStorage_ListTransactions(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, err := db.ListTransactions(100, 0, "", "", 0)
+		_, _, err := db.ListTransactions(100, 0, "", "", 0, "")
 		if err != nil {
 			b.Fatalf("ListTransactions: %v", err)
 		}
 	}
+}
+
+func TestListTransactions_BodyFilter(t *testing.T) {
+db := openTestDB(t)
+now := time.Now()
+
+// Save two requests with distinct bodies
+req1 := &RequestRecord{ID: "bf-1", Method: "POST", URL: "https://a.com/api", Headers: map[string]string{}, Body: []byte(`{"token":"secret"}`), Timestamp: now}
+req2 := &RequestRecord{ID: "bf-2", Method: "GET", URL: "https://b.com/page", Headers: map[string]string{}, Body: []byte(`hello world`), Timestamp: now}
+if err := db.SaveRequest(req1); err != nil {
+t.Fatalf("SaveRequest req1: %v", err)
+}
+if err := db.SaveRequest(req2); err != nil {
+t.Fatalf("SaveRequest req2: %v", err)
+}
+
+// Search for "token" — should match only req1
+results, _, err := db.ListTransactions(10, 0, "", "", 0, "token")
+if err != nil {
+t.Fatalf("ListTransactions body_filter: %v", err)
+}
+if len(results) != 1 {
+t.Fatalf("expected 1 result for body_filter=token, got %d", len(results))
+}
+if results[0].ID != "bf-1" {
+t.Errorf("expected ID bf-1, got %s", results[0].ID)
+}
+
+// Search for "world" — should match req2
+results, _, err = db.ListTransactions(10, 0, "", "", 0, "world")
+if err != nil {
+t.Fatalf("ListTransactions body_filter world: %v", err)
+}
+if len(results) != 1 || results[0].ID != "bf-2" {
+t.Errorf("expected ID bf-2, got %v", results)
+}
+
+// Empty body_filter — should return both
+results, _, err = db.ListTransactions(10, 0, "", "", 0, "")
+if err != nil {
+t.Fatalf("ListTransactions no body_filter: %v", err)
+}
+if len(results) != 2 {
+t.Errorf("expected 2 results with no body_filter, got %d", len(results))
+}
 }

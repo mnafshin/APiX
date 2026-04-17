@@ -196,7 +196,7 @@ func TestHTTPSProxy_PostBodyStoredAndReplayed(t *testing.T) {
 	}
 
 	// Verify the body was persisted in storage.
-	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0)
+	reqs, _, err := eng.DB().ListTransactions(10, 0, "", "POST", 0, "")
 	if err != nil {
 		t.Fatalf("list transactions: %v", err)
 	}

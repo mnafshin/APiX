@@ -163,7 +163,7 @@ func waitForWebSocketTransaction(t *testing.T, eng *engine.Engine) string {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		reqs, resps, err := eng.DB().ListTransactions(10, 0, "", "", 101)
+		reqs, resps, err := eng.DB().ListTransactions(10, 0, "", "", 101, "")
 		if err == nil {
 			for i, req := range reqs {
 				if req != nil && strings.EqualFold(req.Headers["Upgrade"], "websocket") && i < len(resps) && resps[i] != nil {

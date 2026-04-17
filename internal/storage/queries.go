@@ -94,7 +94,9 @@ func (d *DB) GetTransaction(id string) (*RequestRecord, *ResponseRecord, error) 
 }
 
 // ListTransactions returns paginated request/response pairs matching the query.
-func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string, statusFilter int) ([]*RequestRecord, []*ResponseRecord, error) {
+// bodyFilter, when non-empty, restricts results to transactions where the
+// request body OR response body contains the given substring.
+func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string, statusFilter int, bodyFilter string) ([]*RequestRecord, []*ResponseRecord, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -113,6 +115,11 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 	if statusFilter > 0 {
 		whereClauses = append(whereClauses, "resp.status_code = ?")
 		args = append(args, statusFilter)
+	}
+	if bodyFilter != "" {
+		whereClauses = append(whereClauses, "(r.body LIKE ? OR resp.body LIKE ?)")
+		pattern := "%" + bodyFilter + "%"
+		args = append(args, pattern, pattern)
 	}
 
 	where := ""
