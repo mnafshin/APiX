@@ -1,0 +1,42 @@
+name: Build VS Code Extension VSIX
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apix-vscode/**'
+
+jobs:
+  build-vsix:
+    name: Package Extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apix-vscode
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apix-vscode/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Compile TypeScript
+        run: npm run compile
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apix-vsix
+          path: apix-vscode/*.vsix
+          retention-days: 30
