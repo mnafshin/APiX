@@ -185,6 +185,44 @@ export class RequestEditor {
       catch(e) { return {}; }
     }
 
+    function getHeaders() {
+      try { return JSON.parse(document.getElementById('headers').value); }
+      catch(e) { return {}; }
+    }
+
+    function formatTextarea(bodyId, headersId) {
+      const bodyEl = document.getElementById(bodyId);
+      if (!bodyEl || !bodyEl.value.trim()) return;
+      const body = bodyEl.value;
+      let ct = '';
+      if (headersId) {
+        try {
+          const h = JSON.parse(document.getElementById(headersId).value);
+          ct = (h['content-type'] || h['Content-Type'] || '').toLowerCase();
+        } catch(e) {}
+      }
+      if (ct.includes('application/json') || ct.includes('+json') || !ct) {
+        try { bodyEl.value = JSON.stringify(JSON.parse(body), null, 2); return; } catch(e) {}
+      }
+      if (ct.includes('xml')) {
+        bodyEl.value = indentXml(body);
+      }
+    }
+
+    function indentXml(xml) {
+      const parts = xml.replace(/>\s*</g, '><').split('<');
+      let indent = 0; let out = '';
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (!p) continue;
+        if (i === 0) { out += p; continue; }
+        if (p.startsWith('/')) { indent = Math.max(0, indent - 1); out += '\n' + '  '.repeat(indent) + '<' + p; }
+        else if (p.endsWith('/') || p.startsWith('!') || p.startsWith('?')) { out += '\n' + '  '.repeat(indent) + '<' + p; }
+        else { out += '\n' + '  '.repeat(indent) + '<' + p; if (!p.includes('/')) indent++; }
+      }
+      return out.trim();
+    }
+
     function forward() {
       vscode.postMessage({ type: 'forward', data: {
         method: document.getElementById('method').value,

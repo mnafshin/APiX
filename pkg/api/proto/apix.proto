@@ -56,6 +56,18 @@ message StatusResponse {
   bool tls_enabled = 5;
 }
 
+// VersionRequest asks the engine for its API version information.
+message VersionRequest {}
+
+// VersionResponse carries the engine's version and the minimum client version
+// it is compatible with. Clients should reject connections if their version is
+// older than min_client_version.
+message VersionResponse {
+  string engine_version = 1; // semver of the running engine binary
+  string api_version = 2; // semver of the gRPC API contract (from apix.proto)
+  string min_client_version = 3; // oldest client version still compatible
+}
+
 // ========== Traffic capture messages ==========
 
 message CaptureRequest {}
@@ -137,6 +149,7 @@ message HistoryQuery {
   string method_filter = 4; // e.g. "GET"
   int32 status_filter = 5; // e.g. 404; 0 = no filter
   int64 since_ms = 6; // only transactions after this Unix ms timestamp
+  string body_filter = 7; // substring search in request OR response body
 }
 
 message GetWebSocketFramesRequest {
