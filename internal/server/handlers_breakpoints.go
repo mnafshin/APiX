@@ -121,17 +121,7 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 		httpReq, err := http.NewRequestWithContext(ctx, mr.Method, mr.Url,
 			io.NopCloser(bytes.NewReader(mr.Body)))
 		if err == nil {
-			for k, v := range mr.Headers {
-				if cn, ok := httputil.CanonicalHeader(k); ok {
-					if httputil.IsValidHeaderValue(v) {
-						httpReq.Header.Set(cn, v)
-					} else {
-						logging.Warnf(ctx, "grpc: skipped invalid header value for %q", k)
-					}
-				} else {
-					logging.Warnf(ctx, "grpc: skipped invalid header name %q", k)
-				}
-			}
+			httputil.SetValidHeaders(ctx, httpReq.Header, mr.Headers, "grpc")
 			decision.ModifiedRequest = httpReq
 		} else {
 			logging.Errorf(ctx, "grpc: build modified request: %v", err)
@@ -143,17 +133,7 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 	if action == breakpoints.ActionRespond && req.ModifiedResponse != nil {
 		mr := req.ModifiedResponse
 		hdrs := make(http.Header)
-		for k, v := range mr.Headers {
-			if cn, ok := httputil.CanonicalHeader(k); ok {
-				if httputil.IsValidHeaderValue(v) {
-					hdrs.Set(cn, v)
-				} else {
-					logging.Warnf(ctx, "grpc: skipped invalid response header value for %q", k)
-				}
-			} else {
-				logging.Warnf(ctx, "grpc: skipped invalid response header name %q", k)
-			}
-		}
+		httputil.SetValidHeaders(ctx, hdrs, mr.Headers, "grpc")
 		decision.ModifiedResponse = &http.Response{
 			StatusCode: int(mr.StatusCode),
 			Status:     mr.StatusText,
