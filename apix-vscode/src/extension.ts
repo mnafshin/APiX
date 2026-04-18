@@ -110,6 +110,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('apix.refreshTraffic', () => {
             trafficProvider?.refresh();
         }),
+        vscode.commands.registerCommand('apix.mocks.refresh', () => {
+            mocksProvider?.refresh();
+        }),
+        vscode.commands.registerCommand('apix.mocks.toggle', async (itemOrId: MockItem | string) => {
+            const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.rule?.id;
+            if (!id || !engineClient) { return; }
+            try {
+                await engineClient.toggleRewriteRule(id);
+                mocksProvider?.refresh();
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`APiX: Toggle mock failed — ${err?.message || err}`);
+            }
+        }),
+        vscode.commands.registerCommand('apix.mocks.delete', async (itemOrId: MockItem | string) => {
+            const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.rule?.id;
+            if (!id || !engineClient) { return; }
+            try {
+                await engineClient.deleteRewriteRule(id);
+                mocksProvider?.refresh();
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`APiX: Delete mock failed — ${err?.message || err}`);
+            }
+        }),
     );
 
     if (autoStart) {
@@ -131,6 +154,7 @@ export function deactivate(): void {
     // Dispose all providers and their EventEmitters
     trafficProvider?.dispose();
     breakpointsProvider?.dispose();
+    mocksProvider?.dispose();
     
     // Dispose webview panels
     TrafficPanel.currentPanel?.dispose();
@@ -150,7 +174,8 @@ async function startEngine(
     pm: EngineProcessManager,
     client: EngineClient,
     breakpointsProvider: BreakpointsProvider,
-    trafficProvider: TrafficProvider
+    trafficProvider: TrafficProvider,
+    mocksProvider?: MocksProvider
 ): Promise<void> {
     if (pm.isRunning()) {
         vscode.window.showInformationMessage('APiX Engine is already running.');
@@ -176,6 +201,7 @@ async function startEngine(
 
         breakpointsProvider.refresh();
         trafficProvider.refresh();
+        mocksProvider?.refresh();
 
         // Start watching for paused (breakpointed) requests
         _startWatchPausedRequests(context, client);

@@ -29,7 +29,8 @@
     "onCommand:apix.importHAR",
     "onCommand:apix.copyAsCurl",
     "onView:apix.trafficView",
-    "onView:apix.breakpointsView"
+    "onView:apix.breakpointsView",
+    "onView:apix.mocksView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -93,6 +94,21 @@
         "command": "apix.refreshTraffic",
         "title": "APiX: Refresh Traffic",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "apix.mocks.refresh",
+        "title": "APiX: Refresh Mocks",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "apix.mocks.toggle",
+        "title": "APiX: Enable/Disable Mock Rule",
+        "icon": "$(circle-outline)"
+      },
+      {
+        "command": "apix.mocks.delete",
+        "title": "APiX: Delete Mock Rule",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -119,6 +135,13 @@
           "type": "tree",
           "icon": "$(debug-breakpoint)",
           "contextualTitle": "APiX Breakpoints"
+        },
+        {
+          "id": "apix.mocksView",
+          "name": "Mocks",
+          "type": "tree",
+          "icon": "$(server)",
+          "contextualTitle": "APiX Mocks"
         }
       ]
     },
@@ -158,6 +181,11 @@
           "command": "apix.importHAR",
           "when": "view == apix.trafficView",
           "group": "navigation"
+        },
+        {
+          "command": "apix.mocks.refresh",
+          "when": "view == apix.mocksView",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -184,6 +212,16 @@
         {
           "command": "apix.toggleBreakpoint",
           "when": "view == apix.breakpointsView && viewItem == breakpoint",
+          "group": "inline"
+        },
+        {
+          "command": "apix.mocks.toggle",
+          "when": "view == apix.mocksView && viewItem == mockRule",
+          "group": "inline"
+        },
+        {
+          "command": "apix.mocks.delete",
+          "when": "view == apix.mocksView && viewItem == mockRule",
           "group": "inline"
         }
       ]
