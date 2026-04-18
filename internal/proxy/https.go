@@ -174,26 +174,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	// Run plugin OnRequest chain with panic recovery.
-	if p.plugins != nil {
-		var pluginErr error
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					pluginErr = fmt.Errorf("panic in plugin OnRequest: %v", rec)
-					logging.Errorf(ctx, "TLS proxy panic in plugin OnRequest (recovered): %v", rec)
-				}
-			}()
-			modified, err := p.plugins.RunRequest(ctx, proxyReq)
-			if err != nil {
-				pluginErr = err
-				return
-			}
-			proxyReq = modified
-		}()
-		if pluginErr != nil {
-			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", pluginErr))
-			return
-		}
+	var err error
+	proxyReq, err = runPluginRequest(ctx, p.plugins, proxyReq, "tls proxy")
+	if err != nil {
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", err))
+		return
 	}
 
 	// Mocked response short-circuit.
@@ -205,9 +190,9 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	// Breakpoint check.
 	tx := &Transaction{ID: reqID, Request: proxyReq, RequestBody: bodyBytes, OriginalRequestHeaders: origHeaders}
 	if p.engine != nil {
-		modified, action, err := p.engine.PauseRequest(tx)
-		if err != nil {
-			logging.Errorf(ctx, "tls proxy: pause request: %v", err)
+		modified, action, bpErr := p.engine.PauseRequest(tx)
+		if bpErr != nil {
+			logging.Errorf(ctx, "tls proxy: pause request: %v", bpErr)
 		}
 		tx = modified
 		switch action {
@@ -230,24 +215,24 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	// Build and send upstream request using the shared pooled transport.
-	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
-	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("build upstream request: %v", err))
+	upReq, upErr := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
+	if upErr != nil {
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("build upstream request: %v", upErr))
 		return
 	}
 	upReq.Header = proxyReq.Headers.Clone()
 
-	upResp, err := p.transport.RoundTrip(upReq)
-	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", err))
+	upResp, upErr := p.transport.RoundTrip(upReq)
+	if upErr != nil {
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", upErr))
 		return
 	}
 	defer func() { _ = upResp.Body.Close() }()
 
 	// Apply the same body size limit to response bodies
-	respBody, err := httputil.ReadLimitedBody(upResp.Body, maxBodyBytes)
-	if err != nil {
-		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", err))
+	respBody, readErr := httputil.ReadLimitedBody(upResp.Body, maxBodyBytes)
+	if readErr != nil {
+		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", readErr))
 		return
 	}
 	proxyResp := &plugins.ProxyResponse{
@@ -259,21 +244,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	// Run plugin OnResponse chain with panic recovery.
-	if p.plugins != nil {
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logging.Errorf(ctx, "TLS proxy panic in plugin OnResponse (recovered): %v", rec)
-				}
-			}()
-			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
-			if err != nil {
-				logging.Errorf(ctx, "tls proxy: plugin OnResponse: %v", err)
-			} else if modResp != nil {
-				proxyResp = modResp
-			}
-		}()
-	}
+	proxyResp = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy")
 
 	// Buffer the final response body (plugins may have modified it) so we can
 	// both persist it and still write it to the client.
