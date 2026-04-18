@@ -894,7 +894,7 @@ func (a *app) cmdExport(args []string) error {
 		return fmt.Errorf("unsupported export format %q (use ndjson or har)", opts.format)
 	}
 
-	var dest io.Writer = a.out
+	dest := a.out
 	if opts.output != "" {
 		f, err := os.Create(opts.output)
 		if err != nil {
