@@ -24,7 +24,7 @@ import (
 // and provides helpers for all gRPC handlers.
 type Engine struct {
 	mu               sync.Mutex
-	db               *storage.DB
+	db               storage.TransactionRepository
 	bpManager        *breakpoints.Manager
 	pluginRT         *pluginrt.Runtime
 	subscribers      map[chan *apix.HttpRequest]struct{}
@@ -32,7 +32,7 @@ type Engine struct {
 }
 
 // New creates a new Engine wiring together all sub-systems.
-func New(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *Engine {
+func New(db storage.TransactionRepository, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *Engine {
 	return &Engine{
 		db:          db,
 		bpManager:   bpManager,
@@ -43,7 +43,7 @@ func New(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *
 
 // NewWithConfig creates a new Engine using per-configuration settings such as
 // the breakpoint pause timeout.
-func NewWithConfig(db *storage.DB, bpManager *breakpoints.Manager, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
+func NewWithConfig(db storage.TransactionRepository, bpManager *breakpoints.Manager, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
 	e := New(db, bpManager, rt)
 	if cfg != nil {
 		e.pauseTimeoutSec = cfg.BreakpointPauseTimeoutSec
@@ -240,7 +240,14 @@ func (e *Engine) Unsubscribe(ch chan *apix.HttpRequest) {
 }
 
 // DB returns the underlying storage.DB for direct access by gRPC handlers.
-func (e *Engine) DB() *storage.DB { return e.db }
+// It panics if the repository was not constructed with a *storage.DB.
+func (e *Engine) DB() *storage.DB {
+	db, ok := e.db.(*storage.DB)
+	if !ok {
+		panic("engine: DB() called but underlying repository is not *storage.DB")
+	}
+	return db
+}
 
 // BreakpointManager returns the breakpoints manager.
 func (e *Engine) BreakpointManager() *breakpoints.Manager { return e.bpManager }
