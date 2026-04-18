@@ -323,6 +323,171 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 	}
 }
 
+func TestCLIFilter_EngineBacked(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+	stack.storeTransaction(t, "f-get-1", "GET", "https://api.example.com/users", "", `[{"id":1}]`, 200)
+	stack.storeTransaction(t, "f-post-1", "POST", "https://api.example.com/orders", `{"item":"x"}`, `{"id":99}`, 201)
+	stack.storeTransaction(t, "f-get-2", "GET", "https://other.example.com/health", "", "ok", 200)
+
+	// filter by method
+	exit, out, errOut := runCLI(t, stack.args("--output", "json", "filter", "--method", "post")...)
+	if exit != 0 {
+		t.Fatalf("filter method exit=%d err=%s", exit, errOut)
+	}
+	var postItems []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &postItems); err != nil {
+		t.Fatalf("filter method json: %v raw=%s", err, out)
+	}
+	if len(postItems) != 1 || postItems[0]["id"] != "f-post-1" {
+		t.Fatalf("filter method expected 1 POST item, got %#v", postItems)
+	}
+
+	// filter by url-pattern
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "filter", "--url-pattern", "api.example.com")...)
+	if exit != 0 {
+		t.Fatalf("filter url exit=%d err=%s", exit, errOut)
+	}
+	var urlItems []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &urlItems); err != nil {
+		t.Fatalf("filter url json: %v", err)
+	}
+	if len(urlItems) != 2 {
+		t.Fatalf("filter url expected 2 items, got %d: %#v", len(urlItems), urlItems)
+	}
+
+	// filter by body substring
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "filter", "--body", "item")...)
+	if exit != 0 {
+		t.Fatalf("filter body exit=%d err=%s", exit, errOut)
+	}
+	var bodyItems []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &bodyItems); err != nil {
+		t.Fatalf("filter body json: %v", err)
+	}
+	if len(bodyItems) != 1 || bodyItems[0]["id"] != "f-post-1" {
+		t.Fatalf("filter body expected 1 item, got %#v", bodyItems)
+	}
+
+	// default text output (no --output flag means global default "text")
+	exit, out, errOut = runCLI(t, stack.args("filter", "--method", "GET")...)
+	if exit != 0 {
+		t.Fatalf("filter text exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, "f-get-1") || !strings.Contains(out, "f-get-2") {
+		t.Fatalf("filter text output missing GET items: %s", out)
+	}
+}
+
+func TestCLIExport_EngineBacked(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+	stack.storeTransaction(t, "exp-1", "GET", "https://export.example.com/a", "", "body-a", 200)
+	stack.storeTransaction(t, "exp-2", "POST", "https://export.example.com/b", `{"k":"v"}`, `{"ok":true}`, 201)
+
+	// ndjson to stdout
+	exit, out, errOut := runCLI(t, stack.args("export", "--format", "ndjson")...)
+	if exit != 0 {
+		t.Fatalf("export ndjson exit=%d err=%s", exit, errOut)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("export ndjson expected 2 lines, got %d: %s", len(lines), out)
+	}
+	for _, line := range lines {
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Fatalf("export ndjson line json: %v line=%s", err, line)
+		}
+		if obj["id"] == nil {
+			t.Fatalf("export ndjson line missing id: %s", line)
+		}
+	}
+
+	// ndjson default format
+	exit, out, errOut = runCLI(t, stack.args("export")...)
+	if exit != 0 {
+		t.Fatalf("export default exit=%d err=%s", exit, errOut)
+	}
+	defaultLines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(defaultLines) != 2 {
+		t.Fatalf("export default expected 2 lines, got %d", len(defaultLines))
+	}
+
+	// ndjson to file
+	dir := t.TempDir()
+	outFile := filepath.Join(dir, "traffic.ndjson")
+	exit, _, errOut = runCLI(t, stack.args("export", "--format", "ndjson", "--output", outFile)...)
+	if exit != 0 {
+		t.Fatalf("export file exit=%d err=%s", exit, errOut)
+	}
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	fileLines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(fileLines) != 2 {
+		t.Fatalf("export file expected 2 lines, got %d: %s", len(fileLines), string(data))
+	}
+
+	// har format
+	exit, out, errOut = runCLI(t, stack.args("export", "--format", "har")...)
+	if exit != 0 {
+		t.Fatalf("export har exit=%d err=%s", exit, errOut)
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		t.Fatal("export har produced no output")
+	}
+	var harDoc map[string]any
+	if err := json.Unmarshal([]byte(out), &harDoc); err != nil {
+		t.Fatalf("export har json: %v raw=%s", err, out)
+	}
+	if harDoc["log"] == nil {
+		t.Fatalf("export har missing 'log' key: %#v", harDoc)
+	}
+}
+
+func TestCLIWatchWithFilters(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	done := make(chan struct{})
+	var exit int
+	var out, errOut string
+	go func() {
+		exit, out, errOut = runCLI(t, stack.args("--output", "ndjson", "watch", "--method", "POST", "--count", "1")...)
+		close(done)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	// This GET should be filtered out (method mismatch)
+	stack.storeTransaction(t, "w-get-1", "GET", "https://watch.example.com/skip", "", "", 200)
+	time.Sleep(20 * time.Millisecond)
+	// This POST should be delivered
+	stack.storeTransaction(t, "w-post-1", "POST", "https://watch.example.com/match", `{"a":1}`, `{"b":2}`, 201)
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("watch with filter did not finish")
+	}
+	if exit != 0 {
+		t.Fatalf("watch filter exit=%d err=%s", exit, errOut)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 ndjson line, got %d: %s", len(lines), out)
+	}
+	var event map[string]any
+	if err := json.Unmarshal([]byte(lines[0]), &event); err != nil {
+		t.Fatalf("watch filter json: %v", err)
+	}
+	if event["id"] != "w-post-1" {
+		t.Fatalf("watch filter event id=%v, want w-post-1", event["id"])
+	}
+}
+
 func mustRequest(t *testing.T, method, rawURL string) *http.Request {
 	t.Helper()
 	req, err := http.NewRequest(method, rawURL, nil)

@@ -59,7 +59,22 @@ type historyGetOptions struct {
 }
 
 type watchOptions struct {
-	count int
+	count      int
+	method     string
+	urlPattern string
+}
+
+type filterOptions struct {
+	method     string
+	urlPattern string
+	body       string
+	limit      int
+}
+
+type exportOptions struct {
+	format string
+	output string
+	limit  int
 }
 
 type sendOptions struct {
@@ -180,6 +195,8 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		writeLine(errw, "  plugins list")
 		writeLine(errw, "  history list|get|clear")
 		writeLine(errw, "  watch [traffic]")
+		writeLine(errw, "  filter")
+		writeLine(errw, "  export")
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
@@ -234,6 +251,10 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return app.wrapErr(app.cmdHistory(fs.Args()[1:]))
 	case "watch":
 		return app.wrapErr(app.cmdWatch(fs.Args()[1:]))
+	case "filter":
+		return app.wrapErr(app.cmdFilter(fs.Args()[1:]))
+	case "export":
+		return app.wrapErr(app.cmdExport(fs.Args()[1:]))
 	case "breakpoints":
 		return app.wrapErr(app.cmdBreakpoints(fs.Args()[1:]))
 	case "paused":
@@ -741,6 +762,8 @@ func (a *app) cmdWatch(args []string) error {
 	fs.SetOutput(a.errw)
 	opts := watchOptions{}
 	fs.IntVar(&opts.count, "count", 0, "stop after N events (for automation/testing)")
+	fs.StringVar(&opts.method, "method", "", "filter by HTTP method (case-insensitive)")
+	fs.StringVar(&opts.urlPattern, "url-pattern", "", "filter by URL substring")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -763,6 +786,12 @@ func (a *app) cmdWatch(args []string) error {
 		if err != nil {
 			return err
 		}
+		if opts.method != "" && !strings.EqualFold(msg.Method, opts.method) {
+			continue
+		}
+		if opts.urlPattern != "" && !strings.Contains(msg.Url, opts.urlPattern) {
+			continue
+		}
 		if a.opts.output == "ndjson" || a.opts.output == "json" {
 			if err := emitNDJSON(a.out, map[string]any{
 				"event":     "request",
@@ -781,6 +810,135 @@ func (a *app) cmdWatch(args []string) error {
 		seen++
 		if opts.count > 0 && seen >= opts.count {
 			return nil
+		}
+	}
+}
+
+func (a *app) cmdFilter(args []string) error {
+	fs := flag.NewFlagSet("filter", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := filterOptions{limit: 100}
+	fs.StringVar(&opts.method, "method", "", "filter by HTTP method (case-insensitive)")
+	fs.StringVar(&opts.urlPattern, "url-pattern", "", "filter by URL substring")
+	fs.StringVar(&opts.body, "body", "", "filter by request or response body substring")
+	fs.IntVar(&opts.limit, "limit", 100, "max number of results")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	limit, err := int32FromInt(opts.limit, "limit")
+	if err != nil {
+		return err
+	}
+	stream, err := client.GetHistory(ctx, &apix.HistoryQuery{
+		Limit:        limit,
+		MethodFilter: strings.ToUpper(opts.method),
+		UrlFilter:    opts.urlPattern,
+		BodyFilter:   opts.body,
+	})
+	if err != nil {
+		return err
+	}
+	items, err := recvHistory(stream)
+	if err != nil {
+		return err
+	}
+	if a.opts.output == "json" {
+		return emitJSON(a.out, historyToJSON(items))
+	}
+	if a.opts.output == "ndjson" {
+		for _, tx := range items {
+			if err := emitNDJSON(a.out, historyItemToJSON(tx)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if len(items) == 0 {
+		writeLine(a.out, "No matching history items")
+		return nil
+	}
+	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+	writeLine(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
+	for _, tx := range items {
+		statusCode := int32(0)
+		if tx.Response != nil {
+			statusCode = tx.Response.StatusCode
+		}
+		writef(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
+	}
+	return tw.Flush()
+}
+
+func (a *app) cmdExport(args []string) error {
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := exportOptions{format: "ndjson", limit: 100}
+	fs.StringVar(&opts.format, "format", "ndjson", "export format: ndjson|har")
+	fs.StringVar(&opts.output, "output", "", "output file path (default: stdout)")
+	fs.IntVar(&opts.limit, "limit", 100, "max number of transactions to export")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.format != "ndjson" && opts.format != "har" {
+		return fmt.Errorf("unsupported export format %q (use ndjson or har)", opts.format)
+	}
+
+	var dest io.Writer = a.out
+	if opts.output != "" {
+		f, err := os.Create(opts.output)
+		if err != nil {
+			return fmt.Errorf("open output file: %w", err)
+		}
+		defer f.Close() //nolint:errcheck
+		dest = f
+	}
+
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+
+	if opts.format == "har" {
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		resp, err := client.ExportHAR(ctx, &apix.ExportHARRequest{})
+		if err != nil {
+			return err
+		}
+		writeString(dest, resp.HarJson)
+		if !strings.HasSuffix(resp.HarJson, "\n") {
+			writeString(dest, "\n")
+		}
+		return nil
+	}
+
+	// ndjson: stream history and emit one JSON object per line
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	limit, err := int32FromInt(opts.limit, "limit")
+	if err != nil {
+		return err
+	}
+	stream, err := client.GetHistory(ctx, &apix.HistoryQuery{Limit: limit})
+	if err != nil {
+		return err
+	}
+	for {
+		tx, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := emitNDJSON(dest, historyItemToJSON(tx)); err != nil {
+			return err
 		}
 	}
 }
