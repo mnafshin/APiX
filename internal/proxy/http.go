@@ -151,26 +151,16 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	start := time.Now()
-
-	// Buffer the entire request body so it can be stored and forwarded.
-	// Limit body size to prevent OOM denial of service.
 	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
-	var bodyBytes []byte
-	if r.Body != nil {
-		var err error
-		bodyBytes, err = httputil.ReadLimitedBody(r.Body, maxBodyBytes)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
-			return
-		}
-		_ = r.Body.Close()
+
+	// 1. Buffer request body.
+	bodyBytes, err := p.readRequestBody(r, maxBodyBytes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
+		return
 	}
 
 	origHeaders := r.Header.Clone()
-
-	// Detect negotiated protocol. For HTTP/1.x requests r.Proto is "HTTP/1.1".
-	// For h2c (cleartext HTTP/2) the Go standard library upgrades the connection
-	// before reaching the handler, so r.Proto will be "HTTP/2.0".
 	protocol := r.Proto
 	if protocol == "" {
 		protocol = "HTTP/1.1"
@@ -186,142 +176,50 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Raw:      r,
 	}
 
-	// Run plugin OnRequest chain (with panic recovery).
-	var pluginReqFailed bool
-	if p.plugins != nil {
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logging.Errorf(ctx, "HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
-					pluginReqFailed = true
-				}
-			}()
-			modified, err := p.plugins.RunRequest(ctx, proxyReq)
-			if err != nil {
-				logging.Errorf(ctx, "plugin OnRequest error: %v", err)
-				pluginReqFailed = true
-				return
-			}
-			proxyReq = modified
-		}()
-		if pluginReqFailed {
-			http.Error(w, "plugin error", http.StatusBadGateway)
-			return
-		}
-	}
-
-	// If a plugin set a mocked response, short-circuit.
-	if proxyReq.MockedResponse != nil {
-		var mockedBody []byte
-		if proxyReq.MockedResponse.Body != nil {
-			var err error
-			mockedBody, err = io.ReadAll(proxyReq.MockedResponse.Body)
-			if err != nil {
-				logging.Errorf(ctx, "read mocked response body: %v", err)
-			}
-		}
-		writeProxyResponse(w, proxyReq.MockedResponse, mockedBody)
+	// 2. Run plugin OnRequest chain.
+	proxyReq, err = p.runPluginRequest(ctx, proxyReq)
+	if err != nil {
+		http.Error(w, "plugin error", http.StatusBadGateway)
 		return
 	}
 
-	// Check breakpoints.
+	// 3. Short-circuit if plugin provided a mocked response.
+	if proxyReq.MockedResponse != nil {
+		p.writeMockedResponse(ctx, w, proxyReq.MockedResponse)
+		return
+	}
+
+	// 4. Evaluate breakpoints (pause/resume/drop).
 	tx := &Transaction{
 		ID:                     reqID,
 		Request:                proxyReq,
 		RequestBody:            bodyBytes,
 		OriginalRequestHeaders: origHeaders,
 	}
-	if p.engine != nil {
-		bpID := "" // The engine handles evaluation internally via PauseRequest.
-		_ = bpID
-		modified, action, err := p.engine.PauseRequest(tx)
-		if err != nil {
-			logging.Errorf(ctx, "pause request: %v", err)
-			http.Error(w, fmt.Sprintf("pause request: %v", err), http.StatusBadGateway)
-			return
-		}
-		tx = modified
-		switch action {
-		case ResumeDrop:
-			http.Error(w, "request dropped by breakpoint", http.StatusBadGateway)
-			return
-		case ResumeRespond:
-			if tx.Response != nil {
-				var respBody []byte
-				if tx.Response.Body != nil {
-					var err error
-					respBody, err = io.ReadAll(tx.Response.Body)
-					if err != nil {
-						logging.Errorf(ctx, "read synthetic response body: %v", err)
-					}
-				}
-				writeProxyResponse(w, tx.Response, respBody)
-			} else {
-				http.Error(w, "no synthetic response provided", http.StatusBadGateway)
-			}
-			return
-		}
+	tx, done, err := p.evaluateBreakpoint(ctx, w, tx)
+	if err != nil || done {
+		return
 	}
 
+	// 5. Route WebSocket upgrades to dedicated handler.
 	if isWebSocketRequest(r) {
 		p.handleWebSocket(ctx, w, r, tx, start)
 		return
 	}
 
-	// Apply rewrite rules to the request (before forwarding upstream).
-	if p.engine != nil {
-		rules, err := p.engine.RewriteRules()
-		if err != nil {
-			logging.Errorf(ctx, "load rewrite rules: %v", err)
-		} else if len(rules) > 0 {
-			synth, err := rewrite.ApplyRequestRules(rules, r, bodyBytes)
-			if err != nil {
-				logging.Errorf(ctx, "apply rewrite rules: %v", err)
-			} else if synth != nil {
-				for k, vv := range synth.Headers {
-					for _, v := range vv {
-						w.Header().Add(k, v)
-					}
-				}
-				w.WriteHeader(synth.StatusCode)
-				if len(synth.Body) > 0 {
-					_, _ = w.Write(synth.Body)
-				}
-				return
-			}
-		}
-	}
-
-	// Build upstream request.
-	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("build upstream request: %v", err), http.StatusBadGateway)
+	// 6. Apply request rewrite rules.
+	if sent := p.applyRequestRewriteRules(ctx, w, r, bodyBytes); sent {
 		return
 	}
-	upReq.Header = proxyReq.Headers
 
-	upResp, err := p.transport.RoundTrip(upReq)
+	// 7. Forward request upstream and read response.
+	upResp, respBody, err := p.forwardUpstream(ctx, proxyReq, maxBodyBytes)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = upResp.Body.Close() }()
 
-	// Limit response body size to prevent OOM denial of service.
-	respBody, err := io.ReadAll(upResp.Body)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("response body read error: %v", err), http.StatusBadGateway)
-		return
-	}
-
-	// Enforce size limit after reading
-	if int64(len(respBody)) > maxBodyBytes {
-		http.Error(w, fmt.Sprintf("response body too large: %d bytes > %d bytes", len(respBody), maxBodyBytes), http.StatusBadGateway)
-		return
-	}
-
-	// Create proxyResp without Body initially - keep respBody buffered separately.
-	// After plugins run, we'll use the final body bytes directly in writeProxyResponse.
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
@@ -330,69 +228,29 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Raw:        upResp,
 	}
 
-	// Apply response rewrite rules before plugins.
-	if p.engine != nil {
-		rules, err := p.engine.RewriteRules()
-		if err != nil {
-			logging.Errorf(ctx, "load rewrite rules (response): %v", err)
-		} else if len(rules) > 0 {
-			respBody = rewrite.ApplyResponseRules(rules, r, upResp, respBody)
-			// Sync updated headers back into proxyResp.
-			proxyResp.Headers = upResp.Header.Clone()
-		}
-	}
+	// 8. Apply response rewrite rules.
+	respBody = p.applyResponseRewriteRules(ctx, r, upResp, proxyResp, respBody)
 
-	// Run plugin OnResponse chain (with panic recovery).
-	var finalRespBody = respBody
-	var pluginRespErr error
-	if p.plugins != nil {
-		func() {
-			defer func() {
-				if rec := recover(); rec != nil {
-					logging.Errorf(ctx, "HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
-				}
-			}()
-			// Give plugins the body they expect
-			proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
-			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
-			if err != nil {
-				logging.Errorf(ctx, "plugin OnResponse error: %v", err)
-				pluginRespErr = err
-			} else if modResp != nil {
-				proxyResp = modResp
-				// Extract body from modified response if provided
-				if modResp.Body != nil {
-					limitedBody := io.LimitReader(modResp.Body, maxBodyBytes)
-					var readErr error
-					finalRespBody, readErr = io.ReadAll(limitedBody)
-					if readErr != nil {
-						logging.Errorf(ctx, "plugin modified response body read error: %v", readErr)
-						// Keep the original respBody on error
-					}
-				}
-			}
-		}()
-	}
-	if pluginRespErr != nil {
-		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", pluginRespErr), http.StatusBadGateway)
+	// 9. Run plugin OnResponse chain.
+	proxyResp, respBody, err = p.runPluginResponse(ctx, proxyReq, proxyResp, respBody, maxBodyBytes)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
 		return
 	}
 
-	// Store transaction.
+	// 10. Store transaction.
 	if p.engine != nil {
 		tx.Response = proxyResp
-		tx.ResponseBody = finalRespBody
+		tx.ResponseBody = respBody
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
 			logging.Errorf(ctx, "store transaction: %v", err)
 		}
 	}
 
-	// Observe metrics
+	// 11. Emit metrics + slowlog.
 	durationSec := time.Since(start).Seconds()
 	metrics.ObserveRequest(proxyReq.Method, proxyResp.StatusCode, durationSec)
-
-	// Slowlog
 	if p.cfg != nil && p.cfg.SlowlogThresholdMs > 0 {
 		if time.Since(start).Milliseconds() > int64(p.cfg.SlowlogThresholdMs) {
 			logging.Warnf(ctx, "slow request: method=%s url=%s status=%d duration_ms=%d request_id=%s",
@@ -400,7 +258,211 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeProxyResponse(w, proxyResp, finalRespBody)
+	writeProxyResponse(w, proxyResp, respBody)
+}
+
+// readRequestBody buffers r.Body up to maxBytes.
+func (p *HTTPProxy) readRequestBody(r *http.Request, maxBytes int64) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	b, err := httputil.ReadLimitedBody(r.Body, maxBytes)
+	_ = r.Body.Close()
+	return b, err
+}
+
+// runPluginRequest runs the OnRequest plugin chain with panic recovery.
+// Returns the (possibly modified) ProxyRequest, or an error on failure.
+func (p *HTTPProxy) runPluginRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+	if p.plugins == nil {
+		return req, nil
+	}
+	var runErr error
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf(ctx, "HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
+				runErr = fmt.Errorf("plugin panic")
+			}
+		}()
+		modified, err := p.plugins.RunRequest(ctx, req)
+		if err != nil {
+			logging.Errorf(ctx, "plugin OnRequest error: %v", err)
+			runErr = err
+			return
+		}
+		req = modified
+	}()
+	if runErr != nil {
+		return nil, runErr
+	}
+	return req, nil
+}
+
+// writeMockedResponse writes a plugin-provided mocked response to w.
+func (p *HTTPProxy) writeMockedResponse(ctx context.Context, w http.ResponseWriter, mock *plugins.ProxyResponse) {
+	var body []byte
+	if mock.Body != nil {
+		var err error
+		body, err = io.ReadAll(mock.Body)
+		if err != nil {
+			logging.Errorf(ctx, "read mocked response body: %v", err)
+		}
+	}
+	writeProxyResponse(w, mock, body)
+}
+
+// evaluateBreakpoint checks breakpoints on the transaction.
+// Returns (modified tx, true if response was written, error).
+func (p *HTTPProxy) evaluateBreakpoint(ctx context.Context, w http.ResponseWriter, tx *Transaction) (*Transaction, bool, error) {
+	if p.engine == nil {
+		return tx, false, nil
+	}
+	modified, action, err := p.engine.PauseRequest(tx)
+	if err != nil {
+		logging.Errorf(ctx, "pause request: %v", err)
+		http.Error(w, fmt.Sprintf("pause request: %v", err), http.StatusBadGateway)
+		return tx, true, err
+	}
+	tx = modified
+	switch action {
+	case ResumeDrop:
+		http.Error(w, "request dropped by breakpoint", http.StatusBadGateway)
+		return tx, true, nil
+	case ResumeRespond:
+		if tx.Response != nil {
+			var respBody []byte
+			if tx.Response.Body != nil {
+				var readErr error
+				respBody, readErr = io.ReadAll(tx.Response.Body)
+				if readErr != nil {
+					logging.Errorf(ctx, "read synthetic response body: %v", readErr)
+				}
+			}
+			writeProxyResponse(w, tx.Response, respBody)
+		} else {
+			http.Error(w, "no synthetic response provided", http.StatusBadGateway)
+		}
+		return tx, true, nil
+	}
+	return tx, false, nil
+}
+
+// applyRequestRewriteRules applies matching rewrite rules to the outbound request.
+// Returns true if a synthetic response was written and the caller should return immediately.
+func (p *HTTPProxy) applyRequestRewriteRules(ctx context.Context, w http.ResponseWriter, r *http.Request, body []byte) bool {
+	if p.engine == nil {
+		return false
+	}
+	rules, err := p.engine.RewriteRules()
+	if err != nil {
+		logging.Errorf(ctx, "load rewrite rules: %v", err)
+		return false
+	}
+	if len(rules) == 0 {
+		return false
+	}
+	synth, err := rewrite.ApplyRequestRules(rules, r, body)
+	if err != nil {
+		logging.Errorf(ctx, "apply rewrite rules: %v", err)
+		return false
+	}
+	if synth == nil {
+		return false
+	}
+	for k, vv := range synth.Headers {
+		for _, v := range vv {
+			w.Header().Add(k, v)
+		}
+	}
+	w.WriteHeader(synth.StatusCode)
+	if len(synth.Body) > 0 {
+		_, _ = w.Write(synth.Body)
+	}
+	return true
+}
+
+// forwardUpstream sends the request upstream and returns the raw response plus buffered body.
+func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.ProxyRequest, maxBodyBytes int64) (*http.Response, []byte, error) {
+	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build upstream request: %w", err)
+	}
+	upReq.Header = proxyReq.Headers
+
+	upResp, err := p.transport.RoundTrip(upReq)
+	if err != nil {
+		return nil, nil, fmt.Errorf("upstream error: %w", err)
+	}
+
+	respBody, err := io.ReadAll(upResp.Body)
+	if err != nil {
+		_ = upResp.Body.Close()
+		return nil, nil, fmt.Errorf("response body read error: %w", err)
+	}
+	if int64(len(respBody)) > maxBodyBytes {
+		_ = upResp.Body.Close()
+		return nil, nil, fmt.Errorf("response body too large: %d bytes > %d bytes", len(respBody), maxBodyBytes)
+	}
+	return upResp, respBody, nil
+}
+
+// applyResponseRewriteRules applies matching rewrite rules to the upstream response.
+// Returns the (possibly modified) response body.
+func (p *HTTPProxy) applyResponseRewriteRules(ctx context.Context, r *http.Request, upResp *http.Response, proxyResp *plugins.ProxyResponse, body []byte) []byte {
+	if p.engine == nil {
+		return body
+	}
+	rules, err := p.engine.RewriteRules()
+	if err != nil {
+		logging.Errorf(ctx, "load rewrite rules (response): %v", err)
+		return body
+	}
+	if len(rules) == 0 {
+		return body
+	}
+	body = rewrite.ApplyResponseRules(rules, r, upResp, body)
+	proxyResp.Headers = upResp.Header.Clone()
+	return body
+}
+
+// runPluginResponse runs the OnResponse plugin chain with panic recovery.
+// Returns the (possibly modified) ProxyResponse, final body bytes, and any error.
+func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, body []byte, maxBodyBytes int64) (*plugins.ProxyResponse, []byte, error) {
+	if p.plugins == nil {
+		return resp, body, nil
+	}
+	var pluginErr error
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf(ctx, "HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
+			}
+		}()
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		modResp, err := p.plugins.RunResponse(ctx, req, resp)
+		if err != nil {
+			logging.Errorf(ctx, "plugin OnResponse error: %v", err)
+			pluginErr = err
+			return
+		}
+		if modResp != nil {
+			resp = modResp
+			if modResp.Body != nil {
+				limited := io.LimitReader(modResp.Body, maxBodyBytes)
+				newBody, readErr := io.ReadAll(limited)
+				if readErr != nil {
+					logging.Errorf(ctx, "plugin modified response body read error: %v", readErr)
+				} else {
+					body = newBody
+				}
+			}
+		}
+	}()
+	if pluginErr != nil {
+		return nil, nil, pluginErr
+	}
+	return resp, body, nil
 }
 
 func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, start time.Time) {
