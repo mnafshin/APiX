@@ -172,7 +172,7 @@ The layered architecture (proxy → engine → storage) is what allows each laye
 | Orchestration | `internal/engine/` | Store transactions, evaluate breakpoints, publish to subscribers |
 | Persistence | `internal/storage/` | SQLite queries, schema, migrations |
 | API | `internal/server/` | Translate between gRPC proto messages and domain types |
-| Extension | `internal/plugins/`, `internal/pluginrt/` | Safe, sandboxed request/response modification |
+| Extension | `internal/pluginrt/` | Safe, sandboxed request/response modification |
 | Config | `internal/config/` | Load and validate YAML configuration |
 
 **Known gaps (tracked as issues):**
