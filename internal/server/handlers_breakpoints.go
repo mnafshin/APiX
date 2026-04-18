@@ -101,14 +101,16 @@ func (s *EngineServer) WatchPausedRequests(_ *apix.Empty, stream grpc.ServerStre
 	}
 }
 
+// protoToResumeAction maps proto ResumeAction enum values to the internal
+// breakpoints.ResumeAction type. New action variants only need a map entry.
+var protoToResumeAction = map[apix.ResumeAction_Action]breakpoints.ResumeAction{
+	apix.ResumeAction_DROP:    breakpoints.ActionDrop,
+	apix.ResumeAction_RESPOND: breakpoints.ActionRespond,
+}
+
 func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction) (*apix.Empty, error) {
-	var action breakpoints.ResumeAction
-	switch req.Action {
-	case apix.ResumeAction_DROP:
-		action = breakpoints.ActionDrop
-	case apix.ResumeAction_RESPOND:
-		action = breakpoints.ActionRespond
-	default:
+	action, ok := protoToResumeAction[req.Action]
+	if !ok {
 		action = breakpoints.ActionForward
 	}
 
