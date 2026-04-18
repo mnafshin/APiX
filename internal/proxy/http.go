@@ -7,6 +7,7 @@ import (
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
 	metrics "github.com/mnafshin/apix/internal/metrics"
+	"github.com/mnafshin/apix/internal/rewrite"
 	"io"
 	"net"
 	"net/http"
@@ -167,13 +168,22 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	origHeaders := r.Header.Clone()
 
+	// Detect negotiated protocol. For HTTP/1.x requests r.Proto is "HTTP/1.1".
+	// For h2c (cleartext HTTP/2) the Go standard library upgrades the connection
+	// before reaching the handler, so r.Proto will be "HTTP/2.0".
+	protocol := r.Proto
+	if protocol == "" {
+		protocol = "HTTP/1.1"
+	}
+
 	proxyReq := &plugins.ProxyRequest{
-		ID:      reqID,
-		Method:  r.Method,
-		URL:     r.URL,
-		Headers: r.Header.Clone(),
-		Body:    io.NopCloser(bytes.NewReader(bodyBytes)),
-		Raw:     r,
+		ID:       reqID,
+		Method:   r.Method,
+		URL:      r.URL,
+		Headers:  r.Header.Clone(),
+		Body:     io.NopCloser(bytes.NewReader(bodyBytes)),
+		Protocol: protocol,
+		Raw:      r,
 	}
 
 	// Run plugin OnRequest chain (with panic recovery).
@@ -258,6 +268,30 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Apply rewrite rules to the request (before forwarding upstream).
+	if p.engine != nil {
+		rules, err := p.engine.RewriteRules()
+		if err != nil {
+			logging.Errorf(ctx, "load rewrite rules: %v", err)
+		} else if len(rules) > 0 {
+			synth, err := rewrite.ApplyRequestRules(rules, r, bodyBytes)
+			if err != nil {
+				logging.Errorf(ctx, "apply rewrite rules: %v", err)
+			} else if synth != nil {
+				for k, vv := range synth.Headers {
+					for _, v := range vv {
+						w.Header().Add(k, v)
+					}
+				}
+				w.WriteHeader(synth.StatusCode)
+				if len(synth.Body) > 0 {
+					_, _ = w.Write(synth.Body)
+				}
+				return
+			}
+		}
+	}
+
 	// Build upstream request.
 	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if err != nil {
@@ -294,6 +328,18 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Headers:    upResp.Header.Clone(),
 		Body:       nil,
 		Raw:        upResp,
+	}
+
+	// Apply response rewrite rules before plugins.
+	if p.engine != nil {
+		rules, err := p.engine.RewriteRules()
+		if err != nil {
+			logging.Errorf(ctx, "load rewrite rules (response): %v", err)
+		} else if len(rules) > 0 {
+			respBody = rewrite.ApplyResponseRules(rules, r, upResp, respBody)
+			// Sync updated headers back into proxyResp.
+			proxyResp.Headers = upResp.Header.Clone()
+		}
 	}
 
 	// Run plugin OnResponse chain (with panic recovery).

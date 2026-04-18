@@ -380,6 +380,7 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 				Headers:   hdrs,
 				Body:      r.Body,
 				Timestamp: r.Timestamp.UnixMilli(),
+				Protocol:  r.Protocol,
 			},
 		}
 
@@ -611,3 +612,61 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 // Suppress unused import warnings.
 var _ = fmt.Sprintf
 var _ = time.Now
+
+// ----- Rewrite rules -----
+
+func (s *EngineServer) AddRewriteRule(ctx context.Context, rule *apix.RewriteRule) (*apix.RewriteRule, error) {
+	if rule.Id == "" {
+		rule.Id = uuid.NewString()
+	}
+	if err := s.engine.DB().AddRewriteRule(rule); err != nil {
+		return nil, status.Errorf(codes.Internal, "add rewrite rule: %v", err)
+	}
+	return rule, nil
+}
+
+func (s *EngineServer) UpdateRewriteRule(ctx context.Context, rule *apix.RewriteRule) (*apix.RewriteRule, error) {
+	if rule.Id == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
+	}
+	if err := s.engine.DB().UpdateRewriteRule(rule); err != nil {
+		return nil, status.Errorf(codes.Internal, "update rewrite rule: %v", err)
+	}
+	return rule, nil
+}
+
+func (s *EngineServer) DeleteRewriteRule(ctx context.Context, req *apix.RewriteRuleRequest) (*apix.Empty, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
+	}
+	if err := s.engine.DB().DeleteRewriteRule(req.RuleId); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete rewrite rule: %v", err)
+	}
+	return &apix.Empty{}, nil
+}
+
+func (s *EngineServer) ListRewriteRules(ctx context.Context, _ *apix.Empty) (*apix.RewriteRuleList, error) {
+	rules, err := s.engine.DB().ListRewriteRules()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list rewrite rules: %v", err)
+	}
+	return &apix.RewriteRuleList{Rules: rules}, nil
+}
+
+func (s *EngineServer) ToggleRewriteRule(ctx context.Context, req *apix.RewriteRuleRequest) (*apix.RewriteRule, error) {
+	if req.RuleId == "" {
+		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
+	}
+	rule, err := s.engine.DB().GetRewriteRule(req.RuleId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "get rewrite rule: %v", err)
+	}
+	if rule == nil {
+		return nil, status.Errorf(codes.NotFound, "rule %q not found", req.RuleId)
+	}
+	rule.Enabled = !rule.Enabled
+	if err := s.engine.DB().UpdateRewriteRule(rule); err != nil {
+		return nil, status.Errorf(codes.Internal, "toggle rewrite rule: %v", err)
+	}
+	return rule, nil
+}

@@ -36,6 +36,8 @@ type ProxyRequest struct {
 	URL     *url.URL
 	Headers http.Header
 	Body    io.ReadCloser
+	// Protocol is the negotiated HTTP protocol: "HTTP/1.1", "HTTP/2.0", or "h2c".
+	Protocol string
 	// Raw stores the original unmodified request for reference.
 	Raw *http.Request
 	// MockedResponse, if non-nil, causes the proxy to skip upstream forwarding

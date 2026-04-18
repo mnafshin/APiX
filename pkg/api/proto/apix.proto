@@ -16,6 +16,7 @@ message HttpRequest {
   bytes body = 4;
   int64 timestamp = 5;
   string id = 6; // UUID assigned at capture time
+  string protocol = 7; // negotiated protocol: "HTTP/1.1", "HTTP/2.0", "h2c"
 }
 
 // HttpResponse represents a captured or synthesized HTTP response.
@@ -180,6 +181,55 @@ message ImportHARResponse {
   repeated string transaction_ids = 1;
 }
 
+// ========== Rewrite rule messages ==========
+
+message MatchCriteria {
+  string url_pattern = 1;
+  string method = 2;
+  string header_name = 3;
+  string header_value = 4;
+  string body_pattern = 5;
+  int32 status_code = 6;
+}
+
+enum RewriteAction {
+  REWRITE_ACTION_UNSPECIFIED = 0;
+  ADD_REQUEST_HEADER = 1;
+  REMOVE_REQUEST_HEADER = 2;
+  REPLACE_REQUEST_HEADER = 3;
+  ADD_RESPONSE_HEADER = 4;
+  REMOVE_RESPONSE_HEADER = 5;
+  REPLACE_RESPONSE_HEADER = 6;
+  REPLACE_REQUEST_BODY = 7;
+  REPLACE_RESPONSE_BODY = 8;
+  REDIRECT = 9;
+  BLOCK = 10;
+  RESPOND = 11;
+}
+
+message RewriteRule {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  int32 priority = 4;
+  MatchCriteria match = 5;
+  RewriteAction action = 6;
+  string param_key = 7;
+  string param_value = 8;
+  bytes body_template = 9;
+  int32 response_status = 10;
+  bytes response_body = 11;
+  string response_content_type = 12;
+}
+
+message RewriteRuleList {
+  repeated RewriteRule rules = 1;
+}
+
+message RewriteRuleRequest {
+  string rule_id = 1;
+}
+
 // ========== Service ==========
 
 service Engine {
@@ -225,4 +275,11 @@ service Engine {
   rpc ExportHAR(ExportHARRequest) returns (ExportHARResponse);
   // Import HAR 1.2 JSON into stored history.
   rpc ImportHAR(ImportHARRequest) returns (ImportHARResponse);
+
+  // ----- Rewrite rules -----
+  rpc AddRewriteRule(RewriteRule) returns (RewriteRule);
+  rpc UpdateRewriteRule(RewriteRule) returns (RewriteRule);
+  rpc DeleteRewriteRule(RewriteRuleRequest) returns (Empty);
+  rpc ListRewriteRules(Empty) returns (RewriteRuleList);
+  rpc ToggleRewriteRule(RewriteRuleRequest) returns (RewriteRule);
 }

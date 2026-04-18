@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS requests (
     headers     TEXT NOT NULL DEFAULT '{}', -- JSON object
     body        BLOB,
     timestamp   INTEGER NOT NULL,           -- Unix milliseconds
-    duration_ms INTEGER NOT NULL DEFAULT 0
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    protocol    TEXT NOT NULL DEFAULT 'HTTP/1.1'  -- negotiated protocol
 );`
 
 const CreateResponsesTable = `
@@ -54,6 +55,27 @@ CREATE TABLE IF NOT EXISTS ws_frames (
     FOREIGN KEY (transaction_id) REFERENCES requests(id) ON DELETE CASCADE
 );`
 
+const CreateRewriteRulesTable = `
+CREATE TABLE IF NOT EXISTS rewrite_rules (
+    id                    TEXT PRIMARY KEY,
+    name                  TEXT NOT NULL DEFAULT '',
+    enabled               INTEGER NOT NULL DEFAULT 1,
+    priority              INTEGER NOT NULL DEFAULT 100,
+    url_pattern           TEXT NOT NULL DEFAULT '',
+    method                TEXT NOT NULL DEFAULT '',
+    header_name           TEXT NOT NULL DEFAULT '',
+    header_value          TEXT NOT NULL DEFAULT '',
+    body_pattern          TEXT NOT NULL DEFAULT '',
+    status_code           INTEGER NOT NULL DEFAULT 0,
+    action                INTEGER NOT NULL DEFAULT 0,
+    param_key             TEXT NOT NULL DEFAULT '',
+    param_value           TEXT NOT NULL DEFAULT '',
+    body_template         BLOB,
+    response_status       INTEGER NOT NULL DEFAULT 200,
+    response_body         BLOB,
+    response_content_type TEXT NOT NULL DEFAULT ''
+);`
+
 // AllTables is the ordered list of DDL statements to apply during DB init.
 // Order matters for foreign key dependencies.
 var AllTables = []string{
@@ -62,9 +84,11 @@ var AllTables = []string{
 	CreateBreakpointsTable,
 	CreatePluginsTable,
 	CreateWebSocketFramesTable,
+	CreateRewriteRulesTable,
 	// Indexes — created after tables so IF NOT EXISTS is safe on re-open.
 	`CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_method    ON requests(method)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_url       ON requests(url)`,
 	`CREATE INDEX IF NOT EXISTS idx_ws_frames_txid     ON ws_frames(transaction_id)`,
+	`CREATE INDEX IF NOT EXISTS idx_rewrite_rules_priority ON rewrite_rules(priority ASC)`,
 }

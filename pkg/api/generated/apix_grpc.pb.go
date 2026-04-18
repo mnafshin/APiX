@@ -34,6 +34,11 @@ const (
 	Engine_ClearHistory_FullMethodName        = "/apix.Engine/ClearHistory"
 	Engine_ExportHAR_FullMethodName           = "/apix.Engine/ExportHAR"
 	Engine_ImportHAR_FullMethodName           = "/apix.Engine/ImportHAR"
+	Engine_AddRewriteRule_FullMethodName      = "/apix.Engine/AddRewriteRule"
+	Engine_UpdateRewriteRule_FullMethodName   = "/apix.Engine/UpdateRewriteRule"
+	Engine_DeleteRewriteRule_FullMethodName   = "/apix.Engine/DeleteRewriteRule"
+	Engine_ListRewriteRules_FullMethodName    = "/apix.Engine/ListRewriteRules"
+	Engine_ToggleRewriteRule_FullMethodName   = "/apix.Engine/ToggleRewriteRule"
 )
 
 // EngineClient is the client API for Engine service.
@@ -77,6 +82,12 @@ type EngineClient interface {
 	ExportHAR(ctx context.Context, in *ExportHARRequest, opts ...grpc.CallOption) (*ExportHARResponse, error)
 	// Import HAR 1.2 JSON into stored history.
 	ImportHAR(ctx context.Context, in *ImportHARRequest, opts ...grpc.CallOption) (*ImportHARResponse, error)
+	// ----- Rewrite rules -----
+	AddRewriteRule(ctx context.Context, in *RewriteRule, opts ...grpc.CallOption) (*RewriteRule, error)
+	UpdateRewriteRule(ctx context.Context, in *RewriteRule, opts ...grpc.CallOption) (*RewriteRule, error)
+	DeleteRewriteRule(ctx context.Context, in *RewriteRuleRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListRewriteRules(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RewriteRuleList, error)
+	ToggleRewriteRule(ctx context.Context, in *RewriteRuleRequest, opts ...grpc.CallOption) (*RewriteRule, error)
 }
 
 type engineClient struct {
@@ -273,6 +284,56 @@ func (c *engineClient) ImportHAR(ctx context.Context, in *ImportHARRequest, opts
 	return out, nil
 }
 
+func (c *engineClient) AddRewriteRule(ctx context.Context, in *RewriteRule, opts ...grpc.CallOption) (*RewriteRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RewriteRule)
+	err := c.cc.Invoke(ctx, Engine_AddRewriteRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) UpdateRewriteRule(ctx context.Context, in *RewriteRule, opts ...grpc.CallOption) (*RewriteRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RewriteRule)
+	err := c.cc.Invoke(ctx, Engine_UpdateRewriteRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) DeleteRewriteRule(ctx context.Context, in *RewriteRuleRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Engine_DeleteRewriteRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ListRewriteRules(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RewriteRuleList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RewriteRuleList)
+	err := c.cc.Invoke(ctx, Engine_ListRewriteRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ToggleRewriteRule(ctx context.Context, in *RewriteRuleRequest, opts ...grpc.CallOption) (*RewriteRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RewriteRule)
+	err := c.cc.Invoke(ctx, Engine_ToggleRewriteRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EngineServer is the server API for Engine service.
 // All implementations must embed UnimplementedEngineServer
 // for forward compatibility.
@@ -314,6 +375,12 @@ type EngineServer interface {
 	ExportHAR(context.Context, *ExportHARRequest) (*ExportHARResponse, error)
 	// Import HAR 1.2 JSON into stored history.
 	ImportHAR(context.Context, *ImportHARRequest) (*ImportHARResponse, error)
+	// ----- Rewrite rules -----
+	AddRewriteRule(context.Context, *RewriteRule) (*RewriteRule, error)
+	UpdateRewriteRule(context.Context, *RewriteRule) (*RewriteRule, error)
+	DeleteRewriteRule(context.Context, *RewriteRuleRequest) (*Empty, error)
+	ListRewriteRules(context.Context, *Empty) (*RewriteRuleList, error)
+	ToggleRewriteRule(context.Context, *RewriteRuleRequest) (*RewriteRule, error)
 	mustEmbedUnimplementedEngineServer()
 }
 
@@ -368,6 +435,21 @@ func (UnimplementedEngineServer) ExportHAR(context.Context, *ExportHARRequest) (
 }
 func (UnimplementedEngineServer) ImportHAR(context.Context, *ImportHARRequest) (*ImportHARResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ImportHAR not implemented")
+}
+func (UnimplementedEngineServer) AddRewriteRule(context.Context, *RewriteRule) (*RewriteRule, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddRewriteRule not implemented")
+}
+func (UnimplementedEngineServer) UpdateRewriteRule(context.Context, *RewriteRule) (*RewriteRule, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateRewriteRule not implemented")
+}
+func (UnimplementedEngineServer) DeleteRewriteRule(context.Context, *RewriteRuleRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteRewriteRule not implemented")
+}
+func (UnimplementedEngineServer) ListRewriteRules(context.Context, *Empty) (*RewriteRuleList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRewriteRules not implemented")
+}
+func (UnimplementedEngineServer) ToggleRewriteRule(context.Context, *RewriteRuleRequest) (*RewriteRule, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ToggleRewriteRule not implemented")
 }
 func (UnimplementedEngineServer) mustEmbedUnimplementedEngineServer() {}
 func (UnimplementedEngineServer) testEmbeddedByValue()                {}
@@ -632,6 +714,96 @@ func _Engine_ImportHAR_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_AddRewriteRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewriteRule)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).AddRewriteRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_AddRewriteRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).AddRewriteRule(ctx, req.(*RewriteRule))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_UpdateRewriteRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewriteRule)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).UpdateRewriteRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_UpdateRewriteRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).UpdateRewriteRule(ctx, req.(*RewriteRule))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_DeleteRewriteRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewriteRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).DeleteRewriteRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_DeleteRewriteRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).DeleteRewriteRule(ctx, req.(*RewriteRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ListRewriteRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ListRewriteRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ListRewriteRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ListRewriteRules(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ToggleRewriteRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RewriteRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ToggleRewriteRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ToggleRewriteRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ToggleRewriteRule(ctx, req.(*RewriteRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Engine_ServiceDesc is the grpc.ServiceDesc for Engine service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -682,6 +854,26 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ImportHAR",
 			Handler:    _Engine_ImportHAR_Handler,
+		},
+		{
+			MethodName: "AddRewriteRule",
+			Handler:    _Engine_AddRewriteRule_Handler,
+		},
+		{
+			MethodName: "UpdateRewriteRule",
+			Handler:    _Engine_UpdateRewriteRule_Handler,
+		},
+		{
+			MethodName: "DeleteRewriteRule",
+			Handler:    _Engine_DeleteRewriteRule_Handler,
+		},
+		{
+			MethodName: "ListRewriteRules",
+			Handler:    _Engine_ListRewriteRules_Handler,
+		},
+		{
+			MethodName: "ToggleRewriteRule",
+			Handler:    _Engine_ToggleRewriteRule_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
