@@ -13,6 +13,8 @@ import {
     HttpResponse,
     PluginInfo,
     WebSocketFrame,
+    RewriteRule,
+    RewriteRuleList,
 } from './types';
 
 const PROTO_PATH = path.resolve(__dirname, '../../proto/apix.proto');
@@ -331,5 +333,32 @@ export class EngineClient {
     /** Close the gRPC channel. */
     close(): void {
         this.client?.close();
+    }
+
+    async listRewriteRules(): Promise<RewriteRuleList> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.listRewriteRules({}, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve(response as RewriteRuleList); }
+            });
+        });
+    }
+
+    async toggleRewriteRule(ruleId: string): Promise<RewriteRule> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.toggleRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve(response as RewriteRule); }
+            });
+        });
+    }
+
+    async deleteRewriteRule(ruleId: string): Promise<void> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.deleteRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null) => {
+                if (err) { reject(err); } else { resolve(); }
+            });
+        });
     }
 }

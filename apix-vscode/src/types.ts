@@ -102,3 +102,31 @@ export interface PluginInfo {
     description: string;
     enabled: boolean;
 }
+
+export interface MatchCriteria {
+    urlPattern: string;
+    method: string;
+    headerName: string;
+    headerValue: string;
+    bodyPattern: string;
+    statusCode: number;
+}
+
+export interface RewriteRule {
+    id: string;
+    name: string;
+    enabled: boolean;
+    priority: number;
+    match?: MatchCriteria;
+    action: string;       // RewriteAction enum string e.g. "ADD_REQUEST_HEADER"
+    paramKey: string;
+    paramValue: string;
+    bodyTemplate: Uint8Array | string;
+    responseStatus: number;
+    responseBody: Uint8Array | string;
+    responseContentType: string;
+}
+
+export interface RewriteRuleList {
+    rules: RewriteRule[];
+}
