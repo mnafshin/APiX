@@ -25,14 +25,14 @@ import (
 type Engine struct {
 	mu               sync.Mutex
 	db               storage.TransactionRepository
-	bpManager        *breakpoints.Manager
+	bpManager        BreakpointEvaluator
 	pluginRT         *pluginrt.Runtime
 	subscribers      map[chan *apix.HttpRequest]struct{}
 	pauseTimeoutSec  int // 0 = no timeout
 }
 
 // New creates a new Engine wiring together all sub-systems.
-func New(db storage.TransactionRepository, bpManager *breakpoints.Manager, rt *pluginrt.Runtime) *Engine {
+func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pluginrt.Runtime) *Engine {
 	return &Engine{
 		db:          db,
 		bpManager:   bpManager,
@@ -43,7 +43,7 @@ func New(db storage.TransactionRepository, bpManager *breakpoints.Manager, rt *p
 
 // NewWithConfig creates a new Engine using per-configuration settings such as
 // the breakpoint pause timeout.
-func NewWithConfig(db storage.TransactionRepository, bpManager *breakpoints.Manager, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
+func NewWithConfig(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
 	e := New(db, bpManager, rt)
 	if cfg != nil {
 		e.pauseTimeoutSec = cfg.BreakpointPauseTimeoutSec
@@ -249,8 +249,8 @@ func (e *Engine) DB() *storage.DB {
 	return db
 }
 
-// BreakpointManager returns the breakpoints manager.
-func (e *Engine) BreakpointManager() *breakpoints.Manager { return e.bpManager }
+// BreakpointManager returns the breakpoints manager (as BreakpointEvaluator).
+func (e *Engine) BreakpointManager() BreakpointEvaluator { return e.bpManager }
 
 // PluginRuntime returns the plugin runtime.
 func (e *Engine) PluginRuntime() *pluginrt.Runtime { return e.pluginRT }
