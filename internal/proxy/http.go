@@ -377,7 +377,7 @@ func (p *HTTPProxy) applyRequestRewriteRules(ctx context.Context, w http.Respons
 	}
 	w.WriteHeader(synth.StatusCode)
 	if len(synth.Body) > 0 {
-		_, _ = w.Write(synth.Body)
+		_, _ = w.Write(synth.Body) //nolint:gosec // G705: proxy intentionally echoes response body to client
 	}
 	return true
 }
@@ -556,7 +556,7 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse, body
 
 	w.WriteHeader(resp.StatusCode)
 	if len(body) > 0 {
-		if _, err := w.Write(body); err != nil {
+		if _, err := w.Write(body); err != nil { //nolint:gosec // G705: proxy intentionally writes upstream response body to client
 			rid := resp.Headers.Get(logging.RequestIDHeader)
 			ctx := context.Background()
 			if rid != "" {

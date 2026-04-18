@@ -460,27 +460,27 @@ bodyPattern, statusCode, action, paramKey, paramValue, bodyTemplate, responseSta
 }
 
 func buildRewriteRule(id, name string, enabledInt, priority int, urlPattern, method, headerName, headerValue,
-bodyPattern string, statusCode, action int, paramKey, paramValue string, bodyTemplate []byte,
-responseStatus int, responseBody []byte, responseContentType string) *apix.RewriteRule {
-return &apix.RewriteRule{
-Id:       id,
-Name:     name,
-Enabled:  enabledInt == 1,
-Priority: int32(priority),
-Match: &apix.MatchCriteria{
-UrlPattern:  urlPattern,
-Method:      method,
-HeaderName:  headerName,
-HeaderValue: headerValue,
-BodyPattern: bodyPattern,
-StatusCode:  int32(statusCode),
-},
-Action:              apix.RewriteAction(action),
-ParamKey:            paramKey,
-ParamValue:          paramValue,
-BodyTemplate:        bodyTemplate,
-ResponseStatus:      int32(responseStatus),
-ResponseBody:        responseBody,
-ResponseContentType: responseContentType,
-}
+	bodyPattern string, statusCode, action int, paramKey, paramValue string, bodyTemplate []byte,
+	responseStatus int, responseBody []byte, responseContentType string) *apix.RewriteRule {
+	return &apix.RewriteRule{
+		Id:      id,
+		Name:    name,
+		Enabled: enabledInt == 1,
+		Priority: int32(priority), //nolint:gosec // G115: priority is bounded by DB constraints
+		Match: &apix.MatchCriteria{
+			UrlPattern:  urlPattern,
+			Method:      method,
+			HeaderName:  headerName,
+			HeaderValue: headerValue,
+			BodyPattern: bodyPattern,
+			StatusCode:  int32(statusCode), //nolint:gosec // G115: HTTP status codes fit in int32
+		},
+		Action:              apix.RewriteAction(action), //nolint:gosec // G115: action is a bounded enum from DB
+		ParamKey:            paramKey,
+		ParamValue:          paramValue,
+		BodyTemplate:        bodyTemplate,
+		ResponseStatus:      int32(responseStatus), //nolint:gosec // G115: HTTP status codes fit in int32
+		ResponseBody:        responseBody,
+		ResponseContentType: responseContentType,
+	}
 }
