@@ -378,6 +378,8 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 
 ## Roadmap
 
+> **Priority note:** Core debugger depth comes before plugin breadth. Items are ordered by user-facing debugger value first, then ecosystem expansion.
+
 ### v1.0.0 ✅ (Current)
 - ✅ HTTP/HTTPS interception and MITM
 - ✅ WebSocket inspection for `ws://` and `wss://`
@@ -388,51 +390,34 @@ APiX works in the browser via vscode.dev by connecting to a remotely hosted engi
 - ✅ SQLite persistent storage
 - ✅ VS Code extension
 - ✅ Multi-platform binaries (macOS, Linux, Windows)
-- ✅ Comprehensive deployment guide
 - ✅ Security hardening (TLS, auth tokens, secure defaults)
+- ✅ Contract-first CLI (status, history, watch, breakpoints, replay, export)
+- ✅ Declarative rewrite rules and response mocking
+- ✅ Mocks tree view in VS Code sidebar
 
-### v1.0.1 (Patch - ~2 weeks)
-- [ ] Bug fixes from user feedback
-- [ ] Performance optimizations
-- [ ] Additional logging/debugging options
+### v1.1 — Core Debugger Depth (next)
+- [ ] **Conditional breakpoints** — match on headers, body content, status code, method
+- [ ] **Auto-reconnect** — extension recovers when engine process restarts
+- [ ] **WebSocket frame pagination** — GetWebSocketFrames RPC handles large sessions
+- [ ] **TLS certificate cache eviction** — bounded cert cache prevents memory growth
+- [ ] **Body size limits** — configurable cap on buffered request/response bodies
 
-### v1.1 (Minor - ~4-6 weeks)
-- [x] Contract-first CLI foundation (`cmd/apix-cli`, shared transport/auth config, stable flags)
-- [x] AI-ready output contracts (`--output json`, NDJSON streams, stable exit codes)
-- [x] Initial CLI read flows (`status`, `plugins`, `history`, `watch`)
+### v1.2 — Observability & Operations
+- [ ] HTTP/2 full inspection (currently tracked only, not decoded)
+- [ ] `/healthz` liveness probe improvements (dependency checks)
+- [ ] Distributed tracing export (OpenTelemetry)
+- [ ] Performance profiling view
 
-### v1.2 (Minor - ~6-8 weeks)
-- [x] Core CLI terminal workflows (`history`, `watch`, breakpoints, paused request actions, replay/send)
-- [x] CLI operator tooling (`doctor`, certificate status/help, shell completion)
-- [x] History management and export/import foundations
-- [x] Copy-as-curl in the VS Code traffic workflow
-- [x] WebSocket traffic inspection
-- [ ] Breakpoint conditions (match on headers, body, status code)
-- [x] HAR export/import (session persistence)
-- [ ] Response mocking UI
-
-### v1.3 (Minor)
-- [ ] Declarative rewrite rules and repeatable mocking workflows
-- [ ] Request composition/templating
-- [ ] MCP integration and AI-facing automation surfaces
-- [ ] Map Local and cURL/HAR portability improvements
-
-### v1.4+ (Protocol Expansion)
-- [ ] gRPC-over-HTTP/2 inspection
-- [ ] HTTP/2 and staged HTTP/3 support
-- [ ] API authentication/authorization testing
-- [ ] Performance profiling
-- [ ] Distributed tracing support (OpenTelemetry)
+### v1.3 — Ecosystem & Distribution
 - [ ] Homebrew formula
-- [ ] Snap package
-- [ ] AUR package (Arch Linux)
+- [ ] Snap / AUR packages
+- [ ] CI/CD integration (GitHub Actions, GitLab CI)
+- [ ] MCP integration and AI-facing automation surfaces
 
-### v2.0 (Major - ~3-4 months)
+### v2.0 — Platform
 - [ ] Full-featured test suite UI
-- [ ] CI/CD integration (GitHub Actions, GitLab CI, Jenkins)
-- [ ] Scriptable request/response transformations
 - [ ] Multi-engine clustering
-- [ ] Custom plugin marketplace
+- [ ] Custom plugin marketplace (currently 12 plugin RFCs are deferred until v2.0)
 - [ ] Analytics dashboard
 
 ## CLI Direction
