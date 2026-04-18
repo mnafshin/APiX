@@ -12,6 +12,17 @@
 ![VS Code](https://img.shields.io/badge/vscode-%5E1.85-007ACC.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
 
+## Why APiX?
+
+Debugging HTTP APIs in 2025 still means context-switching: open Charles, set up Fiddler, run mitmproxy in a terminal, or squint at browser DevTools that only see browser traffic. None of those tools live inside your editor.
+
+APiX puts the proxy **inside VS Code**. You set a breakpoint on a URL pattern, the request pauses in your sidebar, you edit it, and resume — no tab-switching, no external UI. The same engine exposes a full gRPC API so a terminal CLI or CI script can do the same thing headlessly.
+
+**The short answer to "why not mitmproxy/Charles/Fiddler":**
+- They are external apps. APiX is part of your editor workflow.
+- They capture passively. APiX lets you *pause and mutate* in-flight requests.
+- They have no programmatic API. APiX is API-first (gRPC + CLI).
+
 ## What is APiX?
 
 APiX is an API debugging toolkit backed by a Go proxy engine. It intercepts HTTP/HTTPS traffic via a MITM proxy, lets you pause requests at URL breakpoints, edit and replay them, and extend behavior with plugins. It now ships both a VS Code extension and a contract-first CLI on the same gRPC engine API.
