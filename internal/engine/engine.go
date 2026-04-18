@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
+	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/storage"
@@ -61,6 +62,8 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		tx.ID = uuid.NewString()
 	}
 
+	var retErr error
+
 	req := tx.Request
 	if req != nil {
 		// Prefer storing the original headers captured before plugins modified them.
@@ -74,12 +77,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		} else {
 			hdrSrc = http.Header{}
 		}
-		hdrs := make(map[string]string)
-		for k, vv := range hdrSrc {
-			if len(vv) > 0 {
-				hdrs[k] = vv[0]
-			}
-		}
+		hdrs := httputil.HeadersToMap(hdrSrc)
 
 		rec := &storage.RequestRecord{
 			ID:         tx.ID,
@@ -93,6 +91,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		}
 		if err := e.db.SaveRequest(rec); err != nil {
 			logging.Errorf(context.Background(), "engine: save request: %v", err)
+			retErr = err
 		}
 
 		// Publish to capture subscribers.
@@ -121,12 +120,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 
 	resp := tx.Response
 	if resp != nil {
-		hdrs := make(map[string]string)
-		for k, vv := range resp.Headers {
-			if len(vv) > 0 {
-				hdrs[k] = vv[0]
-			}
-		}
+		hdrs := httputil.HeadersToMap(resp.Headers)
 		rec := &storage.ResponseRecord{
 			RequestID:  tx.ID,
 			StatusCode: resp.StatusCode,
@@ -136,9 +130,12 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		}
 		if err := e.db.SaveResponse(rec); err != nil {
 			logging.Errorf(context.Background(), "engine: save response: %v", err)
+			if retErr == nil {
+				retErr = err
+			}
 		}
 	}
-	return nil
+	return retErr
 }
 
 // StoreWebSocketFrame persists a proxied WebSocket frame for later inspection.

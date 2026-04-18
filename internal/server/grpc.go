@@ -197,12 +197,7 @@ func (s *EngineServer) WatchPausedRequests(_ *apix.Empty, stream grpc.ServerStre
 			if !ok {
 				return nil
 			}
-			hdrs := make(map[string]string)
-			for k, vv := range entry.Request.Header {
-				if len(vv) > 0 {
-					hdrs[k] = vv[0]
-				}
-			}
+			hdrs := httputil.HeadersToMap(entry.Request.Header)
 			if err := stream.Send(&apix.PausedRequest{
 				RequestId:    entry.RequestID,
 				BreakpointId: entry.BreakpointID,
@@ -325,12 +320,7 @@ func (s *EngineServer) ReplayRequest(ctx context.Context, req *apix.ReplaySpec) 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "read replay response body: %v", err)
 	}
-	hdrs := make(map[string]string)
-	for k, vv := range resp.Header {
-		if len(vv) > 0 {
-			hdrs[k] = vv[0]
-		}
-	}
+	hdrs := httputil.HeadersToMap(resp.Header)
 	statusCode, err := int32FromInt(resp.StatusCode, "replay status code")
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "replay: %v", err)

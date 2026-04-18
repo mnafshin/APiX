@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/mnafshin/apix/internal/config"
+	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
@@ -156,9 +157,8 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
 	var bodyBytes []byte
 	if r.Body != nil {
-		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		var err error
-		bodyBytes, err = io.ReadAll(r.Body)
+		bodyBytes, err = httputil.ReadLimitedBody(r.Body, maxBodyBytes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
 			return

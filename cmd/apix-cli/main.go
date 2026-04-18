@@ -293,7 +293,12 @@ func (a *app) wrapErr(err error) int {
 			return exitCode
 		}
 	}
-	writeLine(a.errw, err)
+	// Replace raw gRPC Unavailable errors with an actionable message for human output.
+	displayErr := err
+	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
+		displayErr = fmt.Errorf("APiX engine is not running.\n  Start it with: apix-engine\n  Or check: apix-cli status")
+	}
+	writeLine(a.errw, displayErr)
 	return exitCode
 }
 
