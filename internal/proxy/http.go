@@ -344,6 +344,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Run plugin OnResponse chain (with panic recovery).
 	var finalRespBody = respBody
+	var pluginRespErr error
 	if p.plugins != nil {
 		func() {
 			defer func() {
@@ -356,6 +357,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			modResp, err := p.plugins.RunResponse(ctx, proxyReq, proxyResp)
 			if err != nil {
 				logging.Errorf(ctx, "plugin OnResponse error: %v", err)
+				pluginRespErr = err
 			} else if modResp != nil {
 				proxyResp = modResp
 				// Extract body from modified response if provided
@@ -370,6 +372,10 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}()
+	}
+	if pluginRespErr != nil {
+		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", pluginRespErr), http.StatusBadGateway)
+		return
 	}
 
 	// Store transaction.
