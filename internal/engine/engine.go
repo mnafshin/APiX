@@ -89,6 +89,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Body:       tx.RequestBody,
 			Timestamp:  time.Now(),
 			DurationMs: tx.DurationMs,
+			Protocol:   req.Protocol,
 		}
 		if err := e.db.SaveRequest(rec); err != nil {
 			logging.Errorf(context.Background(), "engine: save request: %v", err)
@@ -102,6 +103,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Headers:   hdrs,
 			Body:      tx.RequestBody,
 			Timestamp: time.Now().UnixMilli(),
+			Protocol:  req.Protocol,
 		}
 		e.mu.Lock()
 		subscribers := make([]chan *apix.HttpRequest, 0, len(e.subscribers))
@@ -248,3 +250,8 @@ func (e *Engine) BreakpointManager() *breakpoints.Manager { return e.bpManager }
 
 // PluginRuntime returns the plugin runtime.
 func (e *Engine) PluginRuntime() *pluginrt.Runtime { return e.pluginRT }
+
+// RewriteRules loads the current list of rewrite rules from storage.
+func (e *Engine) RewriteRules() ([]*proxy.RewriteRuleProto, error) {
+	return e.db.ListRewriteRules()
+}

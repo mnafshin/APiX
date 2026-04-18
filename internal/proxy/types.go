@@ -6,8 +6,12 @@ import (
 	"time"
 
 	"github.com/mnafshin/apix/internal/breakpoints"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
+
+// RewriteRuleProto is a type alias so proxy callers don't need to import the generated package directly.
+type RewriteRuleProto = apix.RewriteRule
 
 // ProxyRequest is an alias for the plugins-layer request type.
 type ProxyRequest = plugins.ProxyRequest
@@ -25,6 +29,8 @@ type TrafficEngine interface {
 	// PauseRequest holds a request at a breakpoint and blocks until resumed.
 	// Returns the (possibly modified) request and the resume action.
 	PauseRequest(tx *Transaction) (*Transaction, ResumeAction, error)
+	// RewriteRules loads the current list of enabled rewrite rules from storage.
+	RewriteRules() ([]*RewriteRuleProto, error)
 }
 
 // PluginChain is an ordered list of plugins applied to each request/response.

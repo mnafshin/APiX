@@ -88,6 +88,13 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 		return
 	}
 	defer func() { _ = tlsConn.Close() }()
+
+	// Detect ALPN-negotiated protocol. "h2" means HTTP/2 over TLS.
+	tlsProto := "HTTP/1.1"
+	if cs := tlsConn.ConnectionState(); cs.NegotiatedProtocol == "h2" {
+		tlsProto = "HTTP/2.0"
+	}
+
 	tlsBr := bufio.NewReader(tlsConn)
 
 	// Handle multiple pipelined requests on the same connection.
@@ -108,7 +115,7 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 			req.URL.Scheme = "https"
 		}
 
-		p.handleRequest(ctx, tlsConn, tlsBr, req, host)
+		p.handleRequest(ctx, tlsConn, tlsBr, req, host, tlsProto)
 		if isWebSocketRequest(req) {
 			return
 		}
@@ -124,7 +131,7 @@ func (c *bufferedConn) Read(p []byte) (int, error) {
 	return c.reader.Read(p)
 }
 
-func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.Reader, r *http.Request, host string) {
+func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.Reader, r *http.Request, host string, protocol string) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			logging.Errorf(ctx, "TLS proxy panic (recovered): %v", rec)
@@ -157,12 +164,13 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	proxyReq := &plugins.ProxyRequest{
-		ID:      reqID,
-		Method:  r.Method,
-		URL:     r.URL,
-		Headers: r.Header.Clone(),
-		Body:    io.NopCloser(bytes.NewReader(bodyBytes)),
-		Raw:     r,
+		ID:       reqID,
+		Method:   r.Method,
+		URL:      r.URL,
+		Headers:  r.Header.Clone(),
+		Body:     io.NopCloser(bytes.NewReader(bodyBytes)),
+		Protocol: protocol,
+		Raw:      r,
 	}
 
 	// Run plugin OnRequest chain with panic recovery.

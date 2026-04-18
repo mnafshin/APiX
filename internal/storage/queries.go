@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"strings"
 	"time"
 )
@@ -19,6 +20,7 @@ type RequestRecord struct {
 	Body       []byte
 	Timestamp  time.Time
 	DurationMs int64
+	Protocol   string // negotiated protocol: "HTTP/1.1", "HTTP/2.0", "h2c"
 }
 
 // ResponseRecord is the Go representation of a row in the responses table.
@@ -72,7 +74,7 @@ func (d *DB) SaveResponse(r *ResponseRecord) error {
 // GetTransaction retrieves a request+response pair by request ID.
 func (d *DB) GetTransaction(id string) (*RequestRecord, *ResponseRecord, error) {
 	req, err := d.scanRequest(d.db.QueryRow(
-		`SELECT id, method, url, headers, body, timestamp, duration_ms
+		`SELECT id, method, url, headers, body, timestamp, duration_ms, COALESCE(protocol,'HTTP/1.1')
 		 FROM requests WHERE id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, nil, nil
@@ -129,6 +131,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 
 	query := fmt.Sprintf(`
 		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp, r.duration_ms,
+		       COALESCE(r.protocol,'HTTP/1.1'),
 		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body
 		FROM requests r
 		LEFT JOIN responses resp ON r.id = resp.request_id
@@ -145,6 +148,7 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 func (d *DB) ExportTransactions(transactionIDs []string) ([]*RequestRecord, []*ResponseRecord, error) {
 	query := `
 		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp, r.duration_ms,
+		       COALESCE(r.protocol,'HTTP/1.1'),
 		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body
 		FROM requests r
 		LEFT JOIN responses resp ON r.id = resp.request_id`
@@ -231,10 +235,11 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 func (d *DB) scanRequest(row *sql.Row) (*RequestRecord, error) {
 	var (
 		id, method, url, hdrs string
+		protocol              string
 		body                  []byte
 		tsMs, durMs           int64
 	)
-	if err := row.Scan(&id, &method, &url, &hdrs, &body, &tsMs, &durMs); err != nil {
+	if err := row.Scan(&id, &method, &url, &hdrs, &body, &tsMs, &durMs, &protocol); err != nil {
 		return nil, err
 	}
 	req := &RequestRecord{
@@ -244,6 +249,7 @@ func (d *DB) scanRequest(row *sql.Row) (*RequestRecord, error) {
 		Body:       body,
 		Timestamp:  time.UnixMilli(tsMs),
 		DurationMs: durMs,
+		Protocol:   protocol,
 	}
 	if err := json.Unmarshal([]byte(hdrs), &req.Headers); err != nil {
 		logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", id, err)
@@ -288,6 +294,7 @@ func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*Reques
 	for rows.Next() {
 		var (
 			reqID, method, url, reqHeaders string
+			protocol                       string
 			reqBody                        []byte
 			tsMs, durMs                    int64
 			respReqID                      sql.NullString
@@ -296,7 +303,7 @@ func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*Reques
 			respBody                       []byte
 		)
 		if err := rows.Scan(
-			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs,
+			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs, &protocol,
 			&respReqID, &statusCode, &statusText, &respHeaders, &respBody,
 		); err != nil {
 			return nil, nil, fmt.Errorf("scan transaction: %w", err)
@@ -309,6 +316,7 @@ func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*Reques
 			Body:       reqBody,
 			Timestamp:  time.UnixMilli(tsMs),
 			DurationMs: durMs,
+			Protocol:   protocol,
 		}
 		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
 			logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", reqID, err)
@@ -335,4 +343,144 @@ func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*Reques
 		}
 	}
 	return reqs, resps, rows.Err()
+}
+
+// AddRewriteRule inserts a new rewrite rule.
+func (d *DB) AddRewriteRule(rule *apix.RewriteRule) error {
+var match *apix.MatchCriteria
+if rule.Match != nil {
+match = rule.Match
+} else {
+match = &apix.MatchCriteria{}
+}
+enabledInt := 0
+if rule.Enabled {
+enabledInt = 1
+}
+_, err := d.db.Exec(
+`INSERT OR REPLACE INTO rewrite_rules
+ (id, name, enabled, priority, url_pattern, method, header_name, header_value,
+  body_pattern, status_code, action, param_key, param_value, body_template,
+  response_status, response_body, response_content_type)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+rule.Id, rule.Name, enabledInt, rule.Priority,
+match.UrlPattern, match.Method, match.HeaderName, match.HeaderValue,
+match.BodyPattern, match.StatusCode,
+int32(rule.Action), rule.ParamKey, rule.ParamValue, rule.BodyTemplate,
+rule.ResponseStatus, rule.ResponseBody, rule.ResponseContentType,
+)
+return err
+}
+
+// UpdateRewriteRule replaces an existing rewrite rule.
+func (d *DB) UpdateRewriteRule(rule *apix.RewriteRule) error {
+return d.AddRewriteRule(rule)
+}
+
+// DeleteRewriteRule removes a rewrite rule by ID.
+func (d *DB) DeleteRewriteRule(id string) error {
+_, err := d.db.Exec("DELETE FROM rewrite_rules WHERE id = ?", id)
+return err
+}
+
+// GetRewriteRule retrieves a single rewrite rule by ID.
+func (d *DB) GetRewriteRule(id string) (*apix.RewriteRule, error) {
+row := d.db.QueryRow(
+`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
+        body_pattern, status_code, action, param_key, param_value, body_template,
+        response_status, response_body, response_content_type
+ FROM rewrite_rules WHERE id = ?`, id)
+rule, err := scanRewriteRule(row)
+if err == sql.ErrNoRows {
+return nil, nil
+}
+return rule, err
+}
+
+// ListRewriteRules returns all rewrite rules ordered by priority.
+func (d *DB) ListRewriteRules() ([]*apix.RewriteRule, error) {
+rows, err := d.db.Query(
+`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
+        body_pattern, status_code, action, param_key, param_value, body_template,
+        response_status, response_body, response_content_type
+ FROM rewrite_rules ORDER BY priority ASC`)
+if err != nil {
+return nil, fmt.Errorf("list rewrite rules: %w", err)
+}
+defer func() { _ = rows.Close() }()
+var rules []*apix.RewriteRule
+for rows.Next() {
+rule, err := scanRewriteRuleRow(rows)
+if err != nil {
+return nil, fmt.Errorf("scan rewrite rule: %w", err)
+}
+rules = append(rules, rule)
+}
+return rules, rows.Err()
+}
+
+func scanRewriteRule(row *sql.Row) (*apix.RewriteRule, error) {
+var (
+id, name, urlPattern, method, headerName, headerValue  string
+bodyPattern, paramKey, paramValue, responseContentType string
+enabledInt, priority, statusCode, action, responseStatus int
+bodyTemplate, responseBody                              []byte
+)
+err := row.Scan(
+&id, &name, &enabledInt, &priority,
+&urlPattern, &method, &headerName, &headerValue,
+&bodyPattern, &statusCode, &action, &paramKey, &paramValue,
+&bodyTemplate, &responseStatus, &responseBody, &responseContentType,
+)
+if err != nil {
+return nil, err
+}
+return buildRewriteRule(id, name, enabledInt, priority, urlPattern, method, headerName, headerValue,
+bodyPattern, statusCode, action, paramKey, paramValue, bodyTemplate, responseStatus, responseBody, responseContentType), nil
+}
+
+func scanRewriteRuleRow(rows *sql.Rows) (*apix.RewriteRule, error) {
+var (
+id, name, urlPattern, method, headerName, headerValue  string
+bodyPattern, paramKey, paramValue, responseContentType string
+enabledInt, priority, statusCode, action, responseStatus int
+bodyTemplate, responseBody                              []byte
+)
+err := rows.Scan(
+&id, &name, &enabledInt, &priority,
+&urlPattern, &method, &headerName, &headerValue,
+&bodyPattern, &statusCode, &action, &paramKey, &paramValue,
+&bodyTemplate, &responseStatus, &responseBody, &responseContentType,
+)
+if err != nil {
+return nil, err
+}
+return buildRewriteRule(id, name, enabledInt, priority, urlPattern, method, headerName, headerValue,
+bodyPattern, statusCode, action, paramKey, paramValue, bodyTemplate, responseStatus, responseBody, responseContentType), nil
+}
+
+func buildRewriteRule(id, name string, enabledInt, priority int, urlPattern, method, headerName, headerValue,
+bodyPattern string, statusCode, action int, paramKey, paramValue string, bodyTemplate []byte,
+responseStatus int, responseBody []byte, responseContentType string) *apix.RewriteRule {
+return &apix.RewriteRule{
+Id:       id,
+Name:     name,
+Enabled:  enabledInt == 1,
+Priority: int32(priority),
+Match: &apix.MatchCriteria{
+UrlPattern:  urlPattern,
+Method:      method,
+HeaderName:  headerName,
+HeaderValue: headerValue,
+BodyPattern: bodyPattern,
+StatusCode:  int32(statusCode),
+},
+Action:              apix.RewriteAction(action),
+ParamKey:            paramKey,
+ParamValue:          paramValue,
+BodyTemplate:        bodyTemplate,
+ResponseStatus:      int32(responseStatus),
+ResponseBody:        responseBody,
+ResponseContentType: responseContentType,
+}
 }
