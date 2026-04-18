@@ -3,6 +3,7 @@ import { EngineClient } from './engineClient';
 import { TrafficPanel } from './trafficPanel';
 import { BreakpointsProvider, BreakpointItem } from './breakpointsProvider';
 import { TrafficProvider, TrafficItem } from './trafficProvider';
+import { MocksProvider, MockItem } from './mocksProvider';
 import { EngineProcessManager } from './engineProcessManager';
 import { ReplayPanel } from './replayPanel';
 import { RequestEditor } from './requestEditor';
@@ -15,6 +16,7 @@ let statusBarItem: vscode.StatusBarItem | undefined;
 let pausedRequestsStream: { cancel: () => void } | undefined;
 let trafficProvider: TrafficProvider | undefined;
 let breakpointsProvider: BreakpointsProvider | undefined;
+let mocksProvider: MocksProvider | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -42,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     trafficProvider = new TrafficProvider(engineClient, outputChannel);
     breakpointsProvider = new BreakpointsProvider(engineClient, outputChannel);
+    mocksProvider = new MocksProvider(engineClient, outputChannel);
 
     const trafficViewDisposable = vscode.window.registerTreeDataProvider(
         'apix.trafficView',
@@ -53,9 +56,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         breakpointsProvider
     );
 
+    const mocksViewDisposable = vscode.window.registerTreeDataProvider(
+        'apix.mocksView',
+        mocksProvider
+    );
+
     context.subscriptions.push(
         trafficViewDisposable,
         breakpointsViewDisposable,
+        mocksViewDisposable,
 
         vscode.commands.registerCommand('apix.startEngine', () =>
             startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
