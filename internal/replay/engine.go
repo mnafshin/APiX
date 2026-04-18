@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
 	"net"
 	"net/http"
@@ -120,18 +119,7 @@ func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.R
 		if err != nil {
 			return nil, fmt.Errorf("build request: %w", err)
 		}
-		for k, v := range rec.Headers {
-			if cn, ok := httputil.CanonicalHeader(k); ok {
-				if httputil.IsValidHeaderValue(v) {
-					httpReq.Header.Set(cn, v)
-				} else {
-					// Skip invalid header values copied from storage; log for debugging.
-					logging.Warnf(ctx, "replay: skipped invalid stored header value for %q", k)
-				}
-			} else {
-				logging.Warnf(ctx, "replay: skipped invalid stored header name %q", k)
-			}
-		}
+		httputil.SetValidHeaders(ctx, httpReq.Header, rec.Headers, "replay")
 
 	case req.RawRequest != nil:
 		// Use the supplied request (clone it with our ctx).
@@ -157,17 +145,7 @@ func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.R
 	}
 
 	// Apply header overrides.
-	for k, v := range req.OverrideHeaders {
-		if cn, ok := httputil.CanonicalHeader(k); ok {
-			if httputil.IsValidHeaderValue(v) {
-				httpReq.Header.Set(cn, v)
-			} else {
-				logging.Warnf(ctx, "replay: skipped invalid override header value for %q", k)
-			}
-		} else {
-			logging.Warnf(ctx, "replay: skipped invalid override header name %q", k)
-		}
-	}
+	httputil.SetValidHeaders(ctx, httpReq.Header, req.OverrideHeaders, "replay")
 
 	// Apply method override.
 	if req.OverrideMethod != "" {
