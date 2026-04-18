@@ -7,7 +7,7 @@ This document explains current and planned testing layers and how they map to pr
 Layers
 - Unit tests (Go/TS) — fast, exercise logic
 - Integration tests — engine + storage + proxy behavior
-- E2E tests — engine + extension + CLI in an integration environment
+- E2E tests — Go full-stack: proxy → engine → storage → gRPC response path (no VS Code extension or CLI involved)
 - Resilience/fault-injection — simulate upstream failures and flaky networks
 - Release smoke tests — minimal checks that the built binaries start and respond
 
