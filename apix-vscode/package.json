@@ -4,7 +4,7 @@
   "description": "Intercept, inspect, and debug HTTP/HTTPS traffic directly in VS Code",
   "version": "1.0.0",
   "publisher": "mnafshin",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/mnafshin/apix"
