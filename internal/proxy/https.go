@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/mnafshin/apix/internal/config"
+	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
@@ -152,9 +153,8 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
 	var bodyBytes []byte
 	if r.Body != nil {
-		r.Body = http.MaxBytesReader(nil, r.Body, maxBodyBytes)
 		var err error
-		bodyBytes, err = io.ReadAll(r.Body)
+		bodyBytes, err = httputil.ReadLimitedBody(r.Body, maxBodyBytes)
 		if err != nil {
 			writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body too large: %v", err))
 			return
@@ -245,8 +245,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	defer func() { _ = upResp.Body.Close() }()
 
 	// Apply the same body size limit to response bodies
-	upResp.Body = http.MaxBytesReader(nil, upResp.Body, maxBodyBytes)
-	respBody, err := io.ReadAll(upResp.Body)
+	respBody, err := httputil.ReadLimitedBody(upResp.Body, maxBodyBytes)
 	if err != nil {
 		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", err))
 		return
