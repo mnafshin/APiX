@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strings"
@@ -173,7 +173,7 @@ func (p *PolicyEngine) applyAction(rule PolicyRule, req *plugins.ProxyRequest) (
 		return clone, nil
 
 	case "log":
-		log.Printf("[policy-engine] rule %q matched — action: log (pass-through)", rule.Name)
+		slog.Info("policy-engine: rule matched — action: log (pass-through)", "rule", rule.Name)
 		return nil, nil
 
 	case "enrich":
@@ -192,7 +192,7 @@ func (p *PolicyEngine) applyAction(rule PolicyRule, req *plugins.ProxyRequest) (
 
 	default:
 		// Unknown action — pass through and log.
-		log.Printf("[policy-engine] unknown action %q for rule %q — passing through", rule.Action, rule.Name)
+		slog.Warn("policy-engine: unknown action — passing through", "action", rule.Action, "rule", rule.Name)
 		return nil, nil
 	}
 }

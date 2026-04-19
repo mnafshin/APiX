@@ -26,6 +26,7 @@ import (
 
 func main() {
 	configCheck := flag.Bool("config-check", false, "Validate config and exit")
+	logFormat := flag.String("log-format", "", "Log output format: 'text' or 'json' (overrides LOG_FORMAT env var; default 'text')")
 	flag.Parse()
 
 	stop := make(chan os.Signal, 1)
@@ -34,8 +35,15 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	// Initialize structured logging
-	logging.Init(os.Stdout)
+	// Resolve log format: flag > LOG_FORMAT env var > default "text".
+	format := *logFormat
+	if format == "" {
+		format = os.Getenv("LOG_FORMAT")
+	}
+	if format == "" {
+		format = "text"
+	}
+	logging.InitWithFormat(os.Stdout, format)
 
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())
