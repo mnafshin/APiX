@@ -93,8 +93,9 @@ This runs all config checks (port availability, plugin paths, regex patterns) an
 
 | Topic | Link |
 |---|---|
-| HTTPS interception (CA cert setup) | [proxy_mitm.md](proxy_mitm.md) |
-| Plugin development | [extension_arch.md](extension_arch.md) |
-| gRPC API reference | [grpc_protobuf.md](grpc_protobuf.md) |
+| Complete feature reference | [FEATURES.md](FEATURES.md) |
+| HTTPS interception (CA cert setup) | [proxy_mitm.md](ARCHITECTURE/proxy_mitm.md) |
+| Plugin development | [extension_arch.md](ARCHITECTURE/extension_arch.md) |
+| gRPC API reference | [grpc_protobuf.md](ARCHITECTURE/grpc_protobuf.md) |
 | Configuration reference | [CONFIG_VALIDATION.md](CONFIG_VALIDATION.md) |
-| Storage and replay internals | [storage_replay.md](storage_replay.md) |
+| Storage and replay internals | [storage_replay.md](ARCHITECTURE/storage_replay.md) |

@@ -8,6 +8,7 @@ Welcome to APiX documentation. Start here to find what you're looking for.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md) — running APiX in production (Docker, systemd, Kubernetes)
 - [`CONFIG_VALIDATION.md`](CONFIG_VALIDATION.md) — configuration schema and validation
 - [`getting-started.md`](getting-started.md) — first steps with APiX
+- [`FEATURES.md`](FEATURES.md) — complete feature reference (v2.0.0)
 
 **For developers & contributors:**
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — how to contribute code and issues
