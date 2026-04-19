@@ -102,6 +102,20 @@ func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, s
 	if err != nil {
 		return status.Errorf(codes.Internal, "list websocket frames: %v", err)
 	}
+
+	// Apply offset/limit pagination matching the HistoryQuery pattern.
+	offset := int(req.Offset)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(frames) {
+		offset = len(frames)
+	}
+	frames = frames[offset:]
+	if req.Limit > 0 && int(req.Limit) < len(frames) {
+		frames = frames[:int(req.Limit)]
+	}
+
 	for _, frame := range frames {
 		opcode, err := int32FromInt(frame.Opcode, "websocket opcode")
 		if err != nil {
