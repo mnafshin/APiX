@@ -35,7 +35,7 @@ Open a second terminal and send any HTTP or HTTPS request through the proxy:
 # Plain HTTP
 curl -x http://localhost:8080 http://httpbin.org/get
 
-# HTTPS (you will see a TLS warning until you install the APiX CA — see proxy_mitm.md)
+# HTTPS (you will see a TLS warning until you install the APiX CA — see ../ARCHITECTURE/proxy_mitm.md)
 curl -x http://localhost:8080 https://httpbin.org/get --insecure
 ```
 
@@ -89,11 +89,11 @@ curl  ──► APiX proxy (:8080) ──► real upstream
 | Symptom | Fix |
 |---|---|
 | `curl: (7) Failed to connect to localhost port 8080` | Engine is not running. Start `./apix-engine` first. |
-| HTTPS request fails with `SSL: no alternative certificate subject name matches target host name` | Install the APiX CA certificate. See [proxy_mitm.md](../proxy_mitm.md). |
+| HTTPS request fails with `SSL: no alternative certificate subject name matches target host name` | Install the APiX CA certificate. See [proxy_mitm.md](../ARCHITECTURE/proxy_mitm.md). |
 | `history list` shows nothing | Make sure curl is proxied (`-x http://localhost:8080`) and try again. |
 
 ## Next steps
 
 - **[First breakpoint](first-breakpoint.md)** — pause a request before it reaches the server and edit it in place.
 - **[Replay](replay.md)** — re-send a captured request, optionally with modifications.
-- **[HTTPS interception](../proxy_mitm.md)** — install the CA cert to capture HTTPS traffic without warnings.
+- **[HTTPS interception](../ARCHITECTURE/proxy_mitm.md)** — install the CA cert to capture HTTPS traffic without warnings.
