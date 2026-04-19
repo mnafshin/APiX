@@ -18,6 +18,7 @@ import (
 	"github.com/mnafshin/apix/internal/config"
 	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/plugins"
+	"golang.org/x/net/http2"
 )
 
 // TLSProxy performs MITM TLS interception.
@@ -84,6 +85,7 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{*cert},
 		MinVersion:   tls.VersionTLS12,
+		NextProtos:   []string{"h2", "http/1.1"},
 	}
 	tlsConn := tls.Server(&bufferedConn{Conn: conn, reader: br}, tlsCfg)
 	if err := tlsConn.Handshake(); err != nil {
@@ -99,6 +101,10 @@ func (p *TLSProxy) handleBufferedConn(ctx context.Context, conn net.Conn, host s
 	}
 
 	tlsBr := bufio.NewReader(tlsConn)
+	if tlsProto == "HTTP/2.0" {
+		p.handleHTTP2Conn(ctx, tlsConn, tlsBr, host)
+		return
+	}
 
 	// Handle multiple pipelined requests on the same connection.
 	for {
@@ -164,6 +170,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		_ = r.Body.Close()
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
+	annotateGRPCFrames(origHeaders, bodyBytes)
 
 	proxyReq := &plugins.ProxyRequest{
 		ID:       reqID,
@@ -237,6 +244,9 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", readErr))
 		return
 	}
+	mergeTrailersIntoHeaders(upResp.Header, upResp.Trailer)
+	setGRPCStatusFromTrailers(upResp.Header)
+	annotateGRPCFrames(upResp.Header, respBody)
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
@@ -298,6 +308,182 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	_ = reqID
 
 	writeProxyResponseToConn(conn, tx.Response)
+}
+
+func (p *TLSProxy) handleHTTP2Conn(ctx context.Context, conn net.Conn, br *bufio.Reader, host string) {
+	h2 := &http2.Server{}
+	h2.ServeConn(&bufferedConn{Conn: conn, reader: br}, &http2.ServeConnOpts{
+		Context: context.WithoutCancel(ctx),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p.handleHTTP2Request(ctx, w, r, host)
+		}),
+	})
+}
+
+func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter, r *http.Request, host string) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logging.Errorf(ctx, "TLS proxy HTTP/2 panic (recovered): %v", rec)
+			http.Error(w, "proxy error", http.StatusBadGateway)
+		}
+	}()
+
+	reqID := uuid.NewString()
+	start := time.Now()
+	if r.URL.Host == "" {
+		r.URL.Host = host
+	}
+	if r.URL.Scheme == "" {
+		r.URL.Scheme = "https"
+	}
+
+	origHeaders := r.Header.Clone()
+	metrics.IncActive()
+	defer metrics.DecActive()
+
+	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
+	var bodyBytes []byte
+	if r.Body != nil {
+		var err error
+		bodyBytes, err = httputil.ReadLimitedBody(r.Body, maxBodyBytes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
+			return
+		}
+		_ = r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+	annotateGRPCFrames(origHeaders, bodyBytes)
+
+	proxyReq := &plugins.ProxyRequest{
+		ID:       reqID,
+		Method:   r.Method,
+		URL:      r.URL,
+		Headers:  r.Header.Clone(),
+		Body:     io.NopCloser(bytes.NewReader(bodyBytes)),
+		Protocol: "HTTP/2.0",
+		Raw:      r,
+	}
+
+	var err error
+	proxyReq, err = runPluginRequest(ctx, p.plugins, proxyReq, "tls proxy h2")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("plugin error: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	if proxyReq.MockedResponse != nil {
+		mockBody := []byte{}
+		if proxyReq.MockedResponse.Body != nil {
+			mockBody, err = io.ReadAll(proxyReq.MockedResponse.Body)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("read mocked response body: %v", err), http.StatusBadGateway)
+				return
+			}
+		}
+		writeProxyResponse(w, proxyReq.MockedResponse, mockBody)
+		return
+	}
+
+	tx := &Transaction{ID: reqID, Request: proxyReq, RequestBody: bodyBytes, OriginalRequestHeaders: origHeaders}
+	if p.engine != nil {
+		modified, action, bpErr := p.engine.PauseRequest(tx)
+		if bpErr != nil {
+			logging.Errorf(ctx, "tls proxy h2: pause request: %v", bpErr)
+		}
+		tx = modified
+		switch action {
+		case ResumeDrop:
+			http.Error(w, "request dropped by breakpoint", http.StatusBadGateway)
+			return
+		case ResumeRespond:
+			if tx.Response != nil {
+				respBody := tx.ResponseBody
+				if tx.Response.Body != nil {
+					respBody, err = io.ReadAll(tx.Response.Body)
+					if err != nil {
+						http.Error(w, fmt.Sprintf("read synthetic response body: %v", err), http.StatusBadGateway)
+						return
+					}
+				}
+				writeProxyResponse(w, tx.Response, respBody)
+			} else {
+				http.Error(w, "no synthetic response", http.StatusBadGateway)
+			}
+			return
+		}
+	}
+
+	upReq, upErr := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
+	if upErr != nil {
+		http.Error(w, fmt.Sprintf("build upstream request: %v", upErr), http.StatusBadGateway)
+		return
+	}
+	upReq.Header = proxyReq.Headers.Clone()
+	upResp, upErr := p.transport.RoundTrip(upReq)
+	if upErr != nil {
+		http.Error(w, fmt.Sprintf("upstream error: %v", upErr), http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = upResp.Body.Close() }()
+
+	respBody, readErr := httputil.ReadLimitedBody(upResp.Body, maxBodyBytes)
+	if readErr != nil {
+		http.Error(w, fmt.Sprintf("response body too large: %v", readErr), http.StatusRequestEntityTooLarge)
+		return
+	}
+	mergeTrailersIntoHeaders(upResp.Header, upResp.Trailer)
+	setGRPCStatusFromTrailers(upResp.Header)
+	annotateGRPCFrames(upResp.Header, respBody)
+
+	proxyResp := &plugins.ProxyResponse{
+		StatusCode: upResp.StatusCode,
+		Status:     upResp.Status,
+		Headers:    upResp.Header.Clone(),
+		Body:       io.NopCloser(bytes.NewReader(respBody)),
+		Raw:        upResp,
+	}
+
+	proxyResp = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy h2")
+	finalRespBody := respBody
+	if proxyResp.Body != nil {
+		finalRespBody, readErr = io.ReadAll(proxyResp.Body)
+		if readErr != nil {
+			http.Error(w, fmt.Sprintf("read response body: %v", readErr), http.StatusBadGateway)
+			return
+		}
+	}
+
+	tx.Response = proxyResp
+	tx.ResponseBody = finalRespBody
+	if p.engine != nil {
+		modified, action, bpErr := p.engine.PauseResponse(tx, proxyResp.StatusCode, finalRespBody)
+		if bpErr != nil {
+			logging.Errorf(ctx, "tls proxy h2: pause response: %v", bpErr)
+		}
+		tx = modified
+		switch action {
+		case ResumeDrop:
+			http.Error(w, "response dropped by breakpoint", http.StatusBadGateway)
+			return
+		case ResumeRespond:
+			if tx.Response != nil {
+				writeProxyResponse(w, tx.Response, tx.ResponseBody)
+			} else {
+				http.Error(w, "no synthetic response", http.StatusBadGateway)
+			}
+			return
+		}
+	}
+
+	if p.engine != nil {
+		tx.DurationMs = time.Since(start).Milliseconds()
+		if err := p.engine.StoreTransaction(tx); err != nil {
+			logging.Errorf(ctx, "tls proxy h2: store transaction: %v", err)
+		}
+	}
+	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, tx.Response.StatusCode, time.Since(start))
+	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
 func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio.Reader, clientReq *http.Request, tx *Transaction, start time.Time) {
