@@ -79,10 +79,12 @@ Comprehensive testing coverage:
 
 Historical documents and outdated proposals:
 
-- [`ARCHIVE/critique-initial-audit.md`](ARCHIVE/critique-initial-audit.md) — initial code audit and critique
-- [`ARCHIVE/review-external.md`](ARCHIVE/review-external.md) — external product review
+- [`ARCHIVE/critique-audit.md`](ARCHIVE/critique-audit.md) — comprehensive code audit and critique
+- [`ARCHIVE/review-summary.md`](ARCHIVE/review-summary.md) — external product review summary
+- [`ARCHIVE/critique-initial-audit.md`](ARCHIVE/critique-initial-audit.md) — initial audit findings
+- [`ARCHIVE/review-external.md`](ARCHIVE/review-external.md) — detailed external review
 - [`ARCHIVE/initial-docs-structure-plan.md`](ARCHIVE/initial-docs-structure-plan.md) — earlier documentation IA proposal
-- [`ARCHIVE/`](ARCHIVE/) — other historical docs
+- [`ARCHIVE/`](ARCHIVE/) — other historical documents
 
 ---
 
