@@ -11,6 +11,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
+	"net/textproto"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -213,12 +215,44 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Forward request upstream and read response.
-	upResp, respBody, err := p.forwardUpstream(ctx, proxyReq, maxBodyBytes)
+	// Attach an httptrace so that any 1xx informational responses (e.g. 103 Early
+	// Hints) received from the upstream are forwarded to the client immediately
+	// without being stored as transactions.
+	rc := http.NewResponseController(w)
+	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
+			// Copy 1xx headers then send the informational status to the client.
+			// Go 1.20+ server ResponseWriter supports 1xx via WriteHeader; errors
+			// here are non-fatal (e.g. client already gone).
+			h := w.Header()
+			for k, vv := range header {
+				for _, v := range vv {
+					h.Add(k, v)
+				}
+			}
+			w.WriteHeader(code)
+			if flushErr := rc.Flush(); flushErr != nil {
+				logging.Warnf(ctx, "flush 1xx %d to client: %v", code, flushErr)
+			}
+			return nil
+		},
+	})
+
+	upResp, respBody, err := p.forwardUpstream(traceCtx, proxyReq, maxBodyBytes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = upResp.Body.Close() }()
+
+	// Defensive: Go's transport always returns the final (>= 200) response via
+	// RoundTrip, but guard against any edge case where a 1xx leaks through.
+	// Informational responses are already forwarded to the client via the
+	// httptrace.Got1xxResponse callback above; do not store them.
+	if upResp.StatusCode < 200 {
+		http.Error(w, "unexpected 1xx response from upstream", http.StatusBadGateway)
+		return
+	}
 
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
@@ -368,6 +402,8 @@ func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.Proxy
 		return nil, nil, fmt.Errorf("upstream error: %w", err)
 	}
 
+	// Go's net/http Transport fully de-chunks chunked transfer-encoded responses
+	// before returning the body, so io.ReadAll always sees the decoded payload.
 	respBody, err := io.ReadAll(upResp.Body)
 	if err != nil {
 		_ = upResp.Body.Close()
@@ -377,6 +413,23 @@ func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.Proxy
 		_ = upResp.Body.Close()
 		return nil, nil, fmt.Errorf("response body too large: %d bytes > %d bytes", len(respBody), maxBodyBytes)
 	}
+
+	// Normalise: ensure an explicitly empty body is stored as []byte{} not nil,
+	// so callers can reliably distinguish "no body" from "empty body".
+	if respBody == nil {
+		respBody = []byte{}
+	}
+
+	// HTTP trailers are populated only after the body is fully consumed.
+	// Merge them into the response headers using a "Trailer-" prefix so they
+	// are preserved in the stored transaction (e.g. Trailer-Grpc-Status: 0).
+	for k, vv := range upResp.Trailer {
+		key := "Trailer-" + k
+		for _, v := range vv {
+			upResp.Header.Add(key, v)
+		}
+	}
+
 	return upResp, respBody, nil
 }
 

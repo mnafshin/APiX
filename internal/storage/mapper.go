@@ -48,6 +48,11 @@ func scanResponse(row *sql.Row) (*ResponseRecord, error) {
 	if err := row.Scan(&reqID, &statusCode, &statusText, &hdrs, &body); err != nil {
 		return nil, err
 	}
+	// SQLite returns nil for empty BLOBs; normalise to a non-nil empty slice so
+	// callers can distinguish "no response" from "response with empty body".
+	if body == nil {
+		body = []byte{}
+	}
 	resp := &ResponseRecord{
 		RequestID:  reqID,
 		StatusCode: statusCode,
@@ -101,6 +106,11 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 		reqs = append(reqs, req)
 
 		if respReqID.Valid {
+			// SQLite returns nil for empty BLOBs; normalise to a non-nil empty slice
+			// so callers can distinguish "response with empty body" from "no response".
+			if respBody == nil {
+				respBody = []byte{}
+			}
 			resp := &ResponseRecord{
 				RequestID:  respReqID.String,
 				StatusCode: int(statusCode.Int64),

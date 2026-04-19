@@ -53,7 +53,11 @@ type Config struct {
 	// reclaim free pages and defragment the database. 0 disables periodic
 	// VACUUM. Default: 24 (once per day).
 	VacuumIntervalHours int `yaml:"vacuum_interval_hours"`
-	SlowlogThresholdMs int    `yaml:"slowlog_threshold_ms"`
+	SlowlogThresholdMs  int `yaml:"slowlog_threshold_ms"`
+
+	// History retention
+	HistoryMaxAgeDays int `yaml:"history_max_age_days"` // 0 = keep forever
+	HistoryMaxRows    int `yaml:"history_max_rows"`     // 0 = unlimited
 
 	// GRPCRateLimitPerSec is the maximum number of gRPC unary calls allowed
 	// per peer address per second. Stream RPCs count as 1 call on open.

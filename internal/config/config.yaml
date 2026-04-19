@@ -15,3 +15,7 @@ dial_timeout_sec: 10         # seconds allowed for TCP dial to upstream
 
 # Body size limits (prevents OOM from unbounded buffering)
 max_body_size_mb: 32         # maximum request/response body size in MB (413 if exceeded)
+
+# History retention policy (0 = disabled / keep forever)
+history_max_age_days: 0      # delete transactions older than N days
+history_max_rows: 0          # keep at most N transactions (prunes oldest first)
