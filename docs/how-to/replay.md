@@ -123,4 +123,4 @@ Output:
 ## Next steps
 
 - **[First breakpoint](first-breakpoint.md)** — pause and edit requests before they hit the server.
-- **[gRPC API reference](../grpc_protobuf.md)** — drive replay programmatically.
+- **[gRPC API reference](../ARCHITECTURE/grpc_protobuf.md)** — drive replay programmatically.

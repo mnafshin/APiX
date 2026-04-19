@@ -263,7 +263,7 @@ Some of these principles can be checked automatically. The following tools are b
 | DIP | `go test ./internal/engine/...` | Engine unit tests (once `TransactionRepository` interface exists) |
 | Plugin wiring | Integration test in `tests/integration/` | Verifies plugins execute on live requests |
 
-See [testing_strategy.md](testing_strategy.md) for the full testing philosophy.
+See [testing_strategy.md](../testing/testing_strategy.md) for the full testing philosophy.
 
 ---
 
