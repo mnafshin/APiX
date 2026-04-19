@@ -104,11 +104,18 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			subscribers = append(subscribers, ch)
 		}
 		e.mu.Unlock()
+		var dropped int
 		for _, sub := range subscribers {
 			select {
 			case sub <- protoReq:
 			default:
+				dropped++
 			}
+		}
+		if dropped > 0 {
+			logging.Warnf(context.Background(),
+				"dropped traffic event for %d/%d subscriber(s) — channel full",
+				dropped, len(subscribers))
 		}
 	}
 
