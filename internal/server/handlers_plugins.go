@@ -7,7 +7,7 @@ import (
 )
 
 func (s *EngineServer) ListPlugins(ctx context.Context, _ *apix.PluginListRequest) (*apix.PluginListResponse, error) {
-	metas := s.engine.PluginRuntime().List()
+	metas := s.plugins.List()
 	infos := make([]*apix.PluginInfo, 0, len(metas))
 	for _, m := range metas {
 		infos = append(infos, &apix.PluginInfo{
