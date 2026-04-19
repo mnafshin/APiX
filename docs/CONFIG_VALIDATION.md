@@ -20,8 +20,11 @@ starting the service.
 - db_path must be set
 - max_idle_conns_per_host must be > 0
 - max_body_size_mb must be >= 0
-- If TLS is enabled, an auth_token must be configured to avoid accidental
-  exposure when binding to 0.0.0.0
+- grpc_bind_address must be a valid bind host (IP address or localhost)
+- If grpc_bind_address is remote (for example `0.0.0.0`), both `tls_enabled`
+  and `auth_token` are required
+- If TLS is enabled, `grpc_cert_path` and `grpc_key_path` must be set, exist,
+  and load as a valid TLS key pair
 
 If you need stricter validation (e.g., file existence checks), call into the
 `config` package and run `cfg.Validate()` from your orchestration scripts.

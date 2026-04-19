@@ -41,6 +41,7 @@ func TestSaveAndGetRequest(t *testing.T) {
 		Body:       []byte("hello"),
 		Timestamp:  now,
 		DurationMs: 42,
+		Protocol:   "HTTP/2.0",
 	}
 
 	if err := db.SaveRequest(req); err != nil {
@@ -77,6 +78,9 @@ func TestSaveAndGetRequest(t *testing.T) {
 	}
 	if !gotReq.Timestamp.Equal(now) {
 		t.Errorf("Timestamp: got %v want %v", gotReq.Timestamp, now)
+	}
+	if gotReq.Protocol != "HTTP/2.0" {
+		t.Errorf("Protocol: got %q want %q", gotReq.Protocol, "HTTP/2.0")
 	}
 }
 
@@ -317,7 +321,7 @@ func TestSaveAndListBreakpoints(t *testing.T) {
 	}
 
 	for _, bp := range bps {
-		if err := db.SaveBreakpoint(bp.id, bp.pattern, bp.methods, bp.enabled, bp.label); err != nil {
+		if err := db.SaveBreakpoint(bp.id, bp.pattern, bp.methods, bp.enabled, bp.label, "", "", "", nil); err != nil {
 			t.Fatalf("SaveBreakpoint %q: %v", bp.id, err)
 		}
 	}
@@ -366,7 +370,7 @@ func TestDeleteBreakpoint(t *testing.T) {
 	db := openTestDB(t)
 
 	for _, id := range []string{"d1", "d2"} {
-		if err := db.SaveBreakpoint(id, ".*", nil, true, ""); err != nil {
+		if err := db.SaveBreakpoint(id, ".*", nil, true, "", "", "", "", nil); err != nil {
 			t.Fatalf("SaveBreakpoint: %v", err)
 		}
 	}
@@ -547,12 +551,12 @@ func TestSaveBreakpoint_UpdateExisting(t *testing.T) {
 	db := openTestDB(t)
 
 	const id = "bp-upsert"
-	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, true, "original"); err != nil {
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, true, "original", "", "", "", nil); err != nil {
 		t.Fatalf("first SaveBreakpoint: %v", err)
 	}
 
 	// Update the same ID with a different label and disabled state.
-	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, false, "updated"); err != nil {
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, false, "updated", "", "", "", nil); err != nil {
 		t.Fatalf("upsert SaveBreakpoint: %v", err)
 	}
 

@@ -23,12 +23,12 @@ import (
 // Engine is the central coordinator for APiX. It implements proxy.TrafficEngine
 // and provides helpers for all gRPC handlers.
 type Engine struct {
-	mu               sync.Mutex
-	db               storage.TransactionRepository
-	bpManager        BreakpointEvaluator
-	pluginRT         *pluginrt.Runtime
-	subscribers      map[chan *apix.HttpRequest]struct{}
-	pauseTimeoutSec  int // 0 = no timeout
+	mu              sync.Mutex
+	db              storage.TransactionRepository
+	bpManager       BreakpointEvaluator
+	pluginRT        *pluginrt.Runtime
+	subscribers     map[chan *apix.HttpRequest]struct{}
+	pauseTimeoutSec int // 0 = no timeout
 }
 
 // New creates a new Engine wiring together all sub-systems.
@@ -156,7 +156,7 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 		return tx, proxy.ResumeForward, nil
 	}
 
-	bpID := e.bpManager.Evaluate(tx.Request.Method, tx.Request.URL.String())
+	bpID := e.bpManager.EvaluateRequest(tx.Request.Method, tx.Request.URL.String(), tx.Request.Headers, tx.RequestBody)
 	if bpID == "" {
 		return tx, proxy.ResumeForward, nil
 	}
@@ -207,6 +207,53 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 			tx.Request.Headers = mr.Header.Clone()
 			tx.Request.Body = mr.Body
 		}
+		return tx, proxy.ResumeForward, nil
+	}
+}
+
+// PauseResponse holds a response at a breakpoint when any response-phase rule matches.
+func (e *Engine) PauseResponse(tx *proxy.Transaction, statusCode int, responseBody []byte) (*proxy.Transaction, proxy.ResumeAction, error) {
+	if tx == nil || tx.Request == nil || tx.Request.Raw == nil {
+		return tx, proxy.ResumeForward, nil
+	}
+	bpID := e.bpManager.EvaluateResponse(tx.Request.Method, tx.Request.URL.String(), tx.Request.Headers, responseBody, statusCode)
+	if bpID == "" {
+		return tx, proxy.ResumeForward, nil
+	}
+
+	pauseCtx := tx.Request.Raw.Context()
+	var cancelPause context.CancelFunc
+	if e.pauseTimeoutSec > 0 {
+		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(e.pauseTimeoutSec)*time.Second)
+		defer cancelPause()
+	}
+
+	entry := breakpoints.NewPausedEntry(tx.ID, bpID, tx.Request.Raw)
+	decision, err := e.bpManager.Pause(pauseCtx, entry)
+	if err != nil || decision == nil {
+		return tx, proxy.ResumeForward, nil
+	}
+
+	switch decision.Action {
+	case breakpoints.ActionDrop:
+		return tx, proxy.ResumeDrop, nil
+	case breakpoints.ActionRespond:
+		if decision.ModifiedResponse != nil {
+			r := decision.ModifiedResponse
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				return tx, proxy.ResumeRespond, fmt.Errorf("read synthetic response body: %w", readErr)
+			}
+			tx.Response = &proxy.ProxyResponse{
+				StatusCode: r.StatusCode,
+				Status:     r.Status,
+				Headers:    r.Header.Clone(),
+				Body:       io.NopCloser(bytes.NewReader(body)),
+			}
+			tx.ResponseBody = body
+		}
+		return tx, proxy.ResumeRespond, nil
+	default:
 		return tx, proxy.ResumeForward, nil
 	}
 }

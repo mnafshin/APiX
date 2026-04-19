@@ -33,6 +33,10 @@ CREATE TABLE IF NOT EXISTS breakpoints (
     methods     TEXT NOT NULL DEFAULT '[]', -- JSON array of HTTP methods
     enabled     INTEGER NOT NULL DEFAULT 1, -- 0 = disabled, 1 = enabled
     label       TEXT NOT NULL DEFAULT '',
+    header_name TEXT NOT NULL DEFAULT '',
+    header_value TEXT NOT NULL DEFAULT '',
+    body_pattern TEXT NOT NULL DEFAULT '',
+    status_codes TEXT NOT NULL DEFAULT '[]', -- JSON array of response status codes
     created_at  INTEGER NOT NULL            -- Unix milliseconds
 );`
 

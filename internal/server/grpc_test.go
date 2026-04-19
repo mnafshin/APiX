@@ -140,10 +140,14 @@ func TestSetAndListBreakpoints(t *testing.T) {
 	ctx := context.Background()
 
 	setResp, err := f.client.SetBreakpoint(ctx, &apix.BreakpointRule{
-		UrlPattern: `.*example\.com.*`,
-		Methods:    []string{"GET"},
-		Enabled:    true,
-		Label:      "test-bp",
+		UrlPattern:  `.*example\.com.*`,
+		Methods:     []string{"GET"},
+		Enabled:     true,
+		Label:       "test-bp",
+		HeaderName:  "X-Debug",
+		HeaderValue: "1",
+		BodyPattern: "error",
+		StatusCodes: []int32{500},
 	})
 	if err != nil {
 		t.Fatalf("SetBreakpoint: %v", err)
@@ -164,6 +168,12 @@ func TestSetAndListBreakpoints(t *testing.T) {
 	}
 	if listResp.Breakpoints[0].Id != setResp.Breakpoint.Id {
 		t.Errorf("ID mismatch: got %q want %q", listResp.Breakpoints[0].Id, setResp.Breakpoint.Id)
+	}
+	if listResp.Breakpoints[0].HeaderName != "X-Debug" {
+		t.Errorf("HeaderName: got %q want %q", listResp.Breakpoints[0].HeaderName, "X-Debug")
+	}
+	if len(listResp.Breakpoints[0].StatusCodes) != 1 || listResp.Breakpoints[0].StatusCodes[0] != 500 {
+		t.Errorf("StatusCodes: got %v want [500]", listResp.Breakpoints[0].StatusCodes)
 	}
 }
 

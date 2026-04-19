@@ -29,11 +29,11 @@ type BreakpointManagerServer interface {
 type ServerRepository interface {
 	SaveRequest(r *storage.RequestRecord) error
 	SaveResponse(r *storage.ResponseRecord) error
-	SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label string) error
-	DeleteBreakpoint(id string) error
 	SaveRequestTemplate(tpl *storage.RequestTemplateRecord) error
 	ListRequestTemplates() ([]*storage.RequestTemplateRecord, error)
 	DeleteRequestTemplate(id string) error
+	SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label, headerName, headerValue, bodyPattern string, statusCodes []int32) error
+	DeleteBreakpoint(id string) error
 	ListTransactions(limit, offset int, urlFilter, methodFilter string, statusFilter int, bodyFilter string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error)
 	ExportTransactions(transactionIDs []string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error)
 	DeleteAllTransactions() error

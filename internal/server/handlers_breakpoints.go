@@ -18,11 +18,15 @@ import (
 
 func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRule) (*apix.BreakpointResponse, error) {
 	rule := &breakpoints.BreakpointRule{
-		ID:         req.Id,
-		URLPattern: req.UrlPattern,
-		Methods:    req.Methods,
-		Enabled:    req.Enabled,
-		Label:      req.Label,
+		ID:          req.Id,
+		URLPattern:  req.UrlPattern,
+		Methods:     req.Methods,
+		Enabled:     req.Enabled,
+		Label:       req.Label,
+		HeaderName:  req.HeaderName,
+		HeaderValue: req.HeaderValue,
+		BodyPattern: req.BodyPattern,
+		StatusCodes: req.StatusCodes,
 	}
 	if rule.ID == "" {
 		rule.ID = uuid.NewString()
@@ -32,16 +36,20 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 		return nil, status.Errorf(codes.InvalidArgument, "invalid breakpoint: %v", err)
 	}
 	// Persist to storage.
-	if err := s.db.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label); err != nil {
+	if err := s.db.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label, added.HeaderName, added.HeaderValue, added.BodyPattern, added.StatusCodes); err != nil {
 		logging.Errorf(ctx, "grpc: save breakpoint: %v", err)
 	}
 	return &apix.BreakpointResponse{
 		Breakpoint: &apix.BreakpointRule{
-			Id:         added.ID,
-			UrlPattern: added.URLPattern,
-			Methods:    added.Methods,
-			Enabled:    added.Enabled,
-			Label:      added.Label,
+			Id:          added.ID,
+			UrlPattern:  added.URLPattern,
+			Methods:     added.Methods,
+			Enabled:     added.Enabled,
+			Label:       added.Label,
+			HeaderName:  added.HeaderName,
+			HeaderValue: added.HeaderValue,
+			BodyPattern: added.BodyPattern,
+			StatusCodes: added.StatusCodes,
 		},
 	}, nil
 }
@@ -61,11 +69,15 @@ func (s *EngineServer) ListBreakpoints(ctx context.Context, _ *apix.Empty) (*api
 	list := make([]*apix.BreakpointRule, 0, len(rules))
 	for _, r := range rules {
 		list = append(list, &apix.BreakpointRule{
-			Id:         r.ID,
-			UrlPattern: r.URLPattern,
-			Methods:    r.Methods,
-			Enabled:    r.Enabled,
-			Label:      r.Label,
+			Id:          r.ID,
+			UrlPattern:  r.URLPattern,
+			Methods:     r.Methods,
+			Enabled:     r.Enabled,
+			Label:       r.Label,
+			HeaderName:  r.HeaderName,
+			HeaderValue: r.HeaderValue,
+			BodyPattern: r.BodyPattern,
+			StatusCodes: r.StatusCodes,
 		})
 	}
 	return &apix.BreakpointList{Breakpoints: list}, nil

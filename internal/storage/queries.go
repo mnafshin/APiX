@@ -37,12 +37,16 @@ type ResponseRecord struct {
 
 // BreakpointRecord is the Go representation of a row in the breakpoints table.
 type BreakpointRecord struct {
-	ID         string
-	URLPattern string
-	Methods    []string
-	Enabled    bool
-	Label      string
-	CreatedAt  time.Time
+	ID          string
+	URLPattern  string
+	Methods     []string
+	Enabled     bool
+	Label       string
+	HeaderName  string
+	HeaderValue string
+	BodyPattern string
+	StatusCodes []int32
+	CreatedAt   time.Time
 }
 
 // RequestTemplateRecord is the Go representation of a row in request_templates.
@@ -63,10 +67,10 @@ func (d *DB) SaveRequest(r *RequestRecord) error {
 		return fmt.Errorf("marshal headers: %w", err)
 	}
 	_, err = d.db.Exec(
-		`INSERT OR REPLACE INTO requests (id, method, url, headers, body, timestamp, duration_ms)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO requests (id, method, url, headers, body, timestamp, duration_ms, protocol)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ID, r.Method, r.URL, string(hdrs), r.Body,
-		r.Timestamp.UnixMilli(), r.DurationMs,
+		r.Timestamp.UnixMilli(), r.DurationMs, r.Protocol,
 	)
 	return err
 }
@@ -186,19 +190,23 @@ func (d *DB) DeleteAllTransactions() error {
 }
 
 // SaveBreakpoint inserts or replaces a breakpoint record.
-func (d *DB) SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label string) error {
+func (d *DB) SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label, headerName, headerValue, bodyPattern string, statusCodes []int32) error {
 	methodsJSON, err := json.Marshal(methods)
 	if err != nil {
 		return fmt.Errorf("marshal methods: %w", err)
+	}
+	statusCodesJSON, err := json.Marshal(statusCodes)
+	if err != nil {
+		return fmt.Errorf("marshal status codes: %w", err)
 	}
 	enabledInt := 0
 	if enabled {
 		enabledInt = 1
 	}
 	_, err = d.db.Exec(
-		`INSERT OR REPLACE INTO breakpoints (id, url_pattern, methods, enabled, label, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		id, urlPattern, string(methodsJSON), enabledInt, label, time.Now().UnixMilli(),
+		`INSERT OR REPLACE INTO breakpoints (id, url_pattern, methods, enabled, label, header_name, header_value, body_pattern, status_codes, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, urlPattern, string(methodsJSON), enabledInt, label, headerName, headerValue, bodyPattern, string(statusCodesJSON), time.Now().UnixMilli(),
 	)
 	return err
 }
@@ -212,7 +220,7 @@ func (d *DB) DeleteBreakpoint(id string) error {
 // ListBreakpoints returns all breakpoint records.
 func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 	rows, err := d.db.Query(
-		`SELECT id, url_pattern, methods, enabled, label, created_at FROM breakpoints`,
+		`SELECT id, url_pattern, methods, enabled, label, header_name, header_value, body_pattern, status_codes, created_at FROM breakpoints`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list breakpoints: %w", err)
@@ -222,23 +230,30 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 	var bps []*BreakpointRecord
 	for rows.Next() {
 		var (
-			id, urlPattern, methodsJSON, label string
-			enabledInt                         int
-			createdAtMs                        int64
+			id, urlPattern, methodsJSON, label, headerName, headerValue, bodyPattern, statusCodesJSON string
+			enabledInt                                                                                int
+			createdAtMs                                                                               int64
 		)
-		if err := rows.Scan(&id, &urlPattern, &methodsJSON, &enabledInt, &label, &createdAtMs); err != nil {
+		if err := rows.Scan(&id, &urlPattern, &methodsJSON, &enabledInt, &label, &headerName, &headerValue, &bodyPattern, &statusCodesJSON, &createdAtMs); err != nil {
 			return nil, fmt.Errorf("scan breakpoint: %w", err)
 		}
 		bp := &BreakpointRecord{
-			ID:         id,
-			URLPattern: urlPattern,
-			Enabled:    enabledInt == 1,
-			Label:      label,
-			CreatedAt:  time.UnixMilli(createdAtMs),
+			ID:          id,
+			URLPattern:  urlPattern,
+			Enabled:     enabledInt == 1,
+			Label:       label,
+			HeaderName:  headerName,
+			HeaderValue: headerValue,
+			BodyPattern: bodyPattern,
+			CreatedAt:   time.UnixMilli(createdAtMs),
 		}
 		if err := json.Unmarshal([]byte(methodsJSON), &bp.Methods); err != nil {
 			logging.Warnf(context.Background(), "failed to unmarshal methods for breakpoint %s: %v", id, err)
 			bp.Methods = nil
+		}
+		if err := json.Unmarshal([]byte(statusCodesJSON), &bp.StatusCodes); err != nil {
+			logging.Warnf(context.Background(), "failed to unmarshal status codes for breakpoint %s: %v", id, err)
+			bp.StatusCodes = nil
 		}
 		bps = append(bps, bp)
 	}
