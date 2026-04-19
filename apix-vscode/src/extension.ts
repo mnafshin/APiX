@@ -149,6 +149,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Errors are logged to the output channel so the user can inspect them.
         startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
             .catch(err => outputChannel?.appendLine(`APiX: auto-start failed — ${err?.message || err}`));
+
+        // Re-establish gRPC streams after auto-restart (exponential backoff kicks in
+        // when engine exits unexpectedly; this callback runs once the new process is ready).
+        processManager!.onRestart = () => {
+            outputChannel?.appendLine('[APiX] Reconnecting gRPC streams after engine restart…');
+            startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
+                .catch(err => outputChannel?.appendLine(`APiX: reconnect failed — ${err?.message || err}`));
+        };
     }
 }
 
