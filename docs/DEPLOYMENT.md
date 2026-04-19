@@ -101,6 +101,13 @@ http_port: "8080"
 # gRPC server port (for VS Code extension / CLI clients)
 grpc_port: "9090"
 
+# MCP server (AI assistants)
+mcp_enabled: false
+mcp_port: "9093"
+mcp_bind_address: "127.0.0.1"
+mcp_allow_replay: false
+mcp_allow_compose: false
+
 # SQLite database path (stores traffic history)
 db_path: "~/.apix/apix.db"
 
@@ -265,7 +272,8 @@ Then in VS Code, open the APiX Traffic view to see the captured request.
 - [ ] Config file created at `~/.apix/config.yaml` or `/etc/apix/config.yaml`
 - [ ] `APIX_AUTH_TOKEN` environment variable set (for remote access)
 - [ ] TLS certificates generated (if remote access needed)
-- [ ] Firewall rules updated (port 8080 for proxy, 9090 for gRPC)
+  - [ ] Firewall rules updated (port 8080 for proxy, 9090 for gRPC)
+  - [ ] MCP firewall rules configured (if `mcp_enabled: true`)
 - [ ] Systemd service enabled and running (Linux)
 - [ ] Log rotation configured (if running as service)
 - [ ] Backup of `~/.apix/apix.db` (if storing important traffic)

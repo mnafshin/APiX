@@ -1,6 +1,11 @@
 http_port: "8080"
 grpc_port: "9090"
 grpc_bind_address: "127.0.0.1"  # default loopback-only; set to 0.0.0.0 for remote access (requires TLS + auth)
+mcp_enabled: false
+mcp_port: "9093"
+mcp_bind_address: "127.0.0.1"  # remote usage requires tls_enabled: true + auth token
+mcp_allow_replay: false
+mcp_allow_compose: false
 
 # HTTP server timeouts (prevents Slowloris attacks)
 http_read_header_timeout_sec: 10

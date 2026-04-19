@@ -56,6 +56,13 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	} else if _, err := strconv.Atoi(c.GRPCPort); err != nil {
 		errs = append(errs, fmt.Errorf("invalid grpc_port %q: %w — must be a number between 1-65535", c.GRPCPort, err))
 	}
+	if c.MCPEnabled {
+		if c.MCPPort == "" {
+			errs = append(errs, fmt.Errorf("mcp_port must be set when mcp_enabled is true"))
+		} else if _, err := strconv.Atoi(c.MCPPort); err != nil {
+			errs = append(errs, fmt.Errorf("invalid mcp_port %q: %w — must be a number between 1-65535", c.MCPPort, err))
+		}
+	}
 
 	// ── Port conflict checks ───────────────────────────────────────────────
 	// Only check when port values look valid.
@@ -70,6 +77,13 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		if _, err := strconv.Atoi(c.GRPCPort); err == nil {
 			if conflictErr := checkPortAvailable("tcp", c.GRPCPort); conflictErr != nil {
 				errs = append(errs, fmt.Errorf("grpc_port %s is already in use: %w — stop the conflicting process or choose a different port", c.GRPCPort, conflictErr))
+			}
+		}
+	}
+	if c.MCPEnabled && !allowBoundPorts && c.MCPPort != "" {
+		if _, err := strconv.Atoi(c.MCPPort); err == nil {
+			if conflictErr := checkPortAvailable("tcp", c.MCPPort); conflictErr != nil {
+				errs = append(errs, fmt.Errorf("mcp_port %s is already in use: %w — stop the conflicting process or choose a different port", c.MCPPort, conflictErr))
 			}
 		}
 	}
@@ -101,6 +115,20 @@ func (c *Config) validate(allowBoundPorts bool) error {
 			errs = append(errs, fmt.Errorf("tls_enabled is true but grpc_key_path is empty — provide the gRPC server TLS private key path"))
 		} else if _, err := os.Stat(c.GRPCKeyPath); os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("grpc_key_path %q does not exist — check the path or generate a server key", c.GRPCKeyPath))
+		}
+	}
+	if c.MCPAllowReplay && !c.MCPEnabled {
+		errs = append(errs, fmt.Errorf("mcp_allow_replay requires mcp_enabled to be true"))
+	}
+	if c.MCPAllowCompose && !c.MCPEnabled {
+		errs = append(errs, fmt.Errorf("mcp_allow_compose requires mcp_enabled to be true"))
+	}
+	if c.MCPEnabled && !isLoopbackHost(c.MCPBindAddress) {
+		if !c.TLSEnabled {
+			errs = append(errs, fmt.Errorf("mcp_bind_address %q is non-loopback; tls_enabled must be true for remote MCP deployments", c.MCPBindAddress))
+		}
+		if c.AuthToken == "" {
+			errs = append(errs, fmt.Errorf("mcp_bind_address %q is non-loopback; set APIX_AUTH_TOKEN or auth_token for MCP authentication", c.MCPBindAddress))
 		}
 	}
 
@@ -149,4 +177,12 @@ func checkPortAvailable(network, port string) error {
 func IsValidationError(err error) bool {
 	var ve *ValidationError
 	return errors.As(err, &ve)
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "" || host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

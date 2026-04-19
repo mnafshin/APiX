@@ -10,19 +10,19 @@ import (
 )
 
 type Config struct {
-	HTTPPort                         string `yaml:"http_port"`
-	GRPCPort                         string `yaml:"grpc_port"`
-	GRPCBindAddress                  string `yaml:"grpc_bind_address"`
-	DBPath                           string `yaml:"db_path"`
-	CACertPath                       string `yaml:"ca_cert_path"`
-	CAKeyPath                        string `yaml:"ca_key_path"`
-	TLSEnabled                       bool   `yaml:"tls_enabled"`
+	HTTPPort        string `yaml:"http_port"`
+	GRPCPort        string `yaml:"grpc_port"`
+	GRPCBindAddress string `yaml:"grpc_bind_address"`
+	DBPath          string `yaml:"db_path"`
+	CACertPath      string `yaml:"ca_cert_path"`
+	CAKeyPath       string `yaml:"ca_key_path"`
+	TLSEnabled      bool   `yaml:"tls_enabled"`
 	// GRPCCertPath and GRPCKeyPath are the TLS certificate and private key for
 	// the gRPC server when tls_enabled is true. These are separate from the MITM
 	// proxy CA cert/key (CACertPath/CAKeyPath). Required when tls_enabled is true.
-	GRPCCertPath string `yaml:"grpc_cert_path"`
-	GRPCKeyPath  string `yaml:"grpc_key_path"`
-	AuthToken    string `yaml:"auth_token"`
+	GRPCCertPath                     string `yaml:"grpc_cert_path"`
+	GRPCKeyPath                      string `yaml:"grpc_key_path"`
+	AuthToken                        string `yaml:"auth_token"`
 	MaxIdleConnsPerHost              int    `yaml:"max_idle_conns_per_host"`
 	IdleConnTimeoutSec               int    `yaml:"idle_conn_timeout_sec"`
 	DialTimeoutSec                   int    `yaml:"dial_timeout_sec"`
@@ -43,12 +43,12 @@ type Config struct {
 	BreakpointPauseTimeoutSec int `yaml:"breakpoint_pause_timeout_sec"`
 
 	// Observability
-	MetricsEnabled     bool   `yaml:"metrics_enabled"`
-	MetricsPort        string `yaml:"metrics_port"`
+	MetricsEnabled bool   `yaml:"metrics_enabled"`
+	MetricsPort    string `yaml:"metrics_port"`
 	// HealthPort is the TCP port for the lightweight HTTP health endpoint
 	// that always serves GET /healthz → 200 {"status":"ok"}. Set to "" to
 	// disable. Default: "9092".
-	HealthPort         string `yaml:"health_port"`
+	HealthPort string `yaml:"health_port"`
 	// VacuumIntervalHours is how often (in hours) to run SQLite VACUUM to
 	// reclaim free pages and defragment the database. 0 disables periodic
 	// VACUUM. Default: 24 (once per day).
@@ -63,6 +63,13 @@ type Config struct {
 	// per peer address per second. Stream RPCs count as 1 call on open.
 	// 0 disables rate limiting (local desktop mode default).
 	GRPCRateLimitPerSec int `yaml:"grpc_rate_limit_per_sec"`
+	// MCP server settings for AI assistants (Copilot/Claude/Cursor).
+	// Disabled by default and bound to loopback for local-only access.
+	MCPEnabled      bool   `yaml:"mcp_enabled"`
+	MCPPort         string `yaml:"mcp_port"`
+	MCPBindAddress  string `yaml:"mcp_bind_address"`
+	MCPAllowReplay  bool   `yaml:"mcp_allow_replay"`
+	MCPAllowCompose bool   `yaml:"mcp_allow_compose"`
 
 	// Plugin paths — each entry is a path to a plugin shared library or
 	// script. Validated at startup via --config-check.
@@ -136,6 +143,11 @@ func LoadConfig(path string) *Config {
 		VacuumIntervalHours: 24,
 		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
+		MCPEnabled:          false,
+		MCPPort:             "9093",
+		MCPBindAddress:      "127.0.0.1",
+		MCPAllowReplay:      false,
+		MCPAllowCompose:     false,
 	}
 
 	// #nosec G304 -- APiX intentionally loads a user-selected config path.
@@ -168,6 +180,9 @@ func LoadConfig(path string) *Config {
 		if cfg.TLSEnabled && cfg.AuthToken != "" {
 			cfg.GRPCBindAddress = "0.0.0.0"
 		}
+	}
+	if cfg.MCPBindAddress == "" {
+		cfg.MCPBindAddress = "127.0.0.1"
 	}
 
 	return cfg
