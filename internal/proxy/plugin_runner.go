@@ -9,11 +9,13 @@ import (
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
-// runPluginRequest executes the OnRequest chain of chain with panic recovery.
-// Returns the (possibly modified) request, or an error if the chain failed.
-// Callers may pass nil for chain — the original req is returned unchanged.
-func runPluginRequest(ctx context.Context, chain PluginChain, req *plugins.ProxyRequest, logTag string) (*plugins.ProxyRequest, error) {
-	if chain == nil {
+// runPluginRequest executes the RunRequest hook via type assertion.
+// Returns the (possibly modified) request, or an error if the hook failed.
+// Callers may pass nil or a value that does not implement RequestPlugin —
+// in both cases the original req is returned unchanged.
+func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest, logTag string) (*plugins.ProxyRequest, error) {
+	rp, ok := chain.(RequestPlugin)
+	if !ok || rp == nil {
 		return req, nil
 	}
 	var runErr error
@@ -24,7 +26,7 @@ func runPluginRequest(ctx context.Context, chain PluginChain, req *plugins.Proxy
 				runErr = fmt.Errorf("plugin panic")
 			}
 		}()
-		modified, err := chain.RunRequest(ctx, req)
+		modified, err := rp.RunRequest(ctx, req)
 		if err != nil {
 			logging.Errorf(ctx, "%s: plugin OnRequest error: %v", logTag, err)
 			runErr = err
@@ -38,11 +40,13 @@ func runPluginRequest(ctx context.Context, chain PluginChain, req *plugins.Proxy
 	return req, nil
 }
 
-// runPluginResponse executes the OnResponse chain of chain with panic recovery.
+// runPluginResponse executes the RunResponse hook via type assertion.
 // Returns the (possibly modified) response, or the original resp on failure.
-// Callers may pass nil for chain — the original resp is returned unchanged.
-func runPluginResponse(ctx context.Context, chain PluginChain, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string) *plugins.ProxyResponse {
-	if chain == nil {
+// Callers may pass nil or a value that does not implement ResponsePlugin —
+// in both cases the original resp is returned unchanged.
+func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string) *plugins.ProxyResponse {
+	rp, ok := chain.(ResponsePlugin)
+	if !ok || rp == nil {
 		return resp
 	}
 	func() {
@@ -51,7 +55,7 @@ func runPluginResponse(ctx context.Context, chain PluginChain, req *plugins.Prox
 				logging.Errorf(ctx, "%s: panic in plugin OnResponse (recovered): %v", logTag, rec)
 			}
 		}()
-		modResp, err := chain.RunResponse(ctx, req, resp)
+		modResp, err := rp.RunResponse(ctx, req, resp)
 		if err != nil {
 			logging.Errorf(ctx, "%s: plugin OnResponse error: %v", logTag, err)
 			return

@@ -24,7 +24,7 @@ import (
 type TLSProxy struct {
 	ca            *CertAuthority
 	engine        TrafficEngine
-	plugins       PluginChain
+	plugins       any
 	transport     *http.Transport
 	transportOpts TransportOptions // retained so SetUpstreamTLSConfig can rebuild
 	cfg           *config.Config
@@ -41,8 +41,10 @@ func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions,
 	}
 }
 
-// SetPlugins wires the plugin chain into the TLS proxy.
-func (p *TLSProxy) SetPlugins(chain PluginChain) {
+// SetPlugins wires the plugin chain into the TLS proxy. chain may implement
+// RequestPlugin, ResponsePlugin, or both (PluginChain). Passing nil disables
+// plugin execution.
+func (p *TLSProxy) SetPlugins(chain any) {
 	p.plugins = chain
 }
 

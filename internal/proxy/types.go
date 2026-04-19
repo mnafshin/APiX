@@ -45,12 +45,27 @@ type TrafficEngine interface {
 	RequestPauser
 }
 
-// PluginChain is an ordered list of plugins applied to each request/response.
-type PluginChain interface {
-	// RunRequest applies all plugins' OnRequest hooks in order.
+// RequestPlugin is implemented by chains that process outbound requests.
+// Pass a RequestPlugin to SetPlugins when only request interception is needed.
+type RequestPlugin interface {
+	// RunRequest applies all request hooks in order.
 	RunRequest(ctx context.Context, req *ProxyRequest) (*ProxyRequest, error)
-	// RunResponse applies all plugins' OnResponse hooks in order.
+}
+
+// ResponsePlugin is implemented by chains that process responses.
+// Pass a ResponsePlugin to SetPlugins when only response interception is needed.
+type ResponsePlugin interface {
+	// RunResponse applies all response hooks in order.
 	RunResponse(ctx context.Context, req *ProxyRequest, resp *ProxyResponse) (*ProxyResponse, error)
+}
+
+// PluginChain combines both optional interfaces. Implementations may satisfy
+// only RequestPlugin, only ResponsePlugin, or both.
+// Kept for backward compatibility — existing runtimes that implement both
+// RunRequest and RunResponse continue to satisfy this interface.
+type PluginChain interface {
+	RequestPlugin
+	ResponsePlugin
 }
 
 // ResumeAction mirrors the proto enum for the proxy layer.

@@ -24,7 +24,7 @@ import (
 type HTTPProxy struct {
 	addr      string
 	tlsProxy  *TLSProxy
-	plugins   PluginChain
+	plugins   any
 	engine    TrafficEngine
 	transport *http.Transport
 	cfg       *config.Config
@@ -524,8 +524,10 @@ func writeProxyResponse(w http.ResponseWriter, resp *plugins.ProxyResponse, body
 	}
 }
 
-// SetPlugins wires the plugin chain into the HTTP proxy.
-func (p *HTTPProxy) SetPlugins(chain PluginChain) {
+// SetPlugins wires the plugin chain into the HTTP proxy. chain may implement
+// RequestPlugin, ResponsePlugin, or both (PluginChain). Passing nil disables
+// plugin execution.
+func (p *HTTPProxy) SetPlugins(chain any) {
 	p.plugins = chain
 }
 
