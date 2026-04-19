@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -43,18 +44,29 @@ func (c *Config) ValidateRuntime() error {
 
 func (c *Config) validate(allowBoundPorts bool) error {
 	var errs []error
+	var httpPort, grpcPort int
 
 	// ── Port validation ────────────────────────────────────────────────────
 	if c.HTTPPort == "" {
 		errs = append(errs, fmt.Errorf("http_port must be set"))
-	} else if _, err := strconv.Atoi(c.HTTPPort); err != nil {
+	} else if parsed, err := strconv.Atoi(c.HTTPPort); err != nil {
 		errs = append(errs, fmt.Errorf("invalid http_port %q: %w — must be a number between 1-65535", c.HTTPPort, err))
+	} else {
+		httpPort = parsed
+		if httpPort < 1 || httpPort > 65535 {
+			errs = append(errs, fmt.Errorf("invalid http_port %q: must be a number between 1-65535", c.HTTPPort))
+		}
 	}
 
 	if c.GRPCPort == "" {
 		errs = append(errs, fmt.Errorf("grpc_port must be set"))
-	} else if _, err := strconv.Atoi(c.GRPCPort); err != nil {
+	} else if parsed, err := strconv.Atoi(c.GRPCPort); err != nil {
 		errs = append(errs, fmt.Errorf("invalid grpc_port %q: %w — must be a number between 1-65535", c.GRPCPort, err))
+	} else {
+		grpcPort = parsed
+		if grpcPort < 1 || grpcPort > 65535 {
+			errs = append(errs, fmt.Errorf("invalid grpc_port %q: must be a number between 1-65535", c.GRPCPort))
+		}
 	}
 	if c.MCPEnabled {
 		if c.MCPPort == "" {
@@ -66,18 +78,21 @@ func (c *Config) validate(allowBoundPorts bool) error {
 
 	// ── Port conflict checks ───────────────────────────────────────────────
 	// Only check when port values look valid.
-	if !allowBoundPorts && c.HTTPPort != "" {
-		if _, err := strconv.Atoi(c.HTTPPort); err == nil {
-			if conflictErr := checkPortAvailable("tcp", c.HTTPPort); conflictErr != nil {
-				errs = append(errs, fmt.Errorf("http_port %s is already in use: %w — stop the conflicting process or choose a different port", c.HTTPPort, conflictErr))
-			}
+	if !allowBoundPorts && httpPort >= 1 && httpPort <= 65535 {
+		if conflictErr := checkPortAvailable("tcp", c.HTTPPort); conflictErr != nil {
+			errs = append(errs, fmt.Errorf("http_port %s is already in use: %w — stop the conflicting process or choose a different port", c.HTTPPort, conflictErr))
 		}
 	}
-	if !allowBoundPorts && c.GRPCPort != "" {
-		if _, err := strconv.Atoi(c.GRPCPort); err == nil {
-			if conflictErr := checkPortAvailable("tcp", c.GRPCPort); conflictErr != nil {
-				errs = append(errs, fmt.Errorf("grpc_port %s is already in use: %w — stop the conflicting process or choose a different port", c.GRPCPort, conflictErr))
-			}
+	if !allowBoundPorts && grpcPort >= 1 && grpcPort <= 65535 {
+		if conflictErr := checkPortAvailable("tcp", c.GRPCPort); conflictErr != nil {
+			errs = append(errs, fmt.Errorf("grpc_port %s is already in use: %w — stop the conflicting process or choose a different port", c.GRPCPort, conflictErr))
+		}
+	}
+
+	// ── gRPC bind address ──────────────────────────────────────────────────
+	if c.GRPCBindAddress != "" {
+		if ip := net.ParseIP(c.GRPCBindAddress); ip == nil && c.GRPCBindAddress != "localhost" {
+			errs = append(errs, fmt.Errorf("grpc_bind_address %q is invalid — use an IP address, localhost, 0.0.0.0, or ::", c.GRPCBindAddress))
 		}
 	}
 	if c.MCPEnabled && !allowBoundPorts && c.MCPPort != "" {
@@ -115,6 +130,20 @@ func (c *Config) validate(allowBoundPorts bool) error {
 			errs = append(errs, fmt.Errorf("tls_enabled is true but grpc_key_path is empty — provide the gRPC server TLS private key path"))
 		} else if _, err := os.Stat(c.GRPCKeyPath); os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("grpc_key_path %q does not exist — check the path or generate a server key", c.GRPCKeyPath))
+		}
+		if c.GRPCCertPath != "" && c.GRPCKeyPath != "" {
+			if _, err := tls.LoadX509KeyPair(c.GRPCCertPath, c.GRPCKeyPath); err != nil {
+				errs = append(errs, fmt.Errorf("grpc_cert_path/grpc_key_path cannot be loaded as a TLS key pair: %w", err))
+			}
+		}
+	}
+
+	if grpcBindRequiresRemoteSecurity(c.GRPCBindAddress) {
+		if !c.TLSEnabled {
+			errs = append(errs, fmt.Errorf("grpc_bind_address %q exposes gRPC remotely but tls_enabled is false — enable TLS before binding outside loopback", c.GRPCBindAddress))
+		}
+		if c.AuthToken == "" {
+			errs = append(errs, fmt.Errorf("grpc_bind_address %q exposes gRPC remotely but auth_token is empty — set APIX_AUTH_TOKEN or auth_token for secure remote access", c.GRPCBindAddress))
 		}
 	}
 	if c.MCPAllowReplay && !c.MCPEnabled {
@@ -154,10 +183,36 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
+	// ── map-local rules ────────────────────────────────────────────────────
+	for i, rule := range c.MapLocalRules {
+		if rule.URLPattern == "" {
+			errs = append(errs, fmt.Errorf("map_local_rules[%d].url_pattern is empty — provide a valid regex", i))
+		} else if _, err := regexp.Compile(rule.URLPattern); err != nil {
+			errs = append(errs, fmt.Errorf("map_local_rules[%d].url_pattern %q is not a valid Go regexp: %w", i, rule.URLPattern, err))
+		}
+		if rule.FilePath == "" {
+			errs = append(errs, fmt.Errorf("map_local_rules[%d].file_path is empty — provide a readable local file path", i))
+		}
+		if rule.StatusCode != 0 && (rule.StatusCode < 100 || rule.StatusCode > 599) {
+			errs = append(errs, fmt.Errorf("map_local_rules[%d].status_code must be 100-599 when set (got %d)", i, rule.StatusCode))
+		}
+	}
+
 	if len(errs) > 0 {
 		return &ValidationError{Errs: errs}
 	}
 	return nil
+}
+
+func grpcBindRequiresRemoteSecurity(addr string) bool {
+	if addr == "" || addr == "localhost" {
+		return false
+	}
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return true
+	}
+	return !ip.IsLoopback()
 }
 
 // checkPortAvailable probes whether addr is free by attempting a temporary

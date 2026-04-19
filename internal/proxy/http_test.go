@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -164,6 +165,221 @@ func TestHTTPProxy_BasicRequest(t *testing.T) {
 	}
 	if len(reqs) == 0 {
 		t.Error("expected at least one stored transaction, got none")
+	}
+}
+
+func TestHTTPProxy_MapLocalMatchServesFileAndStoresTransaction(t *testing.T) {
+	t.Parallel()
+
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, eng, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+
+	dir := t.TempDir()
+	mockPath := filepath.Join(dir, "user.json")
+	const wantBody = `{"id":1}`
+	if err := os.WriteFile(mockPath, []byte(wantBody), 0o600); err != nil {
+		t.Fatalf("write mock file: %v", err)
+	}
+	httpPcfg := &config.Config{
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
+		HTTPIdleTimeout:       120,
+		MaxBodySizeMB:         32,
+		MapLocalRules: []config.MapLocalRule{
+			{
+				URLPattern: "^.*/mock/user$",
+				FilePath:   mockPath,
+				StatusCode: http.StatusCreated,
+			},
+		},
+	}
+	tlsP := proxy.NewTLSProxy(nil, eng, proxy.TransportOptions{}, httpPcfg)
+	httpP = proxy.NewHTTPProxy("", tlsP, eng, proxy.TransportOptions{}, httpPcfg)
+
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(upstream.URL + "/mock/user")
+	if err != nil {
+		t.Fatalf("GET through proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusCreated)
+	}
+	if string(body) != wantBody {
+		t.Fatalf("body: got %q want %q", string(body), wantBody)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type: got %q want application/json", got)
+	}
+	if upstreamCalled {
+		t.Fatal("upstream should not be called for map-local match")
+	}
+
+	_, resps, err := eng.DB().ListTransactions(10, 0, "", "", 0, "")
+	if err != nil {
+		t.Fatalf("list transactions: %v", err)
+	}
+	if len(resps) == 0 || resps[0] == nil {
+		t.Fatal("expected stored response")
+	}
+	if resps[0].StatusCode != http.StatusCreated {
+		t.Fatalf("stored status: got %d want %d", resps[0].StatusCode, http.StatusCreated)
+	}
+	if string(resps[0].Body) != wantBody {
+		t.Fatalf("stored body: got %q want %q", string(resps[0].Body), wantBody)
+	}
+}
+
+func TestHTTPProxy_MapLocalMissingFileReturns500(t *testing.T) {
+	t.Parallel()
+
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, _, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+
+	dir := t.TempDir()
+	missingPath := filepath.Join(dir, "missing.json")
+	cfg := &config.Config{
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
+		HTTPIdleTimeout:       120,
+		MaxBodySizeMB:         32,
+		MapLocalRules: []config.MapLocalRule{
+			{
+				URLPattern: "^.*/missing$",
+				FilePath:   missingPath,
+			},
+		},
+	}
+	httpP = proxy.NewHTTPProxy("", nil, nil, proxy.TransportOptions{}, cfg)
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(upstream.URL + "/missing")
+	if err != nil {
+		t.Fatalf("GET through proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	if !strings.Contains(string(body), "map-local read file") {
+		t.Fatalf("body: expected map-local read error, got %q", string(body))
+	}
+	if upstreamCalled {
+		t.Fatal("upstream should not be called when map-local file is missing")
+	}
+}
+
+func TestHTTPProxy_MapLocalContentTypeDetection(t *testing.T) {
+	t.Parallel()
+
+	httpP, _, _, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+	dir := t.TempDir()
+	textPath := filepath.Join(dir, "plain.unknown")
+	if err := os.WriteFile(textPath, []byte("<html><body>ok</body></html>"), 0o600); err != nil {
+		t.Fatalf("write mock file: %v", err)
+	}
+	cfg := &config.Config{
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
+		HTTPIdleTimeout:       120,
+		MaxBodySizeMB:         32,
+		MapLocalRules: []config.MapLocalRule{
+			{
+				URLPattern: "^https?://.*/content-type$",
+				FilePath:   textPath,
+			},
+		},
+	}
+	httpP = proxy.NewHTTPProxy("", nil, nil, proxy.TransportOptions{}, cfg)
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(target.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(target.URL + "/content-type")
+	if err != nil {
+		t.Fatalf("GET through proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	if got := resp.Header.Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type: got %q want text/html; charset=utf-8", got)
+	}
+}
+
+func TestHTTPProxy_MapLocalNonMatchFallsBackToUpstream(t *testing.T) {
+	t.Parallel()
+
+	const wantBody = "upstream-body"
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(wantBody))
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, _, bpMgr, _ := newTestStack(t)
+	startAutoResume(t, bpMgr)
+	dir := t.TempDir()
+	mockPath := filepath.Join(dir, "mock.txt")
+	if err := os.WriteFile(mockPath, []byte("mock-body"), 0o600); err != nil {
+		t.Fatalf("write mock file: %v", err)
+	}
+	cfg := &config.Config{
+		HTTPReadHeaderTimeout: 10,
+		HTTPReadTimeout:       30,
+		HTTPWriteTimeout:      120,
+		HTTPIdleTimeout:       120,
+		MaxBodySizeMB:         32,
+		MapLocalRules: []config.MapLocalRule{
+			{
+				URLPattern: "^https://does-not-match\\.example/.*",
+				FilePath:   mockPath,
+			},
+		},
+	}
+	httpP = proxy.NewHTTPProxy("", nil, nil, proxy.TransportOptions{}, cfg)
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(upstream.URL + "/fallthrough")
+	if err != nil {
+		t.Fatalf("GET through proxy: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != wantBody {
+		t.Fatalf("body: got %q want %q", string(body), wantBody)
 	}
 }
 

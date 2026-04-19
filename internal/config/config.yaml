@@ -1,6 +1,11 @@
 http_port: "8080"
 grpc_port: "9090"
 grpc_bind_address: "127.0.0.1"  # default loopback-only; set to 0.0.0.0 for remote access (requires TLS + auth)
+tls_enabled: false
+# grpc_cert_path: "/etc/apix/grpc-server.pem"      # required when tls_enabled is true
+# grpc_key_path: "/etc/apix/grpc-server-key.pem"   # required when tls_enabled is true
+# auth_token: "replace-me"                         # prefer APIX_AUTH_TOKEN env var
+
 mcp_enabled: false
 mcp_port: "9093"
 mcp_bind_address: "127.0.0.1"  # remote usage requires tls_enabled: true + auth token
@@ -24,3 +29,9 @@ max_body_size_mb: 32         # maximum request/response body size in MB (413 if 
 # History retention policy (0 = disabled / keep forever)
 history_max_age_days: 0      # delete transactions older than N days
 history_max_rows: 0          # keep at most N transactions (prunes oldest first)
+# Map Local rules (optional): short-circuit upstream calls when URL matches.
+# map_local_rules:
+#   - url_pattern: '^https://api.example.com/mock/users$'
+#     file_path: './mocks/users.json'
+#     content_type: 'application/json'
+#     status_code: 200

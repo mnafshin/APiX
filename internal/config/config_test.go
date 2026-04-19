@@ -173,6 +173,34 @@ func TestLoadConfig_MalformedYAML(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_MapLocalRules(t *testing.T) {
+	t.Parallel()
+	path := writeTemp(t, `
+map_local_rules:
+  - url_pattern: "^https://example\\.com/mock$"
+    file_path: "./mocks/mock.json"
+    content_type: "application/json"
+    status_code: 201
+`)
+	cfg := LoadConfig(path)
+	if len(cfg.MapLocalRules) != 1 {
+		t.Fatalf("MapLocalRules: got %d want 1", len(cfg.MapLocalRules))
+	}
+	rule := cfg.MapLocalRules[0]
+	if rule.URLPattern != "^https://example\\.com/mock$" {
+		t.Errorf("URLPattern: got %q", rule.URLPattern)
+	}
+	if rule.FilePath != "./mocks/mock.json" {
+		t.Errorf("FilePath: got %q", rule.FilePath)
+	}
+	if rule.ContentType != "application/json" {
+		t.Errorf("ContentType: got %q", rule.ContentType)
+	}
+	if rule.StatusCode != 201 {
+		t.Errorf("StatusCode: got %d want 201", rule.StatusCode)
+	}
+}
+
 func TestDefaultPath_EnvVar(t *testing.T) {
 	t.Setenv("APIX_CONFIG", "/custom/path/config.yaml")
 

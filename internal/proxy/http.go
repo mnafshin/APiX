@@ -9,16 +9,21 @@ import (
 	metrics "github.com/mnafshin/apix/internal/metrics"
 	"github.com/mnafshin/apix/internal/rewrite"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/textproto"
+	"os"
+	"path/filepath"
+	"regexp"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/mnafshin/apix/internal/config"
 	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/plugins"
+	"golang.org/x/net/http2"
 )
 
 // HTTPProxy is a forward proxy that intercepts plain HTTP traffic and tunnels
@@ -132,6 +137,10 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		p.tlsProxy.handleBufferedConn(ctx, conn, r.Host, brw.Reader)
 		return
 	}
+	if preface, prefaceErr := brw.Peek(len(http2.ClientPreface)); prefaceErr == nil && string(preface) == http2.ClientPreface {
+		p.handleH2CTunnelConn(ctx, conn, brw.Reader, r.Host)
+		return
+	}
 	p.handleTunnelConn(ctx, conn, brw.Reader, r.Host)
 }
 
@@ -163,6 +172,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	origHeaders := r.Header.Clone()
+	annotateGRPCFrames(origHeaders, bodyBytes)
 	protocol := r.Proto
 	if protocol == "" {
 		protocol = "HTTP/1.1"
@@ -214,7 +224,25 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 7. Forward request upstream and read response.
+	// 7. Serve map-local response (if configured and matched).
+	if mapResp, mapBody, matched := p.applyMapLocalRules(ctx, proxyReq); matched {
+		mapResp, mapBody, err = p.runPluginResponse(ctx, proxyReq, mapResp, mapBody, maxBodyBytes)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
+			return
+		}
+
+		tx.Response = mapResp
+		tx.ResponseBody = mapBody
+		tx, done, err = p.evaluateResponseBreakpoint(ctx, w, tx)
+		if err != nil || done {
+			return
+		}
+		p.storeAndWriteResponse(ctx, w, start, tx)
+		return
+	}
+
+	// 8. Forward request upstream and read response.
 	// Attach an httptrace so that any 1xx informational responses (e.g. 103 Early
 	// Hints) received from the upstream are forwarded to the client immediately
 	// without being stored as transactions.
@@ -262,32 +290,23 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Raw:        upResp,
 	}
 
-	// 8. Apply response rewrite rules.
+	// 9. Apply response rewrite rules.
 	respBody = p.applyResponseRewriteRules(ctx, r, upResp, proxyResp, respBody)
 
-	// 9. Run plugin OnResponse chain.
+	// 10. Run plugin OnResponse chain.
 	proxyResp, respBody, err = p.runPluginResponse(ctx, proxyReq, proxyResp, respBody, maxBodyBytes)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
 		return
 	}
 
-	// 10. Store transaction.
-	if p.engine != nil {
-		tx.Response = proxyResp
-		tx.ResponseBody = respBody
-		tx.DurationMs = time.Since(start).Milliseconds()
-		if err := p.engine.StoreTransaction(tx); err != nil {
-			logging.Errorf(ctx, "store transaction: %v", err)
-		}
+	tx.Response = proxyResp
+	tx.ResponseBody = respBody
+	tx, done, err = p.evaluateResponseBreakpoint(ctx, w, tx)
+	if err != nil || done {
+		return
 	}
-
-	// 11. Emit metrics + slowlog.
-	dur := time.Since(start)
-	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.String(), proxyResp.StatusCode, dur)
-	_ = reqID
-
-	writeProxyResponse(w, proxyResp, respBody)
+	p.storeAndWriteResponse(ctx, w, start, tx)
 }
 
 // readRequestBody buffers r.Body up to maxBytes.
@@ -347,6 +366,33 @@ func (p *HTTPProxy) evaluateBreakpoint(ctx context.Context, w http.ResponseWrite
 				}
 			}
 			writeProxyResponse(w, tx.Response, respBody)
+		} else {
+			http.Error(w, "no synthetic response provided", http.StatusBadGateway)
+		}
+		return tx, true, nil
+	}
+	return tx, false, nil
+}
+
+// evaluateResponseBreakpoint checks response-phase breakpoint conditions.
+func (p *HTTPProxy) evaluateResponseBreakpoint(ctx context.Context, w http.ResponseWriter, tx *Transaction) (*Transaction, bool, error) {
+	if p.engine == nil || tx == nil || tx.Response == nil {
+		return tx, false, nil
+	}
+	modified, action, err := p.engine.PauseResponse(tx, tx.Response.StatusCode, tx.ResponseBody)
+	if err != nil {
+		logging.Errorf(ctx, "pause response: %v", err)
+		http.Error(w, fmt.Sprintf("pause response: %v", err), http.StatusBadGateway)
+		return tx, true, err
+	}
+	tx = modified
+	switch action {
+	case ResumeDrop:
+		http.Error(w, "response dropped by breakpoint", http.StatusBadGateway)
+		return tx, true, nil
+	case ResumeRespond:
+		if tx.Response != nil {
+			writeProxyResponse(w, tx.Response, tx.ResponseBody)
 		} else {
 			http.Error(w, "no synthetic response provided", http.StatusBadGateway)
 		}
@@ -423,12 +469,9 @@ func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.Proxy
 	// HTTP trailers are populated only after the body is fully consumed.
 	// Merge them into the response headers using a "Trailer-" prefix so they
 	// are preserved in the stored transaction (e.g. Trailer-Grpc-Status: 0).
-	for k, vv := range upResp.Trailer {
-		key := "Trailer-" + k
-		for _, v := range vv {
-			upResp.Header.Add(key, v)
-		}
-	}
+	mergeTrailersIntoHeaders(upResp.Header, upResp.Trailer)
+	setGRPCStatusFromTrailers(upResp.Header)
+	annotateGRPCFrames(upResp.Header, respBody)
 
 	return upResp, respBody, nil
 }
@@ -468,6 +511,76 @@ func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyReq
 		return modResp, newBody, nil
 	}
 	return modResp, body, nil
+}
+
+func (p *HTTPProxy) applyMapLocalRules(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyResponse, []byte, bool) {
+	if p.cfg == nil || len(p.cfg.MapLocalRules) == 0 || req == nil || req.URL == nil {
+		return nil, nil, false
+	}
+
+	urlStr := req.URL.String()
+	for _, rule := range p.cfg.MapLocalRules {
+		re, err := regexp.Compile(rule.URLPattern)
+		if err != nil {
+			logging.Errorf(ctx, "map-local invalid regex %q: %v", rule.URLPattern, err)
+			continue
+		}
+		if !re.MatchString(urlStr) {
+			continue
+		}
+
+		body, err := os.ReadFile(rule.FilePath)
+		if err != nil {
+			msg := fmt.Sprintf("map-local read file %q: %v", rule.FilePath, err)
+			logging.Errorf(ctx, "%s", msg)
+			return &plugins.ProxyResponse{
+				StatusCode: http.StatusInternalServerError,
+				Status:     fmt.Sprintf("%d %s", http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)),
+				Headers:    http.Header{"Content-Type": []string{"text/plain; charset=utf-8"}},
+			}, []byte(msg), true
+		}
+
+		statusCode := rule.StatusCode
+		if statusCode == 0 {
+			statusCode = http.StatusOK
+		}
+		contentType := rule.ContentType
+		if contentType == "" {
+			contentType = detectContentType(rule.FilePath, body)
+		}
+		return &plugins.ProxyResponse{
+			StatusCode: statusCode,
+			Status:     fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+			Headers:    http.Header{"Content-Type": []string{contentType}},
+		}, body, true
+	}
+
+	return nil, nil, false
+}
+
+func detectContentType(filePath string, body []byte) string {
+	if ctype := mime.TypeByExtension(filepath.Ext(filePath)); ctype != "" {
+		return ctype
+	}
+	if len(body) > 0 {
+		return http.DetectContentType(body)
+	}
+	return "application/octet-stream"
+}
+
+func (p *HTTPProxy) storeAndWriteResponse(ctx context.Context, w http.ResponseWriter, start time.Time, tx *Transaction) {
+	if tx == nil || tx.Request == nil || tx.Response == nil {
+		http.Error(w, "proxy transaction incomplete", http.StatusBadGateway)
+		return
+	}
+	if p.engine != nil {
+		tx.DurationMs = time.Since(start).Milliseconds()
+		if err := p.engine.StoreTransaction(tx); err != nil {
+			logging.Errorf(ctx, "store transaction: %v", err)
+		}
+	}
+	observeRequest(ctx, p.cfg, tx.Request.Method, tx.Request.URL.String(), tx.Response.StatusCode, time.Since(start))
+	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
 func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, start time.Time) {
@@ -539,6 +652,24 @@ func (p *HTTPProxy) handleTunnelConn(ctx context.Context, conn net.Conn, br *buf
 			return
 		}
 	}
+}
+
+func (p *HTTPProxy) handleH2CTunnelConn(ctx context.Context, conn net.Conn, br *bufio.Reader, host string) {
+	defer func() { _ = conn.Close() }()
+
+	h2 := &http2.Server{}
+	h2.ServeConn(&bufferedConn{Conn: conn, reader: br}, &http2.ServeConnOpts{
+		Context: context.WithoutCancel(ctx),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Host == "" {
+				r.URL.Host = host
+			}
+			if r.URL.Scheme == "" {
+				r.URL.Scheme = "http"
+			}
+			p.handleHTTP(w, r.WithContext(ctx))
+		}),
+	})
 }
 
 // writeProxyResponse writes a ProxyResponse back to the http.ResponseWriter.

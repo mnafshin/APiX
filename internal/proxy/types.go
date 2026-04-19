@@ -36,6 +36,8 @@ type RequestPauser interface {
 	// PauseRequest holds a request at a breakpoint and blocks until resumed.
 	// Returns the (possibly modified) request and the resume action.
 	PauseRequest(tx *Transaction) (*Transaction, ResumeAction, error)
+	// PauseResponse holds a response at a breakpoint and blocks until resumed.
+	PauseResponse(tx *Transaction, statusCode int, responseBody []byte) (*Transaction, ResumeAction, error)
 }
 
 // TrafficEngine composes all proxy interfaces.

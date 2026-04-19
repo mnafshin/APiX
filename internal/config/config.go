@@ -78,6 +78,16 @@ type Config struct {
 	// URLPatterns holds pre-configured URL regex patterns (e.g., allow/deny
 	// lists). Each entry must be a valid Go regexp; validated at startup.
 	URLPatterns []string `yaml:"url_patterns"`
+	// MapLocalRules serves local files for matching request URLs.
+	MapLocalRules []MapLocalRule `yaml:"map_local_rules"`
+}
+
+// MapLocalRule maps a URL regex pattern to a local file response.
+type MapLocalRule struct {
+	URLPattern  string `yaml:"url_pattern"`
+	FilePath    string `yaml:"file_path"`
+	ContentType string `yaml:"content_type"`
+	StatusCode  int    `yaml:"status_code"`
 }
 
 // DefaultPath returns the config file path following these priorities:

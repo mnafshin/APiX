@@ -314,6 +314,8 @@ Configuration validation: run `apix-engine --config-check` to validate your conf
 | `ca_cert_path` | `~/.apix/ca.pem` | MITM CA certificate |
 | `ca_key_path` | `~/.apix/ca-key.pem` | MITM CA private key |
 | `tls_enabled` | `false` | Enable TLS on the gRPC server |
+| `grpc_cert_path` | `""` | gRPC server TLS certificate path (required when `tls_enabled: true`) |
+| `grpc_key_path` | `""` | gRPC server TLS private key path (required when `tls_enabled: true`) |
 | `auth_token` | `""` | Bearer token for gRPC auth (prefer `APIX_AUTH_TOKEN` env var) |
 | `max_idle_conns_per_host` | `10` | Max idle upstream connections per host |
 | `idle_conn_timeout_sec` | `90` | Seconds an idle upstream connection stays open |

@@ -100,6 +100,7 @@ http_port: "8080"
 
 # gRPC server port (for VS Code extension / CLI clients)
 grpc_port: "9090"
+grpc_bind_address: "127.0.0.1" # use 0.0.0.0 only with TLS + auth for remote mode
 
 # MCP server (AI assistants)
 mcp_enabled: false
@@ -117,6 +118,8 @@ db_path: "~/.apix/apix.db"
 
 # Optional: TLS for remote engines (for vscode.dev support)
 tls_enabled: false
+grpc_cert_path: "/etc/apix/grpc-server.pem"      # required when tls_enabled=true
+grpc_key_path: "/etc/apix/grpc-server-key.pem"   # required when tls_enabled=true
 ca_cert_path: "~/.apix/ca.pem"
 ca_key_path: "~/.apix/ca-key.pem"
 
@@ -327,30 +330,31 @@ sudo journalctl -u apix -n 50
 
 ---
 
-## Remote Engine (vscode.dev) — Planned
+## Remote Engine (vscode.dev)
 
-> **Note:** Remote engine support (for vscode.dev and browser-based VS Code) is not yet implemented.
-> The `APiX: Connect to Remote` command does not exist in the current extension.
-> This feature is tracked in [issue #11](https://github.com/mnafshin/APiX/issues/11).
+APiX engine supports remote gRPC access over TLS for vscode.dev/browser clients.
 
-The engine will eventually support remote connections over TLS for use in vscode.dev. The planned configuration will look like:
-
-1. Start engine with TLS (future):
+1. Configure secure remote bind:
    ```yaml
-   # config.yaml
+   grpc_bind_address: "0.0.0.0"
+   grpc_port: "9090"
    tls_enabled: true
    grpc_cert_path: "/etc/apix/grpc-server.pem"
    grpc_key_path: "/etc/apix/grpc-server-key.pem"
-   ca_cert_path: "/etc/apix/ca.pem"
-   ca_key_path: "/etc/apix/ca-key.pem"
+   # Prefer APIX_AUTH_TOKEN env var in production:
    auth_token: "your-secret-token"
    ```
 
-2. Configure firewall to allow gRPC on port 9090
+2. Set token via environment variable (recommended):
+   ```bash
+   export APIX_AUTH_TOKEN="your-secret-token"
+   ```
 
-3. In VS Code / vscode.dev _(once #11 is shipped)_:
-   - APiX: Connect to Remote → `https://your-server:9090`
-   - Enter auth token
+3. Start engine and open firewall for TCP/9090 only to trusted clients.
+
+4. Connect from VS Code/vscode.dev using TLS endpoint:
+   - `https://your-server:9090`
+   - `Authorization: Bearer <token>`
 
 ---
 

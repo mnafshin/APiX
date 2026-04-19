@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // register "sqlite" driver
@@ -72,8 +73,27 @@ func Open(path string) (*DB, error) {
 			return nil, fmt.Errorf("apply schema: %w", err)
 		}
 	}
+	if err := ensureBreakpointColumns(db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	return &DB{db: db}, nil
+}
+
+func ensureBreakpointColumns(db *sql.DB) error {
+	ddls := []string{
+		`ALTER TABLE breakpoints ADD COLUMN header_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE breakpoints ADD COLUMN header_value TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE breakpoints ADD COLUMN body_pattern TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE breakpoints ADD COLUMN status_codes TEXT NOT NULL DEFAULT '[]'`,
+	}
+	for _, ddl := range ddls {
+		if _, err := db.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			return fmt.Errorf("migrate breakpoints columns: %w", err)
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying database connection.
