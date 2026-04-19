@@ -24,6 +24,32 @@ export interface HttpTransaction {
     response: HttpResponse;
     timestamp: number; // Unix ms
     durationMs: number;
+    graphql?: GraphQLMetadata;
+}
+
+export interface GraphQLRequestMetadata {
+    operationName: string;
+    query: string;
+    variablesJson: string;
+    isBatch: boolean;
+    operationCount: number;
+}
+
+export interface GraphQLError {
+    message: string;
+    pathJson: string;
+    locationsJson: string;
+    extensionsJson: string;
+    rawJson: string;
+}
+
+export interface GraphQLResponseMetadata {
+    errors: GraphQLError[];
+}
+
+export interface GraphQLMetadata {
+    request?: GraphQLRequestMetadata;
+    response?: GraphQLResponseMetadata;
 }
 
 export interface WebSocketFrame {

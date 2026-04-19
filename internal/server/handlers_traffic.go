@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	gql "github.com/mnafshin/apix/internal/graphql"
 	"github.com/mnafshin/apix/internal/har"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
@@ -85,12 +86,27 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 				Body:       resp.Body,
 			}
 		}
+		tx.Graphql = toProtoGraphQLMetadata(gql.Extract(tx.Request.Headers, tx.Request.Body, respHeaders(tx.Response), respBody(tx.Response)))
 
 		if err := stream.Send(tx); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func respHeaders(resp *apix.HttpResponse) map[string]string {
+	if resp == nil {
+		return nil
+	}
+	return resp.Headers
+}
+
+func respBody(resp *apix.HttpResponse) []byte {
+	if resp == nil {
+		return nil
+	}
+	return resp.Body
 }
 
 func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, stream grpc.ServerStreamingServer[apix.WebSocketFrame]) error {
