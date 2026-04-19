@@ -163,8 +163,8 @@ These are the gaps I’d elevate most:
    - gRPC/HTTP2 matters more than broad “future protocol” language
 
 10. **Backlog cleanup and dependency shaping**
-   - remove duplicate/stale issues
-   - turn roadmap bullets into acceptance-based epics
+- remove duplicate/stale issues
+- turn roadmap bullets into acceptance-based epics
 
 ## If APiX wants to become top class, the right order is
 
