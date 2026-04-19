@@ -9,10 +9,19 @@ import * as path from 'path';
  * In remote/browser mode (vscode.dev) this manager is not used; the extension
  * connects directly to a user-supplied remote engine address instead.
  */
+// Auto-restart configuration constants.
+const BACKOFF_INITIAL_MS = 1_000;
+const BACKOFF_MAX_MS = 30_000;
+const MAX_RESTART_ATTEMPTS = 5;
+
 export class EngineProcessManager {
     private process: child_process.ChildProcess | null = null;
     private isStarting = false;
     private startPromise: Promise<void> | null = null;
+    private restartAttempts = 0;
+    private restartTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Callback invoked after a successful auto-restart so streams can be re-established. */
+    onRestart: (() => void) | null = null;
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
