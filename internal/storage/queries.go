@@ -56,10 +56,10 @@ func (d *DB) SaveRequest(r *RequestRecord) error {
 		return fmt.Errorf("marshal headers: %w", err)
 	}
 	_, err = d.db.Exec(
-		`INSERT OR REPLACE INTO requests (id, method, url, headers, body, timestamp, duration_ms)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO requests (id, method, url, headers, body, timestamp, duration_ms, protocol)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.ID, r.Method, r.URL, string(hdrs), r.Body,
-		r.Timestamp.UnixMilli(), r.DurationMs,
+		r.Timestamp.UnixMilli(), r.DurationMs, r.Protocol,
 	)
 	return err
 }

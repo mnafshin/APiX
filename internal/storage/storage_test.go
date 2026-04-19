@@ -41,6 +41,7 @@ func TestSaveAndGetRequest(t *testing.T) {
 		Body:       []byte("hello"),
 		Timestamp:  now,
 		DurationMs: 42,
+		Protocol:   "HTTP/2.0",
 	}
 
 	if err := db.SaveRequest(req); err != nil {
@@ -77,6 +78,9 @@ func TestSaveAndGetRequest(t *testing.T) {
 	}
 	if !gotReq.Timestamp.Equal(now) {
 		t.Errorf("Timestamp: got %v want %v", gotReq.Timestamp, now)
+	}
+	if gotReq.Protocol != "HTTP/2.0" {
+		t.Errorf("Protocol: got %q want %q", gotReq.Protocol, "HTTP/2.0")
 	}
 }
 

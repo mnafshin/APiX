@@ -23,6 +23,7 @@ import (
 	"github.com/mnafshin/apix/internal/config"
 	httputil "github.com/mnafshin/apix/internal/http"
 	"github.com/mnafshin/apix/pkg/plugins"
+	"golang.org/x/net/http2"
 )
 
 // HTTPProxy is a forward proxy that intercepts plain HTTP traffic and tunnels
@@ -136,6 +137,10 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		p.tlsProxy.handleBufferedConn(ctx, conn, r.Host, brw.Reader)
 		return
 	}
+	if preface, prefaceErr := brw.Peek(len(http2.ClientPreface)); prefaceErr == nil && string(preface) == http2.ClientPreface {
+		p.handleH2CTunnelConn(ctx, conn, brw.Reader, r.Host)
+		return
+	}
 	p.handleTunnelConn(ctx, conn, brw.Reader, r.Host)
 }
 
@@ -167,6 +172,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	origHeaders := r.Header.Clone()
+	annotateGRPCFrames(origHeaders, bodyBytes)
 	protocol := r.Proto
 	if protocol == "" {
 		protocol = "HTTP/1.1"
@@ -463,12 +469,9 @@ func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.Proxy
 	// HTTP trailers are populated only after the body is fully consumed.
 	// Merge them into the response headers using a "Trailer-" prefix so they
 	// are preserved in the stored transaction (e.g. Trailer-Grpc-Status: 0).
-	for k, vv := range upResp.Trailer {
-		key := "Trailer-" + k
-		for _, v := range vv {
-			upResp.Header.Add(key, v)
-		}
-	}
+	mergeTrailersIntoHeaders(upResp.Header, upResp.Trailer)
+	setGRPCStatusFromTrailers(upResp.Header)
+	annotateGRPCFrames(upResp.Header, respBody)
 
 	return upResp, respBody, nil
 }
@@ -649,6 +652,24 @@ func (p *HTTPProxy) handleTunnelConn(ctx context.Context, conn net.Conn, br *buf
 			return
 		}
 	}
+}
+
+func (p *HTTPProxy) handleH2CTunnelConn(ctx context.Context, conn net.Conn, br *bufio.Reader, host string) {
+	defer func() { _ = conn.Close() }()
+
+	h2 := &http2.Server{}
+	h2.ServeConn(&bufferedConn{Conn: conn, reader: br}, &http2.ServeConnOpts{
+		Context: context.WithoutCancel(ctx),
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Host == "" {
+				r.URL.Host = host
+			}
+			if r.URL.Scheme == "" {
+				r.URL.Scheme = "http"
+			}
+			p.handleHTTP(w, r.WithContext(ctx))
+		}),
+	})
 }
 
 // writeProxyResponse writes a ProxyResponse back to the http.ResponseWriter.
