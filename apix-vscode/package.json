@@ -2,7 +2,7 @@
   "name": "apix",
   "displayName": "APiX - API Debugger",
   "description": "Intercept, inspect, and debug HTTP/HTTPS traffic directly in VS Code",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "publisher": "mnafshin",
   "license": "Apache-2.0",
   "repository": {
