@@ -242,6 +242,7 @@ export class EngineClient {
                     response: raw.response || {},
                     timestamp: raw.timestamp || 0,
                     durationMs: raw.durationMs || 0,
+                    graphql: raw.graphql || undefined,
                 };
                 results.push(tx);
             });

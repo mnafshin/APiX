@@ -143,7 +143,7 @@ func (x ResumeAction_Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ResumeAction_Action.Descriptor instead.
 func (ResumeAction_Action) EnumDescriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{17, 0}
+	return file_apix_proto_rawDescGZIP(), []int{21, 0}
 }
 
 type Empty struct {
@@ -344,6 +344,254 @@ func (x *HttpResponse) GetBody() []byte {
 	return nil
 }
 
+type GraphQLRequestMetadata struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OperationName  string                 `protobuf:"bytes,1,opt,name=operation_name,json=operationName,proto3" json:"operation_name,omitempty"`
+	Query          string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	VariablesJson  string                 `protobuf:"bytes,3,opt,name=variables_json,json=variablesJson,proto3" json:"variables_json,omitempty"`
+	IsBatch        bool                   `protobuf:"varint,4,opt,name=is_batch,json=isBatch,proto3" json:"is_batch,omitempty"`
+	OperationCount int32                  `protobuf:"varint,5,opt,name=operation_count,json=operationCount,proto3" json:"operation_count,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GraphQLRequestMetadata) Reset() {
+	*x = GraphQLRequestMetadata{}
+	mi := &file_apix_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GraphQLRequestMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GraphQLRequestMetadata) ProtoMessage() {}
+
+func (x *GraphQLRequestMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GraphQLRequestMetadata.ProtoReflect.Descriptor instead.
+func (*GraphQLRequestMetadata) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *GraphQLRequestMetadata) GetOperationName() string {
+	if x != nil {
+		return x.OperationName
+	}
+	return ""
+}
+
+func (x *GraphQLRequestMetadata) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *GraphQLRequestMetadata) GetVariablesJson() string {
+	if x != nil {
+		return x.VariablesJson
+	}
+	return ""
+}
+
+func (x *GraphQLRequestMetadata) GetIsBatch() bool {
+	if x != nil {
+		return x.IsBatch
+	}
+	return false
+}
+
+func (x *GraphQLRequestMetadata) GetOperationCount() int32 {
+	if x != nil {
+		return x.OperationCount
+	}
+	return 0
+}
+
+type GraphQLError struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Message        string                 `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	PathJson       string                 `protobuf:"bytes,2,opt,name=path_json,json=pathJson,proto3" json:"path_json,omitempty"`
+	LocationsJson  string                 `protobuf:"bytes,3,opt,name=locations_json,json=locationsJson,proto3" json:"locations_json,omitempty"`
+	ExtensionsJson string                 `protobuf:"bytes,4,opt,name=extensions_json,json=extensionsJson,proto3" json:"extensions_json,omitempty"`
+	RawJson        string                 `protobuf:"bytes,5,opt,name=raw_json,json=rawJson,proto3" json:"raw_json,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GraphQLError) Reset() {
+	*x = GraphQLError{}
+	mi := &file_apix_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GraphQLError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GraphQLError) ProtoMessage() {}
+
+func (x *GraphQLError) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GraphQLError.ProtoReflect.Descriptor instead.
+func (*GraphQLError) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GraphQLError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *GraphQLError) GetPathJson() string {
+	if x != nil {
+		return x.PathJson
+	}
+	return ""
+}
+
+func (x *GraphQLError) GetLocationsJson() string {
+	if x != nil {
+		return x.LocationsJson
+	}
+	return ""
+}
+
+func (x *GraphQLError) GetExtensionsJson() string {
+	if x != nil {
+		return x.ExtensionsJson
+	}
+	return ""
+}
+
+func (x *GraphQLError) GetRawJson() string {
+	if x != nil {
+		return x.RawJson
+	}
+	return ""
+}
+
+type GraphQLResponseMetadata struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Errors        []*GraphQLError        `protobuf:"bytes,1,rep,name=errors,proto3" json:"errors,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GraphQLResponseMetadata) Reset() {
+	*x = GraphQLResponseMetadata{}
+	mi := &file_apix_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GraphQLResponseMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GraphQLResponseMetadata) ProtoMessage() {}
+
+func (x *GraphQLResponseMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GraphQLResponseMetadata.ProtoReflect.Descriptor instead.
+func (*GraphQLResponseMetadata) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GraphQLResponseMetadata) GetErrors() []*GraphQLError {
+	if x != nil {
+		return x.Errors
+	}
+	return nil
+}
+
+type GraphQLMetadata struct {
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Request       *GraphQLRequestMetadata  `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Response      *GraphQLResponseMetadata `protobuf:"bytes,2,opt,name=response,proto3" json:"response,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GraphQLMetadata) Reset() {
+	*x = GraphQLMetadata{}
+	mi := &file_apix_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GraphQLMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GraphQLMetadata) ProtoMessage() {}
+
+func (x *GraphQLMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_apix_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GraphQLMetadata.ProtoReflect.Descriptor instead.
+func (*GraphQLMetadata) Descriptor() ([]byte, []int) {
+	return file_apix_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GraphQLMetadata) GetRequest() *GraphQLRequestMetadata {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *GraphQLMetadata) GetResponse() *GraphQLResponseMetadata {
+	if x != nil {
+		return x.Response
+	}
+	return nil
+}
+
 // HttpTransaction pairs a request with its response plus metadata.
 type HttpTransaction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -352,13 +600,14 @@ type HttpTransaction struct {
 	Response      *HttpResponse          `protobuf:"bytes,3,opt,name=response,proto3" json:"response,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix ms
 	DurationMs    int64                  `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	Graphql       *GraphQLMetadata       `protobuf:"bytes,6,opt,name=graphql,proto3" json:"graphql,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HttpTransaction) Reset() {
 	*x = HttpTransaction{}
-	mi := &file_apix_proto_msgTypes[3]
+	mi := &file_apix_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +619,7 @@ func (x *HttpTransaction) String() string {
 func (*HttpTransaction) ProtoMessage() {}
 
 func (x *HttpTransaction) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[3]
+	mi := &file_apix_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +632,7 @@ func (x *HttpTransaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HttpTransaction.ProtoReflect.Descriptor instead.
 func (*HttpTransaction) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{3}
+	return file_apix_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *HttpTransaction) GetId() string {
@@ -421,6 +670,13 @@ func (x *HttpTransaction) GetDurationMs() int64 {
 	return 0
 }
 
+func (x *HttpTransaction) GetGraphql() *GraphQLMetadata {
+	if x != nil {
+		return x.Graphql
+	}
+	return nil
+}
+
 type PluginInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -433,7 +689,7 @@ type PluginInfo struct {
 
 func (x *PluginInfo) Reset() {
 	*x = PluginInfo{}
-	mi := &file_apix_proto_msgTypes[4]
+	mi := &file_apix_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -445,7 +701,7 @@ func (x *PluginInfo) String() string {
 func (*PluginInfo) ProtoMessage() {}
 
 func (x *PluginInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[4]
+	mi := &file_apix_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -458,7 +714,7 @@ func (x *PluginInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginInfo.ProtoReflect.Descriptor instead.
 func (*PluginInfo) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{4}
+	return file_apix_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PluginInfo) GetName() string {
@@ -497,7 +753,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_apix_proto_msgTypes[5]
+	mi := &file_apix_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -509,7 +765,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[5]
+	mi := &file_apix_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -522,7 +778,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{5}
+	return file_apix_proto_rawDescGZIP(), []int{9}
 }
 
 type StatusResponse struct {
@@ -538,7 +794,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_apix_proto_msgTypes[6]
+	mi := &file_apix_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -550,7 +806,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[6]
+	mi := &file_apix_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -563,7 +819,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{6}
+	return file_apix_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *StatusResponse) GetStatus() string {
@@ -610,7 +866,7 @@ type VersionRequest struct {
 
 func (x *VersionRequest) Reset() {
 	*x = VersionRequest{}
-	mi := &file_apix_proto_msgTypes[7]
+	mi := &file_apix_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -622,7 +878,7 @@ func (x *VersionRequest) String() string {
 func (*VersionRequest) ProtoMessage() {}
 
 func (x *VersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[7]
+	mi := &file_apix_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -635,7 +891,7 @@ func (x *VersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionRequest.ProtoReflect.Descriptor instead.
 func (*VersionRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{7}
+	return file_apix_proto_rawDescGZIP(), []int{11}
 }
 
 // VersionResponse carries the engine's version and the minimum client version
@@ -652,7 +908,7 @@ type VersionResponse struct {
 
 func (x *VersionResponse) Reset() {
 	*x = VersionResponse{}
-	mi := &file_apix_proto_msgTypes[8]
+	mi := &file_apix_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -664,7 +920,7 @@ func (x *VersionResponse) String() string {
 func (*VersionResponse) ProtoMessage() {}
 
 func (x *VersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[8]
+	mi := &file_apix_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -677,7 +933,7 @@ func (x *VersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionResponse.ProtoReflect.Descriptor instead.
 func (*VersionResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{8}
+	return file_apix_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *VersionResponse) GetEngineVersion() string {
@@ -709,7 +965,7 @@ type CaptureRequest struct {
 
 func (x *CaptureRequest) Reset() {
 	*x = CaptureRequest{}
-	mi := &file_apix_proto_msgTypes[9]
+	mi := &file_apix_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -721,7 +977,7 @@ func (x *CaptureRequest) String() string {
 func (*CaptureRequest) ProtoMessage() {}
 
 func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[9]
+	mi := &file_apix_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -734,7 +990,7 @@ func (x *CaptureRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CaptureRequest.ProtoReflect.Descriptor instead.
 func (*CaptureRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{9}
+	return file_apix_proto_rawDescGZIP(), []int{13}
 }
 
 type PluginListRequest struct {
@@ -745,7 +1001,7 @@ type PluginListRequest struct {
 
 func (x *PluginListRequest) Reset() {
 	*x = PluginListRequest{}
-	mi := &file_apix_proto_msgTypes[10]
+	mi := &file_apix_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -757,7 +1013,7 @@ func (x *PluginListRequest) String() string {
 func (*PluginListRequest) ProtoMessage() {}
 
 func (x *PluginListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[10]
+	mi := &file_apix_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -770,7 +1026,7 @@ func (x *PluginListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginListRequest.ProtoReflect.Descriptor instead.
 func (*PluginListRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{10}
+	return file_apix_proto_rawDescGZIP(), []int{14}
 }
 
 type PluginListResponse struct {
@@ -782,7 +1038,7 @@ type PluginListResponse struct {
 
 func (x *PluginListResponse) Reset() {
 	*x = PluginListResponse{}
-	mi := &file_apix_proto_msgTypes[11]
+	mi := &file_apix_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +1050,7 @@ func (x *PluginListResponse) String() string {
 func (*PluginListResponse) ProtoMessage() {}
 
 func (x *PluginListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[11]
+	mi := &file_apix_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +1063,7 @@ func (x *PluginListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PluginListResponse.ProtoReflect.Descriptor instead.
 func (*PluginListResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{11}
+	return file_apix_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PluginListResponse) GetPlugins() []*PluginInfo {
@@ -835,7 +1091,7 @@ type BreakpointRule struct {
 
 func (x *BreakpointRule) Reset() {
 	*x = BreakpointRule{}
-	mi := &file_apix_proto_msgTypes[12]
+	mi := &file_apix_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +1103,7 @@ func (x *BreakpointRule) String() string {
 func (*BreakpointRule) ProtoMessage() {}
 
 func (x *BreakpointRule) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[12]
+	mi := &file_apix_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +1116,7 @@ func (x *BreakpointRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BreakpointRule.ProtoReflect.Descriptor instead.
 func (*BreakpointRule) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{12}
+	return file_apix_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *BreakpointRule) GetId() string {
@@ -935,7 +1191,7 @@ type BreakpointID struct {
 
 func (x *BreakpointID) Reset() {
 	*x = BreakpointID{}
-	mi := &file_apix_proto_msgTypes[13]
+	mi := &file_apix_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -947,7 +1203,7 @@ func (x *BreakpointID) String() string {
 func (*BreakpointID) ProtoMessage() {}
 
 func (x *BreakpointID) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[13]
+	mi := &file_apix_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -960,7 +1216,7 @@ func (x *BreakpointID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BreakpointID.ProtoReflect.Descriptor instead.
 func (*BreakpointID) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{13}
+	return file_apix_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *BreakpointID) GetId() string {
@@ -979,7 +1235,7 @@ type BreakpointList struct {
 
 func (x *BreakpointList) Reset() {
 	*x = BreakpointList{}
-	mi := &file_apix_proto_msgTypes[14]
+	mi := &file_apix_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -991,7 +1247,7 @@ func (x *BreakpointList) String() string {
 func (*BreakpointList) ProtoMessage() {}
 
 func (x *BreakpointList) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[14]
+	mi := &file_apix_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1004,7 +1260,7 @@ func (x *BreakpointList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BreakpointList.ProtoReflect.Descriptor instead.
 func (*BreakpointList) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{14}
+	return file_apix_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *BreakpointList) GetBreakpoints() []*BreakpointRule {
@@ -1024,7 +1280,7 @@ type BreakpointResponse struct {
 
 func (x *BreakpointResponse) Reset() {
 	*x = BreakpointResponse{}
-	mi := &file_apix_proto_msgTypes[15]
+	mi := &file_apix_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1036,7 +1292,7 @@ func (x *BreakpointResponse) String() string {
 func (*BreakpointResponse) ProtoMessage() {}
 
 func (x *BreakpointResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[15]
+	mi := &file_apix_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1049,7 +1305,7 @@ func (x *BreakpointResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BreakpointResponse.ProtoReflect.Descriptor instead.
 func (*BreakpointResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{15}
+	return file_apix_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *BreakpointResponse) GetBreakpoint() *BreakpointRule {
@@ -1072,7 +1328,7 @@ type PausedRequest struct {
 
 func (x *PausedRequest) Reset() {
 	*x = PausedRequest{}
-	mi := &file_apix_proto_msgTypes[16]
+	mi := &file_apix_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1084,7 +1340,7 @@ func (x *PausedRequest) String() string {
 func (*PausedRequest) ProtoMessage() {}
 
 func (x *PausedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[16]
+	mi := &file_apix_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1097,7 +1353,7 @@ func (x *PausedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PausedRequest.ProtoReflect.Descriptor instead.
 func (*PausedRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{16}
+	return file_apix_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PausedRequest) GetRequestId() string {
@@ -1141,7 +1397,7 @@ type ResumeAction struct {
 
 func (x *ResumeAction) Reset() {
 	*x = ResumeAction{}
-	mi := &file_apix_proto_msgTypes[17]
+	mi := &file_apix_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1153,7 +1409,7 @@ func (x *ResumeAction) String() string {
 func (*ResumeAction) ProtoMessage() {}
 
 func (x *ResumeAction) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[17]
+	mi := &file_apix_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1166,7 +1422,7 @@ func (x *ResumeAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeAction.ProtoReflect.Descriptor instead.
 func (*ResumeAction) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{17}
+	return file_apix_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ResumeAction) GetRequestId() string {
@@ -1214,7 +1470,7 @@ type ReplaySpec struct {
 
 func (x *ReplaySpec) Reset() {
 	*x = ReplaySpec{}
-	mi := &file_apix_proto_msgTypes[18]
+	mi := &file_apix_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1226,7 +1482,7 @@ func (x *ReplaySpec) String() string {
 func (*ReplaySpec) ProtoMessage() {}
 
 func (x *ReplaySpec) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[18]
+	mi := &file_apix_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1239,7 +1495,7 @@ func (x *ReplaySpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReplaySpec.ProtoReflect.Descriptor instead.
 func (*ReplaySpec) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{18}
+	return file_apix_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ReplaySpec) GetSource() isReplaySpec_Source {
@@ -1319,7 +1575,7 @@ type HistoryQuery struct {
 
 func (x *HistoryQuery) Reset() {
 	*x = HistoryQuery{}
-	mi := &file_apix_proto_msgTypes[19]
+	mi := &file_apix_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1331,7 +1587,7 @@ func (x *HistoryQuery) String() string {
 func (*HistoryQuery) ProtoMessage() {}
 
 func (x *HistoryQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[19]
+	mi := &file_apix_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1344,7 +1600,7 @@ func (x *HistoryQuery) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HistoryQuery.ProtoReflect.Descriptor instead.
 func (*HistoryQuery) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{19}
+	return file_apix_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *HistoryQuery) GetLimit() int32 {
@@ -1407,7 +1663,7 @@ type GetWebSocketFramesRequest struct {
 
 func (x *GetWebSocketFramesRequest) Reset() {
 	*x = GetWebSocketFramesRequest{}
-	mi := &file_apix_proto_msgTypes[20]
+	mi := &file_apix_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1419,7 +1675,7 @@ func (x *GetWebSocketFramesRequest) String() string {
 func (*GetWebSocketFramesRequest) ProtoMessage() {}
 
 func (x *GetWebSocketFramesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[20]
+	mi := &file_apix_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1432,7 +1688,7 @@ func (x *GetWebSocketFramesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWebSocketFramesRequest.ProtoReflect.Descriptor instead.
 func (*GetWebSocketFramesRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{20}
+	return file_apix_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetWebSocketFramesRequest) GetTransactionId() string {
@@ -1469,7 +1725,7 @@ type WebSocketFrame struct {
 
 func (x *WebSocketFrame) Reset() {
 	*x = WebSocketFrame{}
-	mi := &file_apix_proto_msgTypes[21]
+	mi := &file_apix_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1481,7 +1737,7 @@ func (x *WebSocketFrame) String() string {
 func (*WebSocketFrame) ProtoMessage() {}
 
 func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[21]
+	mi := &file_apix_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1494,7 +1750,7 @@ func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
 func (*WebSocketFrame) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{21}
+	return file_apix_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WebSocketFrame) GetTransactionId() string {
@@ -1541,7 +1797,7 @@ type ExportHARRequest struct {
 
 func (x *ExportHARRequest) Reset() {
 	*x = ExportHARRequest{}
-	mi := &file_apix_proto_msgTypes[22]
+	mi := &file_apix_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1553,7 +1809,7 @@ func (x *ExportHARRequest) String() string {
 func (*ExportHARRequest) ProtoMessage() {}
 
 func (x *ExportHARRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[22]
+	mi := &file_apix_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1566,7 +1822,7 @@ func (x *ExportHARRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportHARRequest.ProtoReflect.Descriptor instead.
 func (*ExportHARRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{22}
+	return file_apix_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ExportHARRequest) GetTransactionIds() []string {
@@ -1585,7 +1841,7 @@ type ExportHARResponse struct {
 
 func (x *ExportHARResponse) Reset() {
 	*x = ExportHARResponse{}
-	mi := &file_apix_proto_msgTypes[23]
+	mi := &file_apix_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1597,7 +1853,7 @@ func (x *ExportHARResponse) String() string {
 func (*ExportHARResponse) ProtoMessage() {}
 
 func (x *ExportHARResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[23]
+	mi := &file_apix_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1610,7 +1866,7 @@ func (x *ExportHARResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExportHARResponse.ProtoReflect.Descriptor instead.
 func (*ExportHARResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{23}
+	return file_apix_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ExportHARResponse) GetHarJson() string {
@@ -1629,7 +1885,7 @@ type ImportHARRequest struct {
 
 func (x *ImportHARRequest) Reset() {
 	*x = ImportHARRequest{}
-	mi := &file_apix_proto_msgTypes[24]
+	mi := &file_apix_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1641,7 +1897,7 @@ func (x *ImportHARRequest) String() string {
 func (*ImportHARRequest) ProtoMessage() {}
 
 func (x *ImportHARRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[24]
+	mi := &file_apix_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1654,7 +1910,7 @@ func (x *ImportHARRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHARRequest.ProtoReflect.Descriptor instead.
 func (*ImportHARRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{24}
+	return file_apix_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ImportHARRequest) GetHarJson() string {
@@ -1673,7 +1929,7 @@ type ImportHARResponse struct {
 
 func (x *ImportHARResponse) Reset() {
 	*x = ImportHARResponse{}
-	mi := &file_apix_proto_msgTypes[25]
+	mi := &file_apix_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1685,7 +1941,7 @@ func (x *ImportHARResponse) String() string {
 func (*ImportHARResponse) ProtoMessage() {}
 
 func (x *ImportHARResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[25]
+	mi := &file_apix_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1698,7 +1954,7 @@ func (x *ImportHARResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportHARResponse.ProtoReflect.Descriptor instead.
 func (*ImportHARResponse) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{25}
+	return file_apix_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ImportHARResponse) GetTransactionIds() []string {
@@ -1722,7 +1978,7 @@ type MatchCriteria struct {
 
 func (x *MatchCriteria) Reset() {
 	*x = MatchCriteria{}
-	mi := &file_apix_proto_msgTypes[26]
+	mi := &file_apix_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1734,7 +1990,7 @@ func (x *MatchCriteria) String() string {
 func (*MatchCriteria) ProtoMessage() {}
 
 func (x *MatchCriteria) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[26]
+	mi := &file_apix_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1747,7 +2003,7 @@ func (x *MatchCriteria) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchCriteria.ProtoReflect.Descriptor instead.
 func (*MatchCriteria) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{26}
+	return file_apix_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *MatchCriteria) GetUrlPattern() string {
@@ -1812,7 +2068,7 @@ type RewriteRule struct {
 
 func (x *RewriteRule) Reset() {
 	*x = RewriteRule{}
-	mi := &file_apix_proto_msgTypes[27]
+	mi := &file_apix_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1824,7 +2080,7 @@ func (x *RewriteRule) String() string {
 func (*RewriteRule) ProtoMessage() {}
 
 func (x *RewriteRule) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[27]
+	mi := &file_apix_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1837,7 +2093,7 @@ func (x *RewriteRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewriteRule.ProtoReflect.Descriptor instead.
 func (*RewriteRule) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{27}
+	return file_apix_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RewriteRule) GetId() string {
@@ -1933,7 +2189,7 @@ type RewriteRuleList struct {
 
 func (x *RewriteRuleList) Reset() {
 	*x = RewriteRuleList{}
-	mi := &file_apix_proto_msgTypes[28]
+	mi := &file_apix_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1945,7 +2201,7 @@ func (x *RewriteRuleList) String() string {
 func (*RewriteRuleList) ProtoMessage() {}
 
 func (x *RewriteRuleList) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[28]
+	mi := &file_apix_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1958,7 +2214,7 @@ func (x *RewriteRuleList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewriteRuleList.ProtoReflect.Descriptor instead.
 func (*RewriteRuleList) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{28}
+	return file_apix_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RewriteRuleList) GetRules() []*RewriteRule {
@@ -1977,7 +2233,7 @@ type RewriteRuleRequest struct {
 
 func (x *RewriteRuleRequest) Reset() {
 	*x = RewriteRuleRequest{}
-	mi := &file_apix_proto_msgTypes[29]
+	mi := &file_apix_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1989,7 +2245,7 @@ func (x *RewriteRuleRequest) String() string {
 func (*RewriteRuleRequest) ProtoMessage() {}
 
 func (x *RewriteRuleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_apix_proto_msgTypes[29]
+	mi := &file_apix_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2002,7 +2258,7 @@ func (x *RewriteRuleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewriteRuleRequest.ProtoReflect.Descriptor instead.
 func (*RewriteRuleRequest) Descriptor() ([]byte, []int) {
-	return file_apix_proto_rawDescGZIP(), []int{29}
+	return file_apix_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *RewriteRuleRequest) GetRuleId() string {
@@ -2039,14 +2295,32 @@ const file_apix_proto_rawDesc = "" +
 	"\x04body\x18\x04 \x01(\fR\x04body\x1a:\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbd\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc0\x01\n" +
+	"\x16GraphQLRequestMetadata\x12%\n" +
+	"\x0eoperation_name\x18\x01 \x01(\tR\roperationName\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\x12%\n" +
+	"\x0evariables_json\x18\x03 \x01(\tR\rvariablesJson\x12\x19\n" +
+	"\bis_batch\x18\x04 \x01(\bR\aisBatch\x12'\n" +
+	"\x0foperation_count\x18\x05 \x01(\x05R\x0eoperationCount\"\xb0\x01\n" +
+	"\fGraphQLError\x12\x18\n" +
+	"\amessage\x18\x01 \x01(\tR\amessage\x12\x1b\n" +
+	"\tpath_json\x18\x02 \x01(\tR\bpathJson\x12%\n" +
+	"\x0elocations_json\x18\x03 \x01(\tR\rlocationsJson\x12'\n" +
+	"\x0fextensions_json\x18\x04 \x01(\tR\x0eextensionsJson\x12\x19\n" +
+	"\braw_json\x18\x05 \x01(\tR\arawJson\"E\n" +
+	"\x17GraphQLResponseMetadata\x12*\n" +
+	"\x06errors\x18\x01 \x03(\v2\x12.apix.GraphQLErrorR\x06errors\"\x84\x01\n" +
+	"\x0fGraphQLMetadata\x126\n" +
+	"\arequest\x18\x01 \x01(\v2\x1c.apix.GraphQLRequestMetadataR\arequest\x129\n" +
+	"\bresponse\x18\x02 \x01(\v2\x1d.apix.GraphQLResponseMetadataR\bresponse\"\xee\x01\n" +
 	"\x0fHttpTransaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
 	"\arequest\x18\x02 \x01(\v2\x11.apix.HttpRequestR\arequest\x12.\n" +
 	"\bresponse\x18\x03 \x01(\v2\x12.apix.HttpResponseR\bresponse\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1f\n" +
 	"\vduration_ms\x18\x05 \x01(\x03R\n" +
-	"durationMs\"v\n" +
+	"durationMs\x12/\n" +
+	"\agraphql\x18\x06 \x01(\v2\x15.apix.GraphQLMetadataR\agraphql\"v\n" +
 	"\n" +
 	"PluginInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
@@ -2229,106 +2503,114 @@ func file_apix_proto_rawDescGZIP() []byte {
 }
 
 var file_apix_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_apix_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_apix_proto_goTypes = []any{
 	(RewriteAction)(0),                // 0: apix.RewriteAction
 	(ResumeAction_Action)(0),          // 1: apix.ResumeAction.Action
 	(*Empty)(nil),                     // 2: apix.Empty
 	(*HttpRequest)(nil),               // 3: apix.HttpRequest
 	(*HttpResponse)(nil),              // 4: apix.HttpResponse
-	(*HttpTransaction)(nil),           // 5: apix.HttpTransaction
-	(*PluginInfo)(nil),                // 6: apix.PluginInfo
-	(*StatusRequest)(nil),             // 7: apix.StatusRequest
-	(*StatusResponse)(nil),            // 8: apix.StatusResponse
-	(*VersionRequest)(nil),            // 9: apix.VersionRequest
-	(*VersionResponse)(nil),           // 10: apix.VersionResponse
-	(*CaptureRequest)(nil),            // 11: apix.CaptureRequest
-	(*PluginListRequest)(nil),         // 12: apix.PluginListRequest
-	(*PluginListResponse)(nil),        // 13: apix.PluginListResponse
-	(*BreakpointRule)(nil),            // 14: apix.BreakpointRule
-	(*BreakpointID)(nil),              // 15: apix.BreakpointID
-	(*BreakpointList)(nil),            // 16: apix.BreakpointList
-	(*BreakpointResponse)(nil),        // 17: apix.BreakpointResponse
-	(*PausedRequest)(nil),             // 18: apix.PausedRequest
-	(*ResumeAction)(nil),              // 19: apix.ResumeAction
-	(*ReplaySpec)(nil),                // 20: apix.ReplaySpec
-	(*HistoryQuery)(nil),              // 21: apix.HistoryQuery
-	(*GetWebSocketFramesRequest)(nil), // 22: apix.GetWebSocketFramesRequest
-	(*WebSocketFrame)(nil),            // 23: apix.WebSocketFrame
-	(*ExportHARRequest)(nil),          // 24: apix.ExportHARRequest
-	(*ExportHARResponse)(nil),         // 25: apix.ExportHARResponse
-	(*ImportHARRequest)(nil),          // 26: apix.ImportHARRequest
-	(*ImportHARResponse)(nil),         // 27: apix.ImportHARResponse
-	(*MatchCriteria)(nil),             // 28: apix.MatchCriteria
-	(*RewriteRule)(nil),               // 29: apix.RewriteRule
-	(*RewriteRuleList)(nil),           // 30: apix.RewriteRuleList
-	(*RewriteRuleRequest)(nil),        // 31: apix.RewriteRuleRequest
-	nil,                               // 32: apix.HttpRequest.HeadersEntry
-	nil,                               // 33: apix.HttpResponse.HeadersEntry
-	nil,                               // 34: apix.ReplaySpec.OverrideHeadersEntry
+	(*GraphQLRequestMetadata)(nil),    // 5: apix.GraphQLRequestMetadata
+	(*GraphQLError)(nil),              // 6: apix.GraphQLError
+	(*GraphQLResponseMetadata)(nil),   // 7: apix.GraphQLResponseMetadata
+	(*GraphQLMetadata)(nil),           // 8: apix.GraphQLMetadata
+	(*HttpTransaction)(nil),           // 9: apix.HttpTransaction
+	(*PluginInfo)(nil),                // 10: apix.PluginInfo
+	(*StatusRequest)(nil),             // 11: apix.StatusRequest
+	(*StatusResponse)(nil),            // 12: apix.StatusResponse
+	(*VersionRequest)(nil),            // 13: apix.VersionRequest
+	(*VersionResponse)(nil),           // 14: apix.VersionResponse
+	(*CaptureRequest)(nil),            // 15: apix.CaptureRequest
+	(*PluginListRequest)(nil),         // 16: apix.PluginListRequest
+	(*PluginListResponse)(nil),        // 17: apix.PluginListResponse
+	(*BreakpointRule)(nil),            // 18: apix.BreakpointRule
+	(*BreakpointID)(nil),              // 19: apix.BreakpointID
+	(*BreakpointList)(nil),            // 20: apix.BreakpointList
+	(*BreakpointResponse)(nil),        // 21: apix.BreakpointResponse
+	(*PausedRequest)(nil),             // 22: apix.PausedRequest
+	(*ResumeAction)(nil),              // 23: apix.ResumeAction
+	(*ReplaySpec)(nil),                // 24: apix.ReplaySpec
+	(*HistoryQuery)(nil),              // 25: apix.HistoryQuery
+	(*GetWebSocketFramesRequest)(nil), // 26: apix.GetWebSocketFramesRequest
+	(*WebSocketFrame)(nil),            // 27: apix.WebSocketFrame
+	(*ExportHARRequest)(nil),          // 28: apix.ExportHARRequest
+	(*ExportHARResponse)(nil),         // 29: apix.ExportHARResponse
+	(*ImportHARRequest)(nil),          // 30: apix.ImportHARRequest
+	(*ImportHARResponse)(nil),         // 31: apix.ImportHARResponse
+	(*MatchCriteria)(nil),             // 32: apix.MatchCriteria
+	(*RewriteRule)(nil),               // 33: apix.RewriteRule
+	(*RewriteRuleList)(nil),           // 34: apix.RewriteRuleList
+	(*RewriteRuleRequest)(nil),        // 35: apix.RewriteRuleRequest
+	nil,                               // 36: apix.HttpRequest.HeadersEntry
+	nil,                               // 37: apix.HttpResponse.HeadersEntry
+	nil,                               // 38: apix.ReplaySpec.OverrideHeadersEntry
 }
 var file_apix_proto_depIdxs = []int32{
-	32, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
-	33, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
-	3,  // 2: apix.HttpTransaction.request:type_name -> apix.HttpRequest
-	4,  // 3: apix.HttpTransaction.response:type_name -> apix.HttpResponse
-	6,  // 4: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
-	14, // 5: apix.BreakpointList.breakpoints:type_name -> apix.BreakpointRule
-	14, // 6: apix.BreakpointResponse.breakpoint:type_name -> apix.BreakpointRule
-	3,  // 7: apix.PausedRequest.request:type_name -> apix.HttpRequest
-	3,  // 8: apix.ResumeAction.modified_request:type_name -> apix.HttpRequest
-	1,  // 9: apix.ResumeAction.action:type_name -> apix.ResumeAction.Action
-	4,  // 10: apix.ResumeAction.modified_response:type_name -> apix.HttpResponse
-	3,  // 11: apix.ReplaySpec.raw_request:type_name -> apix.HttpRequest
-	34, // 12: apix.ReplaySpec.override_headers:type_name -> apix.ReplaySpec.OverrideHeadersEntry
-	28, // 13: apix.RewriteRule.match:type_name -> apix.MatchCriteria
-	0,  // 14: apix.RewriteRule.action:type_name -> apix.RewriteAction
-	29, // 15: apix.RewriteRuleList.rules:type_name -> apix.RewriteRule
-	7,  // 16: apix.Engine.GetStatus:input_type -> apix.StatusRequest
-	9,  // 17: apix.Engine.GetVersion:input_type -> apix.VersionRequest
-	11, // 18: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
-	12, // 19: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
-	14, // 20: apix.Engine.SetBreakpoint:input_type -> apix.BreakpointRule
-	15, // 21: apix.Engine.DeleteBreakpoint:input_type -> apix.BreakpointID
-	2,  // 22: apix.Engine.ListBreakpoints:input_type -> apix.Empty
-	2,  // 23: apix.Engine.WatchPausedRequests:input_type -> apix.Empty
-	19, // 24: apix.Engine.ResumeRequest:input_type -> apix.ResumeAction
-	20, // 25: apix.Engine.ReplayRequest:input_type -> apix.ReplaySpec
-	21, // 26: apix.Engine.GetHistory:input_type -> apix.HistoryQuery
-	22, // 27: apix.Engine.GetWebSocketFrames:input_type -> apix.GetWebSocketFramesRequest
-	2,  // 28: apix.Engine.ClearHistory:input_type -> apix.Empty
-	24, // 29: apix.Engine.ExportHAR:input_type -> apix.ExportHARRequest
-	26, // 30: apix.Engine.ImportHAR:input_type -> apix.ImportHARRequest
-	29, // 31: apix.Engine.AddRewriteRule:input_type -> apix.RewriteRule
-	29, // 32: apix.Engine.UpdateRewriteRule:input_type -> apix.RewriteRule
-	31, // 33: apix.Engine.DeleteRewriteRule:input_type -> apix.RewriteRuleRequest
-	2,  // 34: apix.Engine.ListRewriteRules:input_type -> apix.Empty
-	31, // 35: apix.Engine.ToggleRewriteRule:input_type -> apix.RewriteRuleRequest
-	8,  // 36: apix.Engine.GetStatus:output_type -> apix.StatusResponse
-	10, // 37: apix.Engine.GetVersion:output_type -> apix.VersionResponse
-	3,  // 38: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
-	13, // 39: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
-	17, // 40: apix.Engine.SetBreakpoint:output_type -> apix.BreakpointResponse
-	2,  // 41: apix.Engine.DeleteBreakpoint:output_type -> apix.Empty
-	16, // 42: apix.Engine.ListBreakpoints:output_type -> apix.BreakpointList
-	18, // 43: apix.Engine.WatchPausedRequests:output_type -> apix.PausedRequest
-	2,  // 44: apix.Engine.ResumeRequest:output_type -> apix.Empty
-	4,  // 45: apix.Engine.ReplayRequest:output_type -> apix.HttpResponse
-	5,  // 46: apix.Engine.GetHistory:output_type -> apix.HttpTransaction
-	23, // 47: apix.Engine.GetWebSocketFrames:output_type -> apix.WebSocketFrame
-	2,  // 48: apix.Engine.ClearHistory:output_type -> apix.Empty
-	25, // 49: apix.Engine.ExportHAR:output_type -> apix.ExportHARResponse
-	27, // 50: apix.Engine.ImportHAR:output_type -> apix.ImportHARResponse
-	29, // 51: apix.Engine.AddRewriteRule:output_type -> apix.RewriteRule
-	29, // 52: apix.Engine.UpdateRewriteRule:output_type -> apix.RewriteRule
-	2,  // 53: apix.Engine.DeleteRewriteRule:output_type -> apix.Empty
-	30, // 54: apix.Engine.ListRewriteRules:output_type -> apix.RewriteRuleList
-	29, // 55: apix.Engine.ToggleRewriteRule:output_type -> apix.RewriteRule
-	36, // [36:56] is the sub-list for method output_type
-	16, // [16:36] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	36, // 0: apix.HttpRequest.headers:type_name -> apix.HttpRequest.HeadersEntry
+	37, // 1: apix.HttpResponse.headers:type_name -> apix.HttpResponse.HeadersEntry
+	6,  // 2: apix.GraphQLResponseMetadata.errors:type_name -> apix.GraphQLError
+	5,  // 3: apix.GraphQLMetadata.request:type_name -> apix.GraphQLRequestMetadata
+	7,  // 4: apix.GraphQLMetadata.response:type_name -> apix.GraphQLResponseMetadata
+	3,  // 5: apix.HttpTransaction.request:type_name -> apix.HttpRequest
+	4,  // 6: apix.HttpTransaction.response:type_name -> apix.HttpResponse
+	8,  // 7: apix.HttpTransaction.graphql:type_name -> apix.GraphQLMetadata
+	10, // 8: apix.PluginListResponse.plugins:type_name -> apix.PluginInfo
+	18, // 9: apix.BreakpointList.breakpoints:type_name -> apix.BreakpointRule
+	18, // 10: apix.BreakpointResponse.breakpoint:type_name -> apix.BreakpointRule
+	3,  // 11: apix.PausedRequest.request:type_name -> apix.HttpRequest
+	3,  // 12: apix.ResumeAction.modified_request:type_name -> apix.HttpRequest
+	1,  // 13: apix.ResumeAction.action:type_name -> apix.ResumeAction.Action
+	4,  // 14: apix.ResumeAction.modified_response:type_name -> apix.HttpResponse
+	3,  // 15: apix.ReplaySpec.raw_request:type_name -> apix.HttpRequest
+	38, // 16: apix.ReplaySpec.override_headers:type_name -> apix.ReplaySpec.OverrideHeadersEntry
+	32, // 17: apix.RewriteRule.match:type_name -> apix.MatchCriteria
+	0,  // 18: apix.RewriteRule.action:type_name -> apix.RewriteAction
+	33, // 19: apix.RewriteRuleList.rules:type_name -> apix.RewriteRule
+	11, // 20: apix.Engine.GetStatus:input_type -> apix.StatusRequest
+	13, // 21: apix.Engine.GetVersion:input_type -> apix.VersionRequest
+	15, // 22: apix.Engine.CaptureTraffic:input_type -> apix.CaptureRequest
+	16, // 23: apix.Engine.ListPlugins:input_type -> apix.PluginListRequest
+	18, // 24: apix.Engine.SetBreakpoint:input_type -> apix.BreakpointRule
+	19, // 25: apix.Engine.DeleteBreakpoint:input_type -> apix.BreakpointID
+	2,  // 26: apix.Engine.ListBreakpoints:input_type -> apix.Empty
+	2,  // 27: apix.Engine.WatchPausedRequests:input_type -> apix.Empty
+	23, // 28: apix.Engine.ResumeRequest:input_type -> apix.ResumeAction
+	24, // 29: apix.Engine.ReplayRequest:input_type -> apix.ReplaySpec
+	25, // 30: apix.Engine.GetHistory:input_type -> apix.HistoryQuery
+	26, // 31: apix.Engine.GetWebSocketFrames:input_type -> apix.GetWebSocketFramesRequest
+	2,  // 32: apix.Engine.ClearHistory:input_type -> apix.Empty
+	28, // 33: apix.Engine.ExportHAR:input_type -> apix.ExportHARRequest
+	30, // 34: apix.Engine.ImportHAR:input_type -> apix.ImportHARRequest
+	33, // 35: apix.Engine.AddRewriteRule:input_type -> apix.RewriteRule
+	33, // 36: apix.Engine.UpdateRewriteRule:input_type -> apix.RewriteRule
+	35, // 37: apix.Engine.DeleteRewriteRule:input_type -> apix.RewriteRuleRequest
+	2,  // 38: apix.Engine.ListRewriteRules:input_type -> apix.Empty
+	35, // 39: apix.Engine.ToggleRewriteRule:input_type -> apix.RewriteRuleRequest
+	12, // 40: apix.Engine.GetStatus:output_type -> apix.StatusResponse
+	14, // 41: apix.Engine.GetVersion:output_type -> apix.VersionResponse
+	3,  // 42: apix.Engine.CaptureTraffic:output_type -> apix.HttpRequest
+	17, // 43: apix.Engine.ListPlugins:output_type -> apix.PluginListResponse
+	21, // 44: apix.Engine.SetBreakpoint:output_type -> apix.BreakpointResponse
+	2,  // 45: apix.Engine.DeleteBreakpoint:output_type -> apix.Empty
+	20, // 46: apix.Engine.ListBreakpoints:output_type -> apix.BreakpointList
+	22, // 47: apix.Engine.WatchPausedRequests:output_type -> apix.PausedRequest
+	2,  // 48: apix.Engine.ResumeRequest:output_type -> apix.Empty
+	4,  // 49: apix.Engine.ReplayRequest:output_type -> apix.HttpResponse
+	9,  // 50: apix.Engine.GetHistory:output_type -> apix.HttpTransaction
+	27, // 51: apix.Engine.GetWebSocketFrames:output_type -> apix.WebSocketFrame
+	2,  // 52: apix.Engine.ClearHistory:output_type -> apix.Empty
+	29, // 53: apix.Engine.ExportHAR:output_type -> apix.ExportHARResponse
+	31, // 54: apix.Engine.ImportHAR:output_type -> apix.ImportHARResponse
+	33, // 55: apix.Engine.AddRewriteRule:output_type -> apix.RewriteRule
+	33, // 56: apix.Engine.UpdateRewriteRule:output_type -> apix.RewriteRule
+	2,  // 57: apix.Engine.DeleteRewriteRule:output_type -> apix.Empty
+	34, // 58: apix.Engine.ListRewriteRules:output_type -> apix.RewriteRuleList
+	33, // 59: apix.Engine.ToggleRewriteRule:output_type -> apix.RewriteRule
+	40, // [40:60] is the sub-list for method output_type
+	20, // [20:40] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_apix_proto_init() }
@@ -2336,7 +2618,7 @@ func file_apix_proto_init() {
 	if File_apix_proto != nil {
 		return
 	}
-	file_apix_proto_msgTypes[18].OneofWrappers = []any{
+	file_apix_proto_msgTypes[22].OneofWrappers = []any{
 		(*ReplaySpec_RequestId)(nil),
 		(*ReplaySpec_RawRequest)(nil),
 	}
@@ -2346,7 +2628,7 @@ func file_apix_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apix_proto_rawDesc), len(file_apix_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   33,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -218,6 +218,7 @@ export class TrafficPanel {
     <h4>Request Body</h4><pre id="detail-req-body"></pre>
     <h4>Response Headers</h4><pre id="detail-resp-headers"></pre>
     <h4>Response Body</h4><pre id="detail-resp-body"></pre>
+    <h4 id="detail-graphql-title" style="display:none;">GraphQL</h4><pre id="detail-graphql" style="display:none;"></pre>
     <div id="detail-frames">
       <h4>WebSocket Frames</h4>
       <div id="ws-frame-list"></div>
@@ -292,6 +293,7 @@ export class TrafficPanel {
         JSON.stringify((tx.response && tx.response.headers) || {}, null, 2);
       document.getElementById('detail-resp-body').textContent =
         (tx.response && tx.response.body) ? String(tx.response.body) : '(empty)';
+      renderGraphQLDetail(tx);
       const frames = document.getElementById('detail-frames');
       if (isWebSocket) {
         currentFramesRequestId = tx.id || '';
@@ -308,6 +310,174 @@ export class TrafficPanel {
 
     function closeDetail() {
       document.getElementById('detail').classList.remove('open');
+    }
+
+    function renderGraphQLDetail(tx) {
+      const titleEl = document.getElementById('detail-graphql-title');
+      const bodyEl = document.getElementById('detail-graphql');
+      const meta = tx.graphql || deriveGraphQLMetadata(tx);
+      if (!meta || (!meta.request && !meta.response)) {
+        titleEl.style.display = 'none';
+        bodyEl.style.display = 'none';
+        bodyEl.textContent = '';
+        return;
+      }
+
+      const lines = [];
+      if (meta.request) {
+        lines.push('Request');
+        if (meta.request.operationName) {
+          lines.push('  operationName: ' + meta.request.operationName);
+        }
+        if (meta.request.isBatch) {
+          lines.push('  batched: true (' + String(meta.request.operationCount || 0) + ' operations)');
+        }
+        if (meta.request.query) {
+          lines.push('  query:');
+          lines.push(indentBlock(meta.request.query, '    '));
+        }
+        if (meta.request.variablesJson) {
+          lines.push('  variables:');
+          lines.push(indentBlock(prettyJson(meta.request.variablesJson), '    '));
+        }
+      }
+
+      const errors = (((meta.response || {}).errors) || []);
+      if (errors.length > 0) {
+        if (lines.length) { lines.push(''); }
+        lines.push('Response Errors');
+        errors.forEach(function(err, idx) {
+          lines.push('  [' + String(idx + 1) + '] ' + (err.message || '(no message)'));
+          if (err.pathJson) { lines.push('    path: ' + err.pathJson); }
+          if (err.locationsJson) { lines.push('    locations: ' + err.locationsJson); }
+          if (err.extensionsJson) { lines.push('    extensions: ' + err.extensionsJson); }
+        });
+      }
+
+      titleEl.style.display = '';
+      bodyEl.style.display = '';
+      bodyEl.textContent = lines.join('\n');
+    }
+
+    function deriveGraphQLMetadata(tx) {
+      const req = parseGraphQLRequest((tx.request && tx.request.body) || '');
+      const resp = parseGraphQLResponse((tx.response && tx.response.body) || '');
+      if (!req && !resp) { return null; }
+      return { request: req || undefined, response: resp || undefined };
+    }
+
+    function parseGraphQLRequest(rawBody) {
+      const text = safeBodyText(rawBody);
+      if (!text) { return null; }
+      const payload = safeJsonParse(text);
+      if (!payload) { return null; }
+      if (Array.isArray(payload)) {
+        const ops = payload.map(parseGraphQLOperation).filter(Boolean);
+        if (!ops.length) { return null; }
+        const first = ops[0];
+        return {
+          operationName: first.operationName || '',
+          query: first.query || '',
+          variablesJson: first.variablesJson || '',
+          isBatch: true,
+          operationCount: ops.length,
+        };
+      }
+      const op = parseGraphQLOperation(payload);
+      if (!op) { return null; }
+      return {
+        operationName: op.operationName || '',
+        query: op.query || '',
+        variablesJson: op.variablesJson || '',
+        isBatch: false,
+        operationCount: 1,
+      };
+    }
+
+    function parseGraphQLOperation(obj) {
+      if (!obj || typeof obj !== 'object') { return null; }
+      const hasFields = Object.prototype.hasOwnProperty.call(obj, 'query')
+        || Object.prototype.hasOwnProperty.call(obj, 'operationName')
+        || Object.prototype.hasOwnProperty.call(obj, 'variables');
+      if (!hasFields) { return null; }
+      return {
+        operationName: typeof obj.operationName === 'string' ? obj.operationName : '',
+        query: typeof obj.query === 'string' ? obj.query : '',
+        variablesJson: obj.variables === undefined ? '' : safeJsonStringify(obj.variables),
+      };
+    }
+
+    function parseGraphQLResponse(rawBody) {
+      const text = safeBodyText(rawBody);
+      if (!text) { return null; }
+      const payload = safeJsonParse(text);
+      if (!payload) { return null; }
+      const errors = collectGraphQLErrors(payload);
+      if (!errors.length) { return null; }
+      return { errors };
+    }
+
+    function collectGraphQLErrors(payload) {
+      if (Array.isArray(payload)) {
+        const combined = [];
+        payload.forEach(function(item) {
+          const nested = collectGraphQLErrors(item);
+          for (let i = 0; i < nested.length; i++) {
+            combined.push(nested[i]);
+          }
+        });
+        return combined;
+      }
+      if (!payload || typeof payload !== 'object' || !Array.isArray(payload.errors)) {
+        return [];
+      }
+      return payload.errors
+        .filter(function(item) { return item && typeof item === 'object'; })
+        .map(function(item) {
+          return {
+            message: typeof item.message === 'string' ? item.message : '',
+            pathJson: item.path === undefined ? '' : safeJsonStringify(item.path),
+            locationsJson: item.locations === undefined ? '' : safeJsonStringify(item.locations),
+            extensionsJson: item.extensions === undefined ? '' : safeJsonStringify(item.extensions),
+            rawJson: safeJsonStringify(item),
+          };
+        });
+    }
+
+    function safeBodyText(raw) {
+      if (raw === undefined || raw === null) { return ''; }
+      if (typeof raw === 'string') { return raw; }
+      if (raw && Array.isArray(raw.data)) {
+        try {
+          return new TextDecoder().decode(new Uint8Array(raw.data));
+        } catch (e) {
+          return '';
+        }
+      }
+      if (Array.isArray(raw)) {
+        try {
+          return new TextDecoder().decode(new Uint8Array(raw));
+        } catch (e) {
+          return '';
+        }
+      }
+      return String(raw);
+    }
+
+    function safeJsonParse(text) {
+      try { return JSON.parse(text); } catch (e) { return null; }
+    }
+
+    function safeJsonStringify(value) {
+      try { return JSON.stringify(value); } catch (e) { return ''; }
+    }
+
+    function prettyJson(text) {
+      try { return JSON.stringify(JSON.parse(text), null, 2); } catch (e) { return text; }
+    }
+
+    function indentBlock(text, indent) {
+      return String(text || '').split('\n').map(function(line) { return indent + line; }).join('\n');
     }
 
     function isWebSocketTransaction(tx) {
