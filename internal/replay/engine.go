@@ -1,11 +1,9 @@
 package replay
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"time"
@@ -31,8 +29,9 @@ type ClientConfig struct {
 // Engine replays stored or user-supplied HTTP requests against the original
 // (or a configured) upstream host.
 type Engine struct {
-	db     *storage.DB
-	client *http.Client
+	db       *storage.DB
+	client   *http.Client
+	builders []ReplaySourceBuilder
 }
 
 // NewEngine creates a replay engine.
@@ -40,7 +39,15 @@ type Engine struct {
 // Accepts optional custom http.Client or ClientConfig.SkipTLSVerify to bypass verification.
 func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
 	if cfg != nil && cfg.Client != nil {
-		return &Engine{db: db, client: cfg.Client}
+		e := &Engine{
+			db:     db,
+			client: cfg.Client,
+			builders: []ReplaySourceBuilder{
+				&storedRequestBuilder{db: db},
+				&rawRequestBuilder{},
+			},
+		}
+		return e
 	}
 
 	// Defaults mirror proxy/transport defaults.
@@ -91,7 +98,14 @@ func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
 	}
 
 	client := &http.Client{Transport: transport}
-	return &Engine{db: db, client: client}
+	return &Engine{
+		db:     db,
+		client: client,
+		builders: []ReplaySourceBuilder{
+			&storedRequestBuilder{db: db},
+			&rawRequestBuilder{},
+		},
+	}
 }
 
 // ReplayRequest sends req (with optional header/body overrides) and returns
@@ -99,48 +113,19 @@ func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
 func (e *Engine) ReplayRequest(ctx context.Context, req *ReplayRequest) (*http.Response, error) {
 	var httpReq *http.Request
 
-	switch {
-	case req.RequestID != "":
-		// Load from storage.
-		rec, _, err := e.db.GetTransaction(req.RequestID)
-		if err != nil {
-			return nil, fmt.Errorf("load request %q: %w", req.RequestID, err)
-		}
-		if rec == nil {
-			return nil, fmt.Errorf("request %q not found", req.RequestID)
-		}
-		var bodyReader io.Reader
-		if len(req.OverrideBody) > 0 {
-			bodyReader = bytes.NewReader(req.OverrideBody)
-		} else if len(rec.Body) > 0 {
-			bodyReader = bytes.NewReader(rec.Body)
-		}
-		httpReq, err = http.NewRequestWithContext(ctx, rec.Method, rec.URL, bodyReader)
-		if err != nil {
-			return nil, fmt.Errorf("build request: %w", err)
-		}
-		httputil.SetValidHeaders(ctx, httpReq.Header, rec.Headers, "replay")
-
-	case req.RawRequest != nil:
-		// Use the supplied request (clone it with our ctx).
-		var body io.Reader
-		if len(req.OverrideBody) > 0 {
-			body = bytes.NewReader(req.OverrideBody)
-		} else if req.RawRequest.Body != nil {
-			bodyBytes, err := io.ReadAll(req.RawRequest.Body)
+	var built bool
+	for _, b := range e.builders {
+		if b.CanHandle(req) {
+			var err error
+			httpReq, err = b.Build(ctx, req)
 			if err != nil {
-				return nil, fmt.Errorf("read raw request body: %w", err)
+				return nil, err
 			}
-			body = bytes.NewReader(bodyBytes)
+			built = true
+			break
 		}
-		var err error
-		httpReq, err = http.NewRequestWithContext(ctx, req.RawRequest.Method, req.RawRequest.URL.String(), body)
-		if err != nil {
-			return nil, fmt.Errorf("build request: %w", err)
-		}
-		httpReq.Header = req.RawRequest.Header.Clone()
-
-	default:
+	}
+	if !built {
 		return nil, fmt.Errorf("replay: either RequestID or RawRequest must be set")
 	}
 
