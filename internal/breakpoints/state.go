@@ -23,11 +23,15 @@ const (
 
 // BreakpointRule defines criteria for pausing requests.
 type BreakpointRule struct {
-	ID         string
-	URLPattern string   // regex pattern matched against full URL
-	Methods    []string // nil/empty = all methods
-	Enabled    bool
-	Label      string
+	ID          string
+	URLPattern  string   // regex pattern matched against full URL
+	Methods     []string // nil/empty = all methods
+	Enabled     bool
+	Label       string
+	HeaderName  string  // optional request header name to match
+	HeaderValue string  // optional request header value (empty = header existence)
+	BodyPattern string  // optional regex matched against request/response body
+	StatusCodes []int32 // optional response status codes for response-phase breakpoints
 }
 
 // PausedEntry represents a request currently held at a breakpoint.

@@ -824,7 +824,11 @@ type BreakpointRule struct {
 	UrlPattern    string                 `protobuf:"bytes,2,opt,name=url_pattern,json=urlPattern,proto3" json:"url_pattern,omitempty"` // regex or glob pattern matched against full URL
 	Methods       []string               `protobuf:"bytes,3,rep,name=methods,proto3" json:"methods,omitempty"`                         // empty = all methods
 	Enabled       bool                   `protobuf:"varint,4,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Label         string                 `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"` // human-readable label (optional)
+	Label         string                 `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"`                                        // human-readable label (optional)
+	HeaderName    string                 `protobuf:"bytes,6,opt,name=header_name,json=headerName,proto3" json:"header_name,omitempty"`            // optional request header name to match
+	HeaderValue   string                 `protobuf:"bytes,7,opt,name=header_value,json=headerValue,proto3" json:"header_value,omitempty"`         // optional value for header_name (empty = header existence)
+	BodyPattern   string                 `protobuf:"bytes,8,opt,name=body_pattern,json=bodyPattern,proto3" json:"body_pattern,omitempty"`         // optional regex matched against request/response body
+	StatusCodes   []int32                `protobuf:"varint,9,rep,packed,name=status_codes,json=statusCodes,proto3" json:"status_codes,omitempty"` // optional response status codes (response-phase)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -892,6 +896,34 @@ func (x *BreakpointRule) GetLabel() string {
 		return x.Label
 	}
 	return ""
+}
+
+func (x *BreakpointRule) GetHeaderName() string {
+	if x != nil {
+		return x.HeaderName
+	}
+	return ""
+}
+
+func (x *BreakpointRule) GetHeaderValue() string {
+	if x != nil {
+		return x.HeaderValue
+	}
+	return ""
+}
+
+func (x *BreakpointRule) GetBodyPattern() string {
+	if x != nil {
+		return x.BodyPattern
+	}
+	return ""
+}
+
+func (x *BreakpointRule) GetStatusCodes() []int32 {
+	if x != nil {
+		return x.StatusCodes
+	}
+	return nil
 }
 
 type BreakpointID struct {
@@ -2039,14 +2071,19 @@ const file_apix_proto_rawDesc = "" +
 	"\x0eCaptureRequest\"\x13\n" +
 	"\x11PluginListRequest\"@\n" +
 	"\x12PluginListResponse\x12*\n" +
-	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins\"\x8b\x01\n" +
+	"\aplugins\x18\x01 \x03(\v2\x10.apix.PluginInfoR\aplugins\"\x95\x02\n" +
 	"\x0eBreakpointRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vurl_pattern\x18\x02 \x01(\tR\n" +
 	"urlPattern\x12\x18\n" +
 	"\amethods\x18\x03 \x03(\tR\amethods\x12\x18\n" +
 	"\aenabled\x18\x04 \x01(\bR\aenabled\x12\x14\n" +
-	"\x05label\x18\x05 \x01(\tR\x05label\"\x1e\n" +
+	"\x05label\x18\x05 \x01(\tR\x05label\x12\x1f\n" +
+	"\vheader_name\x18\x06 \x01(\tR\n" +
+	"headerName\x12!\n" +
+	"\fheader_value\x18\a \x01(\tR\vheaderValue\x12!\n" +
+	"\fbody_pattern\x18\b \x01(\tR\vbodyPattern\x12!\n" +
+	"\fstatus_codes\x18\t \x03(\x05R\vstatusCodes\"\x1e\n" +
 	"\fBreakpointID\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"H\n" +
 	"\x0eBreakpointList\x126\n" +

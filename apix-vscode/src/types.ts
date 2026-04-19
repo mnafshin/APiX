@@ -40,6 +40,10 @@ export interface BreakpointRule {
     methods: string[]; // empty = all methods
     enabled: boolean;
     label?: string;
+    headerName?: string;
+    headerValue?: string;
+    bodyPattern?: string;
+    statusCodes?: number[];
 }
 
 export interface BreakpointList {

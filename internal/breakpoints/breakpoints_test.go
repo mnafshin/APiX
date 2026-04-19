@@ -33,6 +33,68 @@ func TestAddRule(t *testing.T) {
 	}
 }
 
+func TestEvaluateRequest_HeaderCondition(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	_, err := m.AddRule(&BreakpointRule{
+		URLPattern:  `.*example\.com.*`,
+		Enabled:     true,
+		HeaderName:  "X-Debug",
+		HeaderValue: "1",
+	})
+	if err != nil {
+		t.Fatalf("AddRule: %v", err)
+	}
+
+	if id := m.EvaluateRequest("GET", "https://example.com", http.Header{}, nil); id != "" {
+		t.Fatalf("expected no match without header, got %q", id)
+	}
+	h := http.Header{}
+	h.Set("X-Debug", "1")
+	if id := m.EvaluateRequest("GET", "https://example.com", h, nil); id == "" {
+		t.Fatal("expected match with header condition")
+	}
+}
+
+func TestEvaluateRequest_BodyPatternCondition(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	_, err := m.AddRule(&BreakpointRule{
+		URLPattern:  `.*example\.com.*`,
+		Enabled:     true,
+		BodyPattern: `"op":"CreateUser"`,
+	})
+	if err != nil {
+		t.Fatalf("AddRule: %v", err)
+	}
+	body := []byte(`{"op":"CreateUser","x":1}`)
+	if id := m.EvaluateRequest("POST", "https://example.com/graphql", nil, body); id == "" {
+		t.Fatal("expected match with request body pattern")
+	}
+}
+
+func TestEvaluateResponse_StatusCodeCondition(t *testing.T) {
+	t.Parallel()
+	m := NewManager()
+	rule, err := m.AddRule(&BreakpointRule{
+		URLPattern:  `.*example\.com.*`,
+		Enabled:     true,
+		StatusCodes: []int32{500, 503},
+	})
+	if err != nil {
+		t.Fatalf("AddRule: %v", err)
+	}
+	if got := m.EvaluateRequest("GET", "https://example.com", nil, nil); got != "" {
+		t.Fatalf("request-phase should skip status-code rule, got %q", got)
+	}
+	if got := m.EvaluateResponse("GET", "https://example.com", nil, nil, 500); got != rule.ID {
+		t.Fatalf("response-phase got %q want %q", got, rule.ID)
+	}
+	if got := m.EvaluateResponse("GET", "https://example.com", nil, nil, 404); got != "" {
+		t.Fatalf("unexpected match for non-listed status: %q", got)
+	}
+}
+
 func TestAddRuleEmptyPattern(t *testing.T) {
 	t.Parallel()
 	m := NewManager()

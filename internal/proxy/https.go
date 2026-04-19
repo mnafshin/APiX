@@ -262,9 +262,30 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	// Store transaction.
+	tx.Response = proxyResp
+	tx.ResponseBody = finalRespBody
 	if p.engine != nil {
-		tx.Response = proxyResp
-		tx.ResponseBody = finalRespBody
+		modified, action, bpErr := p.engine.PauseResponse(tx, proxyResp.StatusCode, finalRespBody)
+		if bpErr != nil {
+			logging.Errorf(ctx, "tls proxy: pause response: %v", bpErr)
+		}
+		tx = modified
+		switch action {
+		case ResumeDrop:
+			writeHTTPError(conn, http.StatusBadGateway, "response dropped by breakpoint")
+			return
+		case ResumeRespond:
+			if tx.Response != nil {
+				writeProxyResponseToConn(conn, tx.Response)
+			} else {
+				writeHTTPError(conn, http.StatusBadGateway, "no synthetic response")
+			}
+			return
+		}
+	}
+
+	// Store transaction.
+	if p.engine != nil {
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
 			logging.Errorf(ctx, "tls proxy: store transaction: %v", err)
@@ -273,10 +294,10 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 
 	// Observe metrics + slowlog.
 	dur := time.Since(start)
-	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, proxyResp.StatusCode, dur)
+	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, tx.Response.StatusCode, dur)
 	_ = reqID
 
-	writeProxyResponseToConn(conn, proxyResp)
+	writeProxyResponseToConn(conn, tx.Response)
 }
 
 func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio.Reader, clientReq *http.Request, tx *Transaction, start time.Time) {

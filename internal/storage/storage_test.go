@@ -317,7 +317,7 @@ func TestSaveAndListBreakpoints(t *testing.T) {
 	}
 
 	for _, bp := range bps {
-		if err := db.SaveBreakpoint(bp.id, bp.pattern, bp.methods, bp.enabled, bp.label); err != nil {
+		if err := db.SaveBreakpoint(bp.id, bp.pattern, bp.methods, bp.enabled, bp.label, "", "", "", nil); err != nil {
 			t.Fatalf("SaveBreakpoint %q: %v", bp.id, err)
 		}
 	}
@@ -366,7 +366,7 @@ func TestDeleteBreakpoint(t *testing.T) {
 	db := openTestDB(t)
 
 	for _, id := range []string{"d1", "d2"} {
-		if err := db.SaveBreakpoint(id, ".*", nil, true, ""); err != nil {
+		if err := db.SaveBreakpoint(id, ".*", nil, true, "", "", "", "", nil); err != nil {
 			t.Fatalf("SaveBreakpoint: %v", err)
 		}
 	}
@@ -547,12 +547,12 @@ func TestSaveBreakpoint_UpdateExisting(t *testing.T) {
 	db := openTestDB(t)
 
 	const id = "bp-upsert"
-	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, true, "original"); err != nil {
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, true, "original", "", "", "", nil); err != nil {
 		t.Fatalf("first SaveBreakpoint: %v", err)
 	}
 
 	// Update the same ID with a different label and disabled state.
-	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, false, "updated"); err != nil {
+	if err := db.SaveBreakpoint(id, "https://api.example.com/.*", nil, false, "updated", "", "", "", nil); err != nil {
 		t.Fatalf("upsert SaveBreakpoint: %v", err)
 	}
 
@@ -676,46 +676,46 @@ func BenchmarkStorage_ListTransactions(b *testing.B) {
 }
 
 func TestListTransactions_BodyFilter(t *testing.T) {
-db := openTestDB(t)
-now := time.Now()
+	db := openTestDB(t)
+	now := time.Now()
 
-// Save two requests with distinct bodies
-req1 := &RequestRecord{ID: "bf-1", Method: "POST", URL: "https://a.com/api", Headers: map[string]string{}, Body: []byte(`{"token":"secret"}`), Timestamp: now}
-req2 := &RequestRecord{ID: "bf-2", Method: "GET", URL: "https://b.com/page", Headers: map[string]string{}, Body: []byte(`hello world`), Timestamp: now}
-if err := db.SaveRequest(req1); err != nil {
-t.Fatalf("SaveRequest req1: %v", err)
-}
-if err := db.SaveRequest(req2); err != nil {
-t.Fatalf("SaveRequest req2: %v", err)
-}
+	// Save two requests with distinct bodies
+	req1 := &RequestRecord{ID: "bf-1", Method: "POST", URL: "https://a.com/api", Headers: map[string]string{}, Body: []byte(`{"token":"secret"}`), Timestamp: now}
+	req2 := &RequestRecord{ID: "bf-2", Method: "GET", URL: "https://b.com/page", Headers: map[string]string{}, Body: []byte(`hello world`), Timestamp: now}
+	if err := db.SaveRequest(req1); err != nil {
+		t.Fatalf("SaveRequest req1: %v", err)
+	}
+	if err := db.SaveRequest(req2); err != nil {
+		t.Fatalf("SaveRequest req2: %v", err)
+	}
 
-// Search for "token" — should match only req1
-results, _, err := db.ListTransactions(10, 0, "", "", 0, "token")
-if err != nil {
-t.Fatalf("ListTransactions body_filter: %v", err)
-}
-if len(results) != 1 {
-t.Fatalf("expected 1 result for body_filter=token, got %d", len(results))
-}
-if results[0].ID != "bf-1" {
-t.Errorf("expected ID bf-1, got %s", results[0].ID)
-}
+	// Search for "token" — should match only req1
+	results, _, err := db.ListTransactions(10, 0, "", "", 0, "token")
+	if err != nil {
+		t.Fatalf("ListTransactions body_filter: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for body_filter=token, got %d", len(results))
+	}
+	if results[0].ID != "bf-1" {
+		t.Errorf("expected ID bf-1, got %s", results[0].ID)
+	}
 
-// Search for "world" — should match req2
-results, _, err = db.ListTransactions(10, 0, "", "", 0, "world")
-if err != nil {
-t.Fatalf("ListTransactions body_filter world: %v", err)
-}
-if len(results) != 1 || results[0].ID != "bf-2" {
-t.Errorf("expected ID bf-2, got %v", results)
-}
+	// Search for "world" — should match req2
+	results, _, err = db.ListTransactions(10, 0, "", "", 0, "world")
+	if err != nil {
+		t.Fatalf("ListTransactions body_filter world: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "bf-2" {
+		t.Errorf("expected ID bf-2, got %v", results)
+	}
 
-// Empty body_filter — should return both
-results, _, err = db.ListTransactions(10, 0, "", "", 0, "")
-if err != nil {
-t.Fatalf("ListTransactions no body_filter: %v", err)
-}
-if len(results) != 2 {
-t.Errorf("expected 2 results with no body_filter, got %d", len(results))
-}
+	// Empty body_filter — should return both
+	results, _, err = db.ListTransactions(10, 0, "", "", 0, "")
+	if err != nil {
+		t.Fatalf("ListTransactions no body_filter: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results with no body_filter, got %d", len(results))
+	}
 }

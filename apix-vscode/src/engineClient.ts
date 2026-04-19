@@ -99,6 +99,10 @@ export class EngineClient {
                 methods: rule.methods,
                 enabled: rule.enabled,
                 label: rule.label || '',
+                headerName: rule.headerName || '',
+                headerValue: rule.headerValue || '',
+                bodyPattern: rule.bodyPattern || '',
+                statusCodes: rule.statusCodes || [],
             };
             this.stub.setBreakpoint(req, this.metadata, (err: grpc.ServiceError | null, response: any) => {
                 if (err) { reject(err); } else { resolve(response.breakpoint as BreakpointRule); }
