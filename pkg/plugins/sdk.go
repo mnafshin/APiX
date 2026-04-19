@@ -7,8 +7,30 @@ import (
 	"net/url"
 )
 
+// RequestPlugin is implemented by plugins that intercept outbound requests.
+// Plugins that only care about requests may implement this alone.
+type RequestPlugin interface {
+	// OnRequest is called before the request is forwarded upstream.
+	// Returning a non-nil *ProxyRequest replaces the request.
+	// Returning nil passes the original through unchanged.
+	// Returning an error aborts the request (client receives 502).
+	OnRequest(ctx context.Context, req *ProxyRequest) (*ProxyRequest, error)
+}
+
+// ResponsePlugin is implemented by plugins that intercept responses.
+// Plugins that only care about responses may implement this alone.
+type ResponsePlugin interface {
+	// OnResponse is called after receiving the upstream response.
+	// Returning a non-nil *ProxyResponse replaces the response.
+	// Returning nil passes the original through unchanged.
+	OnResponse(ctx context.Context, req *ProxyRequest, resp *ProxyResponse) (*ProxyResponse, error)
+}
+
 // Plugin is the interface every APiX plugin must implement.
 // Plugins are called in registration order for every proxied request/response.
+// Implementations that only care about one direction may omit the other hook
+// by satisfying only RequestPlugin or ResponsePlugin; the runtime skips hooks
+// that are not implemented.
 type Plugin interface {
 	// Name returns the unique plugin identifier (e.g. "header-editor").
 	Name() string
@@ -16,15 +38,8 @@ type Plugin interface {
 	Version() string
 	// Description returns a short human-readable description.
 	Description() string
-	// OnRequest is called before the request is forwarded upstream.
-	// Returning a non-nil *ProxyRequest replaces the request.
-	// Returning nil passes the original through unchanged.
-	// Returning an error aborts the request (client receives 502).
-	OnRequest(ctx context.Context, req *ProxyRequest) (*ProxyRequest, error)
-	// OnResponse is called after receiving the upstream response.
-	// Returning a non-nil *ProxyResponse replaces the response.
-	// Returning nil passes the original through unchanged.
-	OnResponse(ctx context.Context, req *ProxyRequest, resp *ProxyResponse) (*ProxyResponse, error)
+	RequestPlugin
+	ResponsePlugin
 }
 
 // ProxyRequest is the richer internal request type passed through the plugin chain.

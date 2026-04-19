@@ -71,6 +71,7 @@ func (r *Runtime) List() []PluginMeta {
 }
 
 // RunRequest executes the OnRequest hook of every plugin in order.
+// Plugins that do not implement RequestPlugin are silently skipped.
 // Short-circuits on the first error. Panics inside plugin code are recovered
 // and returned as errors so a misbehaving plugin cannot crash the engine.
 func (r *Runtime) RunRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
@@ -85,7 +86,11 @@ func (r *Runtime) RunRequest(ctx context.Context, req *plugins.ProxyRequest) (*p
 
 	for _, name := range order {
 		p := pluginMap[name]
-		modified, err := safeOnRequest(ctx, p, req)
+		rp, ok := p.(plugins.RequestPlugin)
+		if !ok {
+			continue
+		}
+		modified, err := safeOnRequest(ctx, rp, req)
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q OnRequest: %w", name, err)
 		}
@@ -97,6 +102,7 @@ func (r *Runtime) RunRequest(ctx context.Context, req *plugins.ProxyRequest) (*p
 }
 
 // RunResponse executes the OnResponse hook of every plugin in order.
+// Plugins that do not implement ResponsePlugin are silently skipped.
 // Panics inside plugin code are recovered and returned as errors.
 func (r *Runtime) RunResponse(ctx context.Context, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (*plugins.ProxyResponse, error) {
 	r.mu.RLock()
@@ -110,7 +116,11 @@ func (r *Runtime) RunResponse(ctx context.Context, req *plugins.ProxyRequest, re
 
 	for _, name := range order {
 		p := pluginMap[name]
-		modified, err := safeOnResponse(ctx, p, req, resp)
+		rp, ok := p.(plugins.ResponsePlugin)
+		if !ok {
+			continue
+		}
+		modified, err := safeOnResponse(ctx, rp, req, resp)
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q OnResponse: %w", name, err)
 		}
@@ -122,7 +132,7 @@ func (r *Runtime) RunResponse(ctx context.Context, req *plugins.ProxyRequest, re
 }
 
 // safeOnRequest calls p.OnRequest and converts any panic into an error.
-func safeOnRequest(ctx context.Context, p plugins.Plugin, req *plugins.ProxyRequest) (modified *plugins.ProxyRequest, err error) {
+func safeOnRequest(ctx context.Context, p plugins.RequestPlugin, req *plugins.ProxyRequest) (modified *plugins.ProxyRequest, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
@@ -132,7 +142,7 @@ func safeOnRequest(ctx context.Context, p plugins.Plugin, req *plugins.ProxyRequ
 }
 
 // safeOnResponse calls p.OnResponse and converts any panic into an error.
-func safeOnResponse(ctx context.Context, p plugins.Plugin, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (modified *plugins.ProxyResponse, err error) {
+func safeOnResponse(ctx context.Context, p plugins.ResponsePlugin, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (modified *plugins.ProxyResponse, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v\n%s", r, debug.Stack())
