@@ -8,6 +8,7 @@ import {
     HistoryQuery,
     StatusResponse,
     HttpTransaction,
+    HttpRequest,
     PausedRequest,
     BreakpointList,
     HttpResponse,
@@ -249,9 +250,9 @@ export class EngineClient {
     async getWebSocketFrames(transactionId: string): Promise<WebSocketFrame[]> {
         this.ensureStub();
         return new Promise((resolve, reject) => {
-            const stream: grpc.ClientReadableStream<any> = this.stub.getWebSocketFrames({ transactionId }, this.metadata);
+            const stream: grpc.ClientReadableStream<WebSocketFrame> = this.stub!.getWebSocketFrames({ transactionId }, this.metadata);
             const results: WebSocketFrame[] = [];
-            stream.on('data', (raw: any) => {
+            stream.on('data', (raw: WebSocketFrame) => {
                 const payload = Buffer.from(raw.payload || []).toString('utf8');
                 results.push({
                     transactionId: raw.transactionId || '',
@@ -302,8 +303,8 @@ export class EngineClient {
         onError: (err: Error) => void
     ): grpc.ClientReadableStream<HttpTransaction> {
         this.ensureStub();
-        const stream: grpc.ClientReadableStream<any> = this.stub.captureTraffic({}, this.metadata);
-        stream.on('data', (raw: any) => {
+        const stream: grpc.ClientReadableStream<HttpRequest> = this.stub!.captureTraffic({}, this.metadata);
+        stream.on('data', (raw: HttpRequest) => {
             // CaptureTraffic streams HttpRequest; wrap into a partial HttpTransaction
             const tx: HttpTransaction = {
                 id: raw.id || '',
@@ -327,7 +328,7 @@ export class EngineClient {
             onData(tx);
         });
         stream.on('error', (err: Error) => onError(err));
-        return stream as grpc.ClientReadableStream<HttpTransaction>;
+        return stream as unknown as grpc.ClientReadableStream<HttpTransaction>;
     }
 
     /** Close the gRPC channel. */
@@ -338,8 +339,8 @@ export class EngineClient {
     async listRewriteRules(): Promise<RewriteRuleList> {
         this.ensureStub();
         return new Promise((resolve, reject) => {
-            this.stub.listRewriteRules({}, this.metadata, (err: grpc.ServiceError | null, response: any) => {
-                if (err) { reject(err); } else { resolve(response as RewriteRuleList); }
+            this.stub!.listRewriteRules({}, this.metadata, (err: grpc.ServiceError | null, response: RewriteRuleList) => {
+                if (err) { reject(err); } else { resolve(response); }
             });
         });
     }
@@ -347,8 +348,8 @@ export class EngineClient {
     async toggleRewriteRule(ruleId: string): Promise<RewriteRule> {
         this.ensureStub();
         return new Promise((resolve, reject) => {
-            this.stub.toggleRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null, response: any) => {
-                if (err) { reject(err); } else { resolve(response as RewriteRule); }
+            this.stub!.toggleRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null, response: RewriteRule) => {
+                if (err) { reject(err); } else { resolve(response); }
             });
         });
     }
@@ -356,7 +357,7 @@ export class EngineClient {
     async deleteRewriteRule(ruleId: string): Promise<void> {
         this.ensureStub();
         return new Promise((resolve, reject) => {
-            this.stub.deleteRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null) => {
+            this.stub!.deleteRewriteRule({ ruleId }, this.metadata, (err: grpc.ServiceError | null) => {
                 if (err) { reject(err); } else { resolve(); }
             });
         });
