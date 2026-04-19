@@ -22,9 +22,12 @@ apix "github.com/mnafshin/apix/pkg/api/generated"
 // EngineServer implements the apix.EngineServer gRPC interface.
 type EngineServer struct {
 apix.UnimplementedEngineServer
-engine       *engine.Engine
-replayEngine *replay.Engine
-cfg          *config.Config
+traffic       TrafficSubscriber
+breakpointMgr BreakpointManagerServer
+db            ServerRepository
+plugins       PluginLister
+replayEngine  *replay.Engine
+cfg           *config.Config
 }
 
 func int32FromInt(v int, field string) (int32, error) {
@@ -35,11 +38,16 @@ return int32(v), nil
 }
 
 // NewEngineServer wires the gRPC server to all sub-systems.
+// The concrete *engine.Engine is the composition root — it satisfies all
+// narrow interfaces defined in interfaces.go.
 func NewEngineServer(eng *engine.Engine, re *replay.Engine, cfg *config.Config) *EngineServer {
 return &EngineServer{
-engine:       eng,
-replayEngine: re,
-cfg:          cfg,
+traffic:       eng,
+breakpointMgr: eng.BreakpointManager(),
+db:            eng.DB(),
+plugins:       eng.PluginRuntime(),
+replayEngine:  re,
+cfg:           cfg,
 }
 }
 

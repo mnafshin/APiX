@@ -27,12 +27,12 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 	if rule.ID == "" {
 		rule.ID = uuid.NewString()
 	}
-	added, err := s.engine.BreakpointManager().AddRule(rule)
+	added, err := s.breakpointMgr.AddRule(rule)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid breakpoint: %v", err)
 	}
 	// Persist to storage.
-	if err := s.engine.DB().SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label); err != nil {
+	if err := s.db.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label); err != nil {
 		logging.Errorf(ctx, "grpc: save breakpoint: %v", err)
 	}
 	return &apix.BreakpointResponse{
@@ -47,17 +47,17 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 }
 
 func (s *EngineServer) DeleteBreakpoint(ctx context.Context, req *apix.BreakpointID) (*apix.Empty, error) {
-	if err := s.engine.BreakpointManager().RemoveRule(req.Id); err != nil {
+	if err := s.breakpointMgr.RemoveRule(req.Id); err != nil {
 		return nil, status.Errorf(codes.NotFound, "breakpoint not found: %v", err)
 	}
-	if err := s.engine.DB().DeleteBreakpoint(req.Id); err != nil {
+	if err := s.db.DeleteBreakpoint(req.Id); err != nil {
 		logging.Errorf(ctx, "grpc: delete breakpoint from storage: %v", err)
 	}
 	return &apix.Empty{}, nil
 }
 
 func (s *EngineServer) ListBreakpoints(ctx context.Context, _ *apix.Empty) (*apix.BreakpointList, error) {
-	rules := s.engine.BreakpointManager().ListRules()
+	rules := s.breakpointMgr.ListRules()
 	list := make([]*apix.BreakpointRule, 0, len(rules))
 	for _, r := range rules {
 		list = append(list, &apix.BreakpointRule{
@@ -72,8 +72,8 @@ func (s *EngineServer) ListBreakpoints(ctx context.Context, _ *apix.Empty) (*api
 }
 
 func (s *EngineServer) WatchPausedRequests(_ *apix.Empty, stream grpc.ServerStreamingServer[apix.PausedRequest]) error {
-	ch := s.engine.BreakpointManager().Subscribe()
-	defer s.engine.BreakpointManager().Unsubscribe(ch)
+	ch := s.breakpointMgr.Subscribe()
+	defer s.breakpointMgr.Unsubscribe(ch)
 
 	for {
 		select {
@@ -144,7 +144,7 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 		}
 	}
 
-	if err := s.engine.BreakpointManager().Resume(req.RequestId, decision); err != nil {
+	if err := s.breakpointMgr.Resume(req.RequestId, decision); err != nil {
 		return nil, status.Errorf(codes.NotFound, "resume request: %v", err)
 	}
 	return &apix.Empty{}, nil

@@ -13,7 +13,7 @@ func (s *EngineServer) AddRewriteRule(ctx context.Context, rule *apix.RewriteRul
 	if rule.Id == "" {
 		rule.Id = uuid.NewString()
 	}
-	if err := s.engine.DB().AddRewriteRule(rule); err != nil {
+	if err := s.db.AddRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "add rewrite rule: %v", err)
 	}
 	return rule, nil
@@ -23,7 +23,7 @@ func (s *EngineServer) UpdateRewriteRule(ctx context.Context, rule *apix.Rewrite
 	if rule.Id == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
 	}
-	if err := s.engine.DB().UpdateRewriteRule(rule); err != nil {
+	if err := s.db.UpdateRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "update rewrite rule: %v", err)
 	}
 	return rule, nil
@@ -33,14 +33,14 @@ func (s *EngineServer) DeleteRewriteRule(ctx context.Context, req *apix.RewriteR
 	if req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
 	}
-	if err := s.engine.DB().DeleteRewriteRule(req.RuleId); err != nil {
+	if err := s.db.DeleteRewriteRule(req.RuleId); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete rewrite rule: %v", err)
 	}
 	return &apix.Empty{}, nil
 }
 
 func (s *EngineServer) ListRewriteRules(ctx context.Context, _ *apix.Empty) (*apix.RewriteRuleList, error) {
-	rules, err := s.engine.DB().ListRewriteRules()
+	rules, err := s.db.ListRewriteRules()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list rewrite rules: %v", err)
 	}
@@ -51,7 +51,7 @@ func (s *EngineServer) ToggleRewriteRule(ctx context.Context, req *apix.RewriteR
 	if req.RuleId == "" {
 		return nil, status.Error(codes.InvalidArgument, "rule_id is required")
 	}
-	rule, err := s.engine.DB().GetRewriteRule(req.RuleId)
+	rule, err := s.db.GetRewriteRule(req.RuleId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get rewrite rule: %v", err)
 	}
@@ -59,7 +59,7 @@ func (s *EngineServer) ToggleRewriteRule(ctx context.Context, req *apix.RewriteR
 		return nil, status.Errorf(codes.NotFound, "rule %q not found", req.RuleId)
 	}
 	rule.Enabled = !rule.Enabled
-	if err := s.engine.DB().UpdateRewriteRule(rule); err != nil {
+	if err := s.db.UpdateRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "toggle rewrite rule: %v", err)
 	}
 	return rule, nil
