@@ -104,6 +104,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.transaction?.id;
             if (id) { openReplayPanel(context, engineClient!, id); }
         }),
+        vscode.commands.registerCommand('apix.composeRequest', () =>
+            openReplayPanel(context, engineClient!)
+        ),
         vscode.commands.registerCommand('apix.copyAsCurl', (itemOrTx: TrafficItem | HttpTransaction) =>
             copyAsCurl(itemOrTx)
         ),
@@ -305,7 +308,7 @@ async function deleteBreakpoint(client: EngineClient, provider: BreakpointsProvi
 async function openReplayPanel(
     context: vscode.ExtensionContext,
     client: EngineClient,
-    requestId: string
+    requestId?: string
 ): Promise<void> {
     await ReplayPanel.show(context.extensionUri, client, requestId);
 }

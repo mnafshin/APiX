@@ -79,6 +79,13 @@ export interface ReplaySpec {
     followRedirects: boolean;
 }
 
+export interface RequestTemplate {
+    id: string;
+    name: string;
+    request: HttpRequest;
+    updatedAt?: number;
+}
+
 export interface HistoryQuery {
     limit: number;
     offset: number;

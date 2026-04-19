@@ -608,6 +608,60 @@ func TestListTransactions_MethodFilter(t *testing.T) {
 	}
 }
 
+func TestRequestTemplates_CRUDAndUpsert(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	now := time.Now().Add(-time.Minute).UTC()
+	tpl := &RequestTemplateRecord{
+		ID:        "tpl-1",
+		Name:      "List users",
+		Method:    "GET",
+		URL:       "https://api.example.com/users",
+		Headers:   map[string]string{"Accept": "application/json"},
+		Body:      nil,
+		UpdatedAt: now,
+	}
+	if err := db.SaveRequestTemplate(tpl); err != nil {
+		t.Fatalf("SaveRequestTemplate: %v", err)
+	}
+
+	// Upsert by ID should update fields.
+	tpl.Name = "List users v2"
+	tpl.Method = "POST"
+	tpl.Body = []byte(`{"q":"active"}`)
+	tpl.UpdatedAt = now.Add(time.Minute)
+	if err := db.SaveRequestTemplate(tpl); err != nil {
+		t.Fatalf("SaveRequestTemplate upsert: %v", err)
+	}
+
+	templates, err := db.ListRequestTemplates()
+	if err != nil {
+		t.Fatalf("ListRequestTemplates: %v", err)
+	}
+	if len(templates) != 1 {
+		t.Fatalf("expected 1 template, got %d", len(templates))
+	}
+	got := templates[0]
+	if got.ID != "tpl-1" || got.Name != "List users v2" || got.Method != "POST" {
+		t.Fatalf("unexpected template: %#v", got)
+	}
+	if string(got.Body) != `{"q":"active"}` {
+		t.Fatalf("unexpected body: %q", string(got.Body))
+	}
+
+	if err := db.DeleteRequestTemplate("tpl-1"); err != nil {
+		t.Fatalf("DeleteRequestTemplate: %v", err)
+	}
+	templates, err = db.ListRequestTemplates()
+	if err != nil {
+		t.Fatalf("ListRequestTemplates after delete: %v", err)
+	}
+	if len(templates) != 0 {
+		t.Fatalf("expected 0 templates after delete, got %d", len(templates))
+	}
+}
+
 // ── Benchmark: Storage Write Rate ─────────────────────────────────────────
 
 func BenchmarkStorage_SaveRequest(b *testing.B) {
@@ -676,46 +730,46 @@ func BenchmarkStorage_ListTransactions(b *testing.B) {
 }
 
 func TestListTransactions_BodyFilter(t *testing.T) {
-db := openTestDB(t)
-now := time.Now()
+	db := openTestDB(t)
+	now := time.Now()
 
-// Save two requests with distinct bodies
-req1 := &RequestRecord{ID: "bf-1", Method: "POST", URL: "https://a.com/api", Headers: map[string]string{}, Body: []byte(`{"token":"secret"}`), Timestamp: now}
-req2 := &RequestRecord{ID: "bf-2", Method: "GET", URL: "https://b.com/page", Headers: map[string]string{}, Body: []byte(`hello world`), Timestamp: now}
-if err := db.SaveRequest(req1); err != nil {
-t.Fatalf("SaveRequest req1: %v", err)
-}
-if err := db.SaveRequest(req2); err != nil {
-t.Fatalf("SaveRequest req2: %v", err)
-}
+	// Save two requests with distinct bodies
+	req1 := &RequestRecord{ID: "bf-1", Method: "POST", URL: "https://a.com/api", Headers: map[string]string{}, Body: []byte(`{"token":"secret"}`), Timestamp: now}
+	req2 := &RequestRecord{ID: "bf-2", Method: "GET", URL: "https://b.com/page", Headers: map[string]string{}, Body: []byte(`hello world`), Timestamp: now}
+	if err := db.SaveRequest(req1); err != nil {
+		t.Fatalf("SaveRequest req1: %v", err)
+	}
+	if err := db.SaveRequest(req2); err != nil {
+		t.Fatalf("SaveRequest req2: %v", err)
+	}
 
-// Search for "token" — should match only req1
-results, _, err := db.ListTransactions(10, 0, "", "", 0, "token")
-if err != nil {
-t.Fatalf("ListTransactions body_filter: %v", err)
-}
-if len(results) != 1 {
-t.Fatalf("expected 1 result for body_filter=token, got %d", len(results))
-}
-if results[0].ID != "bf-1" {
-t.Errorf("expected ID bf-1, got %s", results[0].ID)
-}
+	// Search for "token" — should match only req1
+	results, _, err := db.ListTransactions(10, 0, "", "", 0, "token")
+	if err != nil {
+		t.Fatalf("ListTransactions body_filter: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for body_filter=token, got %d", len(results))
+	}
+	if results[0].ID != "bf-1" {
+		t.Errorf("expected ID bf-1, got %s", results[0].ID)
+	}
 
-// Search for "world" — should match req2
-results, _, err = db.ListTransactions(10, 0, "", "", 0, "world")
-if err != nil {
-t.Fatalf("ListTransactions body_filter world: %v", err)
-}
-if len(results) != 1 || results[0].ID != "bf-2" {
-t.Errorf("expected ID bf-2, got %v", results)
-}
+	// Search for "world" — should match req2
+	results, _, err = db.ListTransactions(10, 0, "", "", 0, "world")
+	if err != nil {
+		t.Fatalf("ListTransactions body_filter world: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "bf-2" {
+		t.Errorf("expected ID bf-2, got %v", results)
+	}
 
-// Empty body_filter — should return both
-results, _, err = db.ListTransactions(10, 0, "", "", 0, "")
-if err != nil {
-t.Fatalf("ListTransactions no body_filter: %v", err)
-}
-if len(results) != 2 {
-t.Errorf("expected 2 results with no body_filter, got %d", len(results))
-}
+	// Empty body_filter — should return both
+	results, _, err = db.ListTransactions(10, 0, "", "", 0, "")
+	if err != nil {
+		t.Fatalf("ListTransactions no body_filter: %v", err)
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 results with no body_filter, got %d", len(results))
+	}
 }

@@ -31,6 +31,7 @@
     "onCommand:apix.deleteBreakpoint",
     "onCommand:apix.toggleBreakpoint",
     "onCommand:apix.replayRequest",
+    "onCommand:apix.composeRequest",
     "onCommand:apix.copyAsCurl",
     "onCommand:apix.exportHAR",
     "onCommand:apix.importHAR",
@@ -80,6 +81,11 @@
         "command": "apix.replayRequest",
         "title": "APiX: Replay Request",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "apix.composeRequest",
+        "title": "APiX: Open Request Composer",
+        "icon": "$(edit)"
       },
       {
         "command": "apix.copyAsCurl",
@@ -180,6 +186,11 @@
         },
         {
           "command": "apix.refreshTraffic",
+          "when": "view == apix.trafficView",
+          "group": "navigation"
+        },
+        {
+          "command": "apix.composeRequest",
           "when": "view == apix.trafficView",
           "group": "navigation"
         },

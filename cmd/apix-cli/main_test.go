@@ -290,6 +290,26 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 		t.Fatalf("send status=%v", sendResp["status_code"])
 	}
 
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "save", "--id", "tpl-1", "--name", "health", "--method", "GET", "--url", upstream.URL+"/health")...)
+	if exit != 0 {
+		t.Fatalf("templates save exit=%d err=%s", exit, errOut)
+	}
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "list")...)
+	if exit != 0 {
+		t.Fatalf("templates list exit=%d err=%s", exit, errOut)
+	}
+	var templates []map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &templates); err != nil {
+		t.Fatalf("templates list json: %v", err)
+	}
+	if len(templates) != 1 || templates[0]["id"] != "tpl-1" {
+		t.Fatalf("unexpected templates list: %#v", templates)
+	}
+	exit, _, errOut = runCLI(t, stack.args("templates", "delete", "tpl-1")...)
+	if exit != 0 {
+		t.Fatalf("templates delete exit=%d err=%s", exit, errOut)
+	}
+
 	stack.storeTransaction(t, "req-replay", "GET", upstream.URL+"/replay", "", "", 0)
 	exit, out, errOut = runCLI(t, stack.args("--output", "json", "replay", "req-replay")...)
 	if exit != 0 {

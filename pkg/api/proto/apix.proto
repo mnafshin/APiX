@@ -141,6 +141,28 @@ message ReplaySpec {
   bool follow_redirects = 5;
 }
 
+// ComposeSpec executes an arbitrary request from scratch.
+message ComposeSpec {
+  HttpRequest request = 1;
+  bool follow_redirects = 2;
+}
+
+// RequestTemplate stores a reusable composed request.
+message RequestTemplate {
+  string id = 1;
+  string name = 2;
+  HttpRequest request = 3;
+  int64 updated_at = 4;
+}
+
+message RequestTemplateList {
+  repeated RequestTemplate templates = 1;
+}
+
+message RequestTemplateID {
+  string id = 1;
+}
+
 // ========== History messages ==========
 
 message HistoryQuery {
@@ -265,6 +287,14 @@ service Engine {
   // ----- Replay -----
   // Replay a stored or synthetic request and return the response.
   rpc ReplayRequest(ReplaySpec) returns (HttpResponse);
+  // Execute a composed standalone request and return the response.
+  rpc ComposeRequest(ComposeSpec) returns (HttpResponse);
+  // Save (create/update by id) a reusable request template.
+  rpc SaveRequestTemplate(RequestTemplate) returns (RequestTemplate);
+  // List saved request templates.
+  rpc ListRequestTemplates(Empty) returns (RequestTemplateList);
+  // Delete a saved request template by id.
+  rpc DeleteRequestTemplate(RequestTemplateID) returns (Empty);
 
   // ----- History -----
   // Retrieve stored request/response pairs from SQLite.

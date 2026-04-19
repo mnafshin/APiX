@@ -1,51 +1,48 @@
 import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
-import { ReplaySpec, HttpResponse, HttpTransaction } from './types';
+import { ReplaySpec, HttpResponse, HttpTransaction, RequestTemplate } from './types';
 
-/**
- * ReplayPanel opens a WebviewPanel that lets the user modify and re-send a
- * previously captured HTTP request.
- *
- * Flow:
- *   1. User right-clicks a traffic item and chooses "Replay"
- *   2. ReplayPanel.show() is called with the transaction ID
- *   3. Panel loads request details from the engine (via GetHistory) and
- *      renders an editable form
- *   4. User edits headers/body and clicks Send
- *   5. ReplayRequest RPC is called and the response is displayed
- */
 export class ReplayPanel {
     private static readonly viewType = 'apixReplay';
 
     public static async show(
         extensionUri: vscode.Uri,
         client: EngineClient,
-        requestId: string
+        requestId?: string
     ): Promise<void> {
         const panel = vscode.window.createWebviewPanel(
             ReplayPanel.viewType,
-            'Replay Request',
+            requestId ? 'Replay Request' : 'Request Composer',
             vscode.ViewColumn.Active,
             { enableScripts: true }
         );
 
-        // Fetch transaction from history
         let tx: HttpTransaction | undefined;
-        try {
-            const [history, _cancel] = await client.getHistory({
-                limit: 500,
-                offset: 0,
-                urlFilter: '',
-                methodFilter: '',
-                statusFilter: 0,
-                sinceMs: 0,
-            });
-            tx = history.find(t => t.id === requestId);
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`APiX: Could not load request — ${err?.message || err}`);
+        if (requestId) {
+            try {
+                const [history] = await client.getHistory({
+                    limit: 500,
+                    offset: 0,
+                    urlFilter: '',
+                    methodFilter: '',
+                    statusFilter: 0,
+                    sinceMs: 0,
+                });
+                tx = history.find(t => t.id === requestId);
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`APiX: Could not load request — ${err?.message || err}`);
+            }
         }
 
-        panel.webview.html = ReplayPanel._getHtml(panel.webview, tx);
+        const templates = await ReplayPanel.safeListTemplates(client);
+        panel.webview.html = ReplayPanel._getHtml(panel.webview, tx, requestId, templates);
+
+        const postTemplates = async () => {
+            panel.webview.postMessage({
+                type: 'templates',
+                data: await ReplayPanel.safeListTemplates(client),
+            });
+        };
 
         panel.webview.onDidReceiveMessage(async (message: { type: string; data: any }) => {
             if (message.type === 'send') {
@@ -60,28 +57,75 @@ export class ReplayPanel {
                         followRedirects: data.followRedirects === true,
                     };
 
-                    if (data.useRaw) {
-                        let headers: Record<string, string> = {};
-                        try { headers = JSON.parse(data.headers || '{}'); } catch { /* ignore */ }
-                        spec.rawRequest = {
+                    let headers: Record<string, string> = {};
+                    try { headers = JSON.parse(data.headers || '{}'); } catch { /* ignore */ }
+
+                    const rawRequest = {
+                        id: '',
+                        method: data.method || 'GET',
+                        url: data.url || '',
+                        headers,
+                        body: data.body || '',
+                        timestamp: Date.now(),
+                    };
+
+                    let response: HttpResponse;
+                    if (!requestId || data.useRaw) {
+                        response = await client.composeRequest(rawRequest, data.followRedirects === true);
+                    } else {
+                        spec.requestId = requestId;
+                        response = await ReplayPanel._sendReplay(client, spec);
+                    }
+                    panel.webview.postMessage({ type: 'response', data: response });
+                } catch (err: any) {
+                    panel.webview.postMessage({ type: 'error', message: err?.message || String(err) });
+                }
+            }
+
+            if (message.type === 'saveTemplate') {
+                try {
+                    const data = message.data;
+                    let headers: Record<string, string> = {};
+                    try { headers = JSON.parse(data.headers || '{}'); } catch { /* ignore */ }
+                    await client.saveRequestTemplate({
+                        id: data.id || '',
+                        name: data.name || '',
+                        request: {
                             id: '',
                             method: data.method || 'GET',
                             url: data.url || '',
                             headers,
                             body: data.body || '',
                             timestamp: Date.now(),
-                        };
-                    } else {
-                        spec.requestId = requestId;
-                    }
+                        },
+                    });
+                    await postTemplates();
+                } catch (err: any) {
+                    panel.webview.postMessage({ type: 'error', message: err?.message || String(err) });
+                }
+            }
 
-                    const response = await ReplayPanel._sendReplay(client, spec);
-                    panel.webview.postMessage({ type: 'response', data: response });
+            if (message.type === 'deleteTemplate') {
+                try {
+                    const id = String(message.data?.id || '');
+                    if (!id) {
+                        throw new Error('Template id is required');
+                    }
+                    await client.deleteRequestTemplate(id);
+                    await postTemplates();
                 } catch (err: any) {
                     panel.webview.postMessage({ type: 'error', message: err?.message || String(err) });
                 }
             }
         });
+    }
+
+    private static async safeListTemplates(client: EngineClient): Promise<RequestTemplate[]> {
+        try {
+            return await client.listRequestTemplates();
+        } catch {
+            return [];
+        }
     }
 
     private static async _sendReplay(
@@ -100,7 +144,7 @@ export class ReplayPanel {
         return text;
     }
 
-    private static _getHtml(webview: vscode.Webview, tx: HttpTransaction | undefined): string {
+    private static _getHtml(webview: vscode.Webview, tx: HttpTransaction | undefined, requestId: string | undefined, templates: RequestTemplate[]): string {
         const nonce = ReplayPanel._getNonce();
         const csp = webview.cspSource;
         const req = tx?.request;
@@ -113,18 +157,17 @@ export class ReplayPanel {
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}' ${csp}; connect-src ${csp}; img-src ${csp} data:; font-src ${csp} data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none';">
-  <title>Replay Request</title>
+  <title>${requestId ? 'Replay Request' : 'Request Composer'}</title>
   <style nonce="${nonce}">
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px; }
     h2 { margin-top: 0; font-size: 16px; }
     label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 2px; margin-top: 12px; }
     input, select, textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 5px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
-    input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); }
     .row { display: flex; gap: 8px; }
-    .row select { width: 120px; flex-shrink: 0; }
-    .row input { flex: 1; }
+    .row > * { flex: 1; }
+    .row .small { max-width: 140px; }
     textarea { resize: vertical; min-height: 80px; font-family: var(--vscode-editor-font-family, monospace); }
-    .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 16px; border-radius: 3px; cursor: pointer; font-size: 13px; margin-top: 16px; }
+    .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px; margin-top: 10px; margin-right: 8px; }
     .btn:hover { background: var(--vscode-button-hoverBackground); }
     .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; }
     .checkbox-row input { width: auto; }
@@ -143,9 +186,19 @@ export class ReplayPanel {
   </style>
 </head>
 <body>
-  <h2>↺ Replay Request</h2>
+  <h2>${requestId ? '↺ Replay Request' : '✎ Request Composer'}</h2>
   <div class="row">
-    <select id="method">
+    <input id="template-name" placeholder="Template name" />
+    <input id="template-id" placeholder="Template id (optional)" />
+  </div>
+  <div class="row">
+    <select id="template-select"></select>
+    <button class="btn" onclick="loadTemplate()">Load</button>
+    <button class="btn" onclick="saveTemplate()">Save</button>
+    <button class="btn" onclick="deleteTemplate()">Delete</button>
+  </div>
+  <div class="row">
+    <select id="method" class="small">
       <option>GET</option><option>POST</option><option>PUT</option>
       <option>DELETE</option><option>PATCH</option><option>HEAD</option><option>OPTIONS</option>
     </select>
@@ -156,7 +209,7 @@ export class ReplayPanel {
   <label>Body</label>
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
   <hr>
-  <h3 style="font-size:14px;margin:0 0 8px">Overrides (applied on top of original)</h3>
+  <h3 style="font-size:14px;margin:0 0 8px">Overrides (for replay mode)</h3>
   <label>Override Headers (JSON — merged with original)</label>
   <textarea id="override-headers" rows="3">{}</textarea>
   <label>Override Body (leave empty to use original)</label>
@@ -165,8 +218,8 @@ export class ReplayPanel {
     <input type="checkbox" id="follow-redirects" checked />
     <label for="follow-redirects" style="margin:0">Follow redirects</label>
   </div>
-  <div class="checkbox-row">
-    <input type="checkbox" id="use-raw" />
+  <div class="checkbox-row" ${requestId ? '' : 'style="display:none"'}>
+    <input type="checkbox" id="use-raw" ${requestId ? '' : 'checked'} />
     <label for="use-raw" style="margin:0">Use edited request above (instead of original from history)</label>
   </div>
   <br>
@@ -184,12 +237,57 @@ export class ReplayPanel {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    let templates = ${JSON.stringify(templates)};
 
-    // Set initial method
     const methodEl = document.getElementById('method');
     const initMethod = ${JSON.stringify(req?.method || 'GET')};
     for (let i = 0; i < methodEl.options.length; i++) {
       if (methodEl.options[i].value === initMethod) { methodEl.selectedIndex = i; break; }
+    }
+
+    function renderTemplates() {
+      const sel = document.getElementById('template-select');
+      sel.innerHTML = '<option value="">Saved templates...</option>';
+      templates.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.id;
+        o.textContent = (t.name || '(unnamed)') + ' [' + t.id + ']';
+        sel.appendChild(o);
+      });
+    }
+
+    function loadTemplate() {
+      const id = document.getElementById('template-select').value;
+      const tpl = templates.find(t => t.id === id);
+      if (!tpl || !tpl.request) { return; }
+      document.getElementById('template-id').value = tpl.id || '';
+      document.getElementById('template-name').value = tpl.name || '';
+      document.getElementById('method').value = tpl.request.method || 'GET';
+      document.getElementById('url').value = tpl.request.url || '';
+      document.getElementById('headers').value = JSON.stringify(tpl.request.headers || {}, null, 2);
+      document.getElementById('body').value = tpl.request.body ? String(tpl.request.body) : '';
+    }
+
+    function saveTemplate() {
+      vscode.postMessage({ type: 'saveTemplate', data: {
+        id: document.getElementById('template-id').value,
+        name: document.getElementById('template-name').value,
+        method: document.getElementById('method').value,
+        url: document.getElementById('url').value,
+        headers: document.getElementById('headers').value,
+        body: document.getElementById('body').value,
+      }});
+    }
+
+    function deleteTemplate() {
+      const id = document.getElementById('template-id').value || document.getElementById('template-select').value;
+      if (!id) {
+        document.getElementById('error-msg').textContent = 'Error: Template id is required to delete';
+        return;
+      }
+      vscode.postMessage({ type: 'deleteTemplate', data: { id } });
+      document.getElementById('template-id').value = '';
+      document.getElementById('template-name').value = '';
     }
 
     window.addEventListener('message', function(event) {
@@ -199,6 +297,9 @@ export class ReplayPanel {
         showResponse(msg.data);
       } else if (msg.type === 'error') {
         document.getElementById('error-msg').textContent = 'Error: ' + msg.message;
+      } else if (msg.type === 'templates') {
+        templates = msg.data || [];
+        renderTemplates();
       }
     });
 
@@ -213,7 +314,7 @@ export class ReplayPanel {
         overrideHeaders: document.getElementById('override-headers').value,
         overrideBody: document.getElementById('override-body').value,
         followRedirects: document.getElementById('follow-redirects').checked,
-        useRaw: document.getElementById('use-raw').checked,
+        useRaw: document.getElementById('use-raw') ? document.getElementById('use-raw').checked : true,
       }});
     }
 
@@ -229,9 +330,10 @@ export class ReplayPanel {
       document.getElementById('resp-body').textContent = resp.body ? String(resp.body) : '(empty)';
       section.scrollIntoView({ behavior: 'smooth' });
     }
+
+    renderTemplates();
   </script>
 </body>
 </html>`;
     }
 }
-

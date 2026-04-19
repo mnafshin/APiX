@@ -85,6 +85,7 @@ On first launch, APiX starts the engine automatically and begins capturing traff
 | `APiX: Delete Breakpoint` | Remove a breakpoint |
 | `APiX: Enable/Disable Breakpoint` | Toggle a breakpoint on or off |
 | `APiX: Replay Request` | Re-send a captured request with optional overrides |
+| `APiX: Open Request Composer` | Compose and send a standalone request; save/load templates |
 | `APiX: Open Traffic Inspector` | Open the traffic panel |
 | `APiX: Refresh Traffic` | Manually refresh the traffic list |
 
