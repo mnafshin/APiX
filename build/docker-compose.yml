@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   apix:
-    image: mnafshin/apix:1.0.0
+    image: mnafshin/apix:2.0.0
     container_name: apix-engine
     ports:
       - "8080:8080"   # HTTP proxy
