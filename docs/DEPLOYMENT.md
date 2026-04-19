@@ -17,7 +17,7 @@ This guide covers deploying APiX for production use: local desktop, remote serve
 
 **macOS (Apple Silicon)**:
 ```bash
-curl -L https://github.com/mnafshin/apix/releases/download/v1.0.0/apix-engine-darwin-arm64 \
+curl -L https://github.com/mnafshin/apix/releases/download/v2.0.0/apix-engine-darwin-arm64 \
   -o apix-engine
 chmod +x apix-engine
 ./apix-engine
@@ -25,7 +25,7 @@ chmod +x apix-engine
 
 **macOS (Intel)**:
 ```bash
-curl -L https://github.com/mnafshin/apix/releases/download/v1.0.0/apix-engine-darwin-amd64 \
+curl -L https://github.com/mnafshin/apix/releases/download/v2.0.0/apix-engine-darwin-amd64 \
   -o apix-engine
 chmod +x apix-engine
 ./apix-engine
@@ -33,7 +33,7 @@ chmod +x apix-engine
 
 **Linux (x86_64)**:
 ```bash
-curl -L https://github.com/mnafshin/apix/releases/download/v1.0.0/apix-engine-linux-amd64 \
+curl -L https://github.com/mnafshin/apix/releases/download/v2.0.0/apix-engine-linux-amd64 \
   -o apix-engine
 chmod +x apix-engine
 ./apix-engine
@@ -41,7 +41,7 @@ chmod +x apix-engine
 
 **Windows (PowerShell)**:
 ```powershell
-$url = "https://github.com/mnafshin/apix/releases/download/v1.0.0/apix-engine-windows-amd64.exe"
+$url = "https://github.com/mnafshin/apix/releases/download/v2.0.0/apix-engine-windows-amd64.exe"
 Invoke-WebRequest -Uri $url -OutFile apix-engine.exe
 .\apix-engine.exe
 ```
@@ -59,7 +59,7 @@ apix-engine
 ```bash
 docker run -p 8080:8080 -p 9090:9090 \
   -e APIX_AUTH_TOKEN=your-secret-token \
-  mnafshin/apix:1.0.0
+  mnafshin/apix:2.0.0
 ```
 
 For persistence and configuration:
@@ -68,7 +68,7 @@ docker run -p 8080:8080 -p 9090:9090 \
   -v ~/.apix:/root/.apix \
   -e APIX_CONFIG=/root/.apix/config.yaml \
   -e APIX_AUTH_TOKEN=your-secret-token \
-  mnafshin/apix:1.0.0
+  mnafshin/apix:2.0.0
 ```
 
 ### Option 4: Source Build
@@ -204,7 +204,7 @@ version: '3.8'
 
 services:
   apix:
-    image: mnafshin/apix:1.0.0
+    image: mnafshin/apix:2.0.0
     ports:
       - "8080:8080"   # HTTP proxy
       - "9090:9090"   # gRPC API
