@@ -1,15 +1,16 @@
-// Package logging provides a small structured JSON logger and helpers for request IDs.
+// Package logging provides a structured logger backed by log/slog and helpers
+// for request IDs.
 package logging
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
-	"time"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/google/uuid"
 )
@@ -22,15 +23,43 @@ const ctxKeyRequestID ctxKey = "apix.request_id"
 // RequestIDHeader is the header used to carry a request ID.
 const RequestIDHeader = "X-Request-ID"
 
-var logger *log.Logger
+// global holds the active *slog.Logger. Stored as unsafe.Pointer for
+// lock-free reads; written only during Init / InitWithFormat.
+var global unsafe.Pointer // *slog.Logger
 
-// Init initializes the logger to write JSON lines to the provided writer.
-// If w is nil, os.Stdout is used.
+func getLogger() *slog.Logger {
+	p := atomic.LoadPointer(&global)
+	if p == nil {
+		return slog.Default()
+	}
+	return (*slog.Logger)(p)
+}
+
+func setLogger(l *slog.Logger) {
+	atomic.StorePointer(&global, unsafe.Pointer(l))
+}
+
+// Init initializes the logger with the text handler writing to w.
+// If w is nil, os.Stdout is used. Equivalent to InitWithFormat(w, "text").
 func Init(w io.Writer) {
+	InitWithFormat(w, "text")
+}
+
+// InitWithFormat initialises the global logger.
+// format must be "json" or "text" (case-insensitive); anything else defaults to text.
+// If w is nil, os.Stdout is used.
+func InitWithFormat(w io.Writer, format string) {
 	if w == nil {
 		w = os.Stdout
 	}
-	logger = log.New(w, "", 0)
+	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+	var h slog.Handler
+	if format == "json" {
+		h = slog.NewJSONHandler(w, opts)
+	} else {
+		h = slog.NewTextHandler(w, opts)
+	}
+	setLogger(slog.New(h))
 }
 
 // WithRequestID returns a new context with the provided request ID attached.
@@ -65,47 +94,32 @@ func EnsureRequestID(h http.Header) string {
 	return id
 }
 
-// logWithLevel emits a single JSON log line with level, timestamp, message and optional request_id.
-func logWithLevel(ctx context.Context, level string, format string, args ...interface{}) {
-	if logger == nil {
-		Init(os.Stdout)
-	}
-	msg := fmt.Sprintf(format, args...)
-	entry := map[string]interface{}{
-		"level": level,
-		"ts":    time.Now().UTC().Format(time.RFC3339Nano),
-		"msg":   msg,
-	}
+// extraArgs returns the slog key/value pairs to add to every log record.
+// Currently injects request_id when present in ctx.
+func extraArgs(ctx context.Context) []any {
 	if rid := RequestIDFromContext(ctx); rid != "" {
-		entry["request_id"] = rid
+		return []any{"request_id", rid}
 	}
-	if b, err := json.Marshal(entry); err == nil {
-		logger.Println(string(b))
-	} else {
-		// Fallback to plain text if JSON encoding fails
-		logger.Printf("%s: %s", level, msg)
-	}
-	if level == "fatal" {
-		os.Exit(1)
-	}
+	return nil
 }
 
-// Infof logs an info-level message.
+// Infof logs a formatted info-level message.
 func Infof(ctx context.Context, format string, args ...interface{}) {
-	logWithLevel(ctx, "info", format, args...)
+	getLogger().InfoContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
 }
 
-// Warnf logs a warning-level message.
+// Warnf logs a formatted warning-level message.
 func Warnf(ctx context.Context, format string, args ...interface{}) {
-	logWithLevel(ctx, "warn", format, args...)
+	getLogger().WarnContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
 }
 
-// Errorf logs an error-level message.
+// Errorf logs a formatted error-level message.
 func Errorf(ctx context.Context, format string, args ...interface{}) {
-	logWithLevel(ctx, "error", format, args...)
+	getLogger().ErrorContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
 }
 
-// Fatalf logs a fatal message and exits the process.
+// Fatalf logs a formatted fatal-level message and exits the process.
 func Fatalf(ctx context.Context, format string, args ...interface{}) {
-	logWithLevel(ctx, "fatal", format, args...)
+	getLogger().ErrorContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
+	os.Exit(1)
 }
