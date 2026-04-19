@@ -92,7 +92,7 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	// ── gRPC bind address ──────────────────────────────────────────────────
 	if c.GRPCBindAddress != "" {
 		if ip := net.ParseIP(c.GRPCBindAddress); ip == nil && c.GRPCBindAddress != "localhost" {
-			errs = append(errs, fmt.Errorf("grpc_bind_address %q is invalid — use an IP address, localhost, 0.0.0.0, or ::", c.GRPCBindAddress))
+			errs = append(errs, fmt.Errorf("grpc_bind_address %q is invalid — use an IP address, localhost, 0.0.0.0, or ::1", c.GRPCBindAddress))
 		}
 	}
 	if c.MCPEnabled && !allowBoundPorts && c.MCPPort != "" {
