@@ -249,14 +249,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 11. Emit metrics + slowlog.
-	durationSec := time.Since(start).Seconds()
-	metrics.ObserveRequest(proxyReq.Method, proxyResp.StatusCode, durationSec)
-	if p.cfg != nil && p.cfg.SlowlogThresholdMs > 0 {
-		if time.Since(start).Milliseconds() > int64(p.cfg.SlowlogThresholdMs) {
-			logging.Warnf(ctx, "slow request: method=%s url=%s status=%d duration_ms=%d request_id=%s",
-				proxyReq.Method, proxyReq.URL.String(), proxyResp.StatusCode, time.Since(start).Milliseconds(), reqID)
-		}
-	}
+	dur := time.Since(start)
+	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.String(), proxyResp.StatusCode, dur)
+	_ = reqID
 
 	writeProxyResponse(w, proxyResp, respBody)
 }
@@ -423,7 +418,7 @@ func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyReq
 }
 
 func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, start time.Time) {
-	upstreamHeaders := copyWebSocketRequestHeaders(tx.Request.Headers)
+	upstreamHeaders := copyHeadersExcluding(tx.Request.Headers, "Connection", "Upgrade", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Extensions", "Host")
 	dialer := newWebSocketDialer(p.transport, tx.Request)
 	upstreamConn, resp, err := dialer.DialContext(ctx, webSocketTargetURL(tx.Request.URL), upstreamHeaders)
 	if err != nil {
@@ -445,7 +440,7 @@ func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, 
 	if protocol := upstreamConn.Subprotocol(); protocol != "" {
 		upgrader.Subprotocols = []string{protocol}
 	}
-	clientConn, err := upgrader.Upgrade(w, r, copyWebSocketResponseHeaders(resp.Header))
+	clientConn, err := upgrader.Upgrade(w, r, copyHeadersExcluding(resp.Header, "Connection", "Upgrade", "Sec-WebSocket-Accept", "Sec-WebSocket-Extensions"))
 	if err != nil {
 		_ = upstreamConn.Close()
 		logging.Errorf(ctx, "websocket client upgrade: %v", err)

@@ -269,23 +269,16 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		}
 	}
 
-	// Observe metrics
-	durationSec := time.Since(start).Seconds()
-	metrics.ObserveRequest(proxyReq.Method, proxyResp.StatusCode, durationSec)
-
-	// Slowlog
-	if p.cfg != nil && p.cfg.SlowlogThresholdMs > 0 {
-		if time.Since(start).Milliseconds() > int64(p.cfg.SlowlogThresholdMs) {
-			logging.Warnf(ctx, "slow request: method=%s host=%s status=%d duration_ms=%d request_id=%s",
-				proxyReq.Method, proxyReq.URL.Host, proxyResp.StatusCode, time.Since(start).Milliseconds(), reqID)
-		}
-	}
+	// Observe metrics + slowlog.
+	dur := time.Since(start)
+	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, proxyResp.StatusCode, dur)
+	_ = reqID
 
 	writeProxyResponseToConn(conn, proxyResp)
 }
 
 func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio.Reader, clientReq *http.Request, tx *Transaction, start time.Time) {
-	upstreamHeaders := copyWebSocketRequestHeaders(tx.Request.Headers)
+	upstreamHeaders := copyHeadersExcluding(tx.Request.Headers, "Connection", "Upgrade", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Extensions", "Host")
 	dialer := newWebSocketDialer(p.transport, tx.Request)
 	upstreamConn, resp, err := dialer.DialContext(ctx, webSocketTargetURL(tx.Request.URL), upstreamHeaders)
 	if err != nil {
@@ -308,7 +301,7 @@ func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio
 		upgrader.Subprotocols = []string{protocol}
 	}
 	responseWriter := newHijackableResponseWriter(conn, br)
-	clientConn, err := upgrader.Upgrade(responseWriter, clientReq, copyWebSocketResponseHeaders(resp.Header))
+	clientConn, err := upgrader.Upgrade(responseWriter, clientReq, copyHeadersExcluding(resp.Header, "Connection", "Upgrade", "Sec-WebSocket-Accept", "Sec-WebSocket-Extensions"))
 	if err != nil {
 		_ = upstreamConn.Close()
 		logging.Errorf(ctx, "tls websocket client upgrade: %v", err)
