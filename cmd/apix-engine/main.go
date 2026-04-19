@@ -120,6 +120,9 @@ func main() {
 		db.StartPeriodicVacuum(ctx, time.Duration(cfg.VacuumIntervalHours)*time.Hour)
 	}
 
+	// Start periodic history retention pruning (runs daily; no-op when both limits are 0).
+	db.StartPeriodicPrune(ctx, 24*time.Hour, cfg.HistoryMaxAgeDays, cfg.HistoryMaxRows)
+
 	// 3. Create CertAuthority.
 	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)
 	if err != nil {
