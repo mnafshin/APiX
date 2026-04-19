@@ -210,6 +210,59 @@ func TestValidate_ValidURLPatterns(t *testing.T) {
 	}
 }
 
+func TestValidate_MapLocalRules(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		MapLocalRules: []MapLocalRule{
+			{
+				URLPattern: "^https://example\\.com/mock$",
+				FilePath:   "mock.json",
+				StatusCode: 200,
+			},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid map-local config, got: %v", err)
+	}
+}
+
+func TestValidate_MapLocalRulesInvalid(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		MapLocalRules: []MapLocalRule{
+			{
+				URLPattern: "[invalid",
+				FilePath:   "",
+				StatusCode: 999,
+			},
+		},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected map-local validation error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "map_local_rules[0].url_pattern") {
+		t.Fatalf("expected url_pattern validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "map_local_rules[0].file_path") {
+		t.Fatalf("expected file_path validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "map_local_rules[0].status_code") {
+		t.Fatalf("expected status_code validation error, got: %v", err)
+	}
+}
+
 // TestIsValidationError verifies the helper function.
 func TestIsValidationError(t *testing.T) {
 	t.Parallel()
