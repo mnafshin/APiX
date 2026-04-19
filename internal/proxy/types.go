@@ -19,18 +19,30 @@ type ProxyRequest = plugins.ProxyRequest
 // ProxyResponse is an alias for the plugins-layer response type.
 type ProxyResponse = plugins.ProxyResponse
 
-// TrafficEngine is the interface the proxy uses to store and publish traffic.
+// TransactionStore is the narrow interface for persisting and publishing traffic.
 // Implemented by internal/engine.Engine.
-type TrafficEngine interface {
+type TransactionStore interface {
 	// StoreTransaction persists and publishes a completed HTTP transaction.
 	StoreTransaction(tx *Transaction) error
 	// StoreWebSocketFrame persists a relayed WebSocket frame.
 	StoreWebSocketFrame(frame *WebSocketFrame) error
+	// RewriteRules loads the current list of enabled rewrite rules from storage.
+	RewriteRules() ([]*RewriteRuleProto, error)
+}
+
+// RequestPauser is the narrow interface for breakpoint pause/resume.
+// Implemented by internal/engine.Engine.
+type RequestPauser interface {
 	// PauseRequest holds a request at a breakpoint and blocks until resumed.
 	// Returns the (possibly modified) request and the resume action.
 	PauseRequest(tx *Transaction) (*Transaction, ResumeAction, error)
-	// RewriteRules loads the current list of enabled rewrite rules from storage.
-	RewriteRules() ([]*RewriteRuleProto, error)
+}
+
+// TrafficEngine composes all proxy interfaces.
+// Implemented by internal/engine.Engine.
+type TrafficEngine interface {
+	TransactionStore
+	RequestPauser
 }
 
 // PluginChain is an ordered list of plugins applied to each request/response.

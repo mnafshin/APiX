@@ -112,7 +112,7 @@ func copyWebSocketResponseHeaders(headers http.Header) http.Header {
 	return out
 }
 
-func relayWebSocket(ctx context.Context, engine TrafficEngine, transactionID string, clientConn, upstreamConn *websocket.Conn) {
+func relayWebSocket(ctx context.Context, engine TransactionStore, transactionID string, clientConn, upstreamConn *websocket.Conn) {
 	var forwardCloseOnce sync.Once
 	var shutdownOnce sync.Once
 	shutdown := func() {
@@ -193,7 +193,7 @@ func isExpectedWebSocketClose(err error) bool {
 	return strings.Contains(err.Error(), "use of closed network connection")
 }
 
-func recordWebSocketFrame(ctx context.Context, engine TrafficEngine, transactionID, direction string, opcode int, payload []byte) {
+func recordWebSocketFrame(ctx context.Context, engine TransactionStore, transactionID, direction string, opcode int, payload []byte) {
 	if engine == nil {
 		return
 	}
