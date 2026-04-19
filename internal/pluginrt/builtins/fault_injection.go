@@ -52,7 +52,7 @@ func (p *FaultInjection) OnRequest(ctx context.Context, req *plugins.ProxyReques
 		if !matchesRule(rule, req) {
 			continue
 		}
-		if rule.Percentage < 100.0 && rand.Float64()*100.0 >= rule.Percentage {
+		if rule.Percentage < 100.0 && rand.Float64()*100.0 >= rule.Percentage { //nolint:gosec
 			continue
 		}
 

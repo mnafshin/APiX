@@ -59,7 +59,7 @@ func (p *LatencyModifier) OnRequest(ctx context.Context, req *plugins.ProxyReque
 		}
 		delay := rule.FixedDelay
 		if rule.JitterMax > 0 {
-			delay += time.Duration(rand.Int63n(int64(rule.JitterMax) + 1))
+			delay += time.Duration(rand.Int63n(int64(rule.JitterMax) + 1)) //nolint:gosec
 		}
 		if delay > 0 {
 			select {

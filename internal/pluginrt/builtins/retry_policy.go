@@ -37,13 +37,6 @@ type RetryRule struct {
 
 var defaultMatchMethods = []string{http.MethodGet, http.MethodHead, http.MethodOptions}
 
-func (r *RetryRule) maxAttempts() int {
-	if r.MaxAttempts <= 0 {
-		return 3
-	}
-	return r.MaxAttempts
-}
-
 func (r *RetryRule) backoffBase() time.Duration {
 	if r.BackoffBase <= 0 {
 		return 100 * time.Millisecond

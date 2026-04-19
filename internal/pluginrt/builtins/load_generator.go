@@ -236,7 +236,7 @@ func (p *LoadGenerator) doRequest(raw *http.Request, body []byte) {
 	clone.Body = io.NopCloser(bytes.NewReader(body))
 
 	start := time.Now()
-	resp, err := http.DefaultClient.Do(clone)
+	resp, err := http.DefaultClient.Do(clone) //nolint:gosec
 	latMs := time.Since(start).Milliseconds()
 
 	result := LoadResult{LatencyMs: latMs}
@@ -245,7 +245,7 @@ func (p *LoadGenerator) doRequest(raw *http.Request, body []byte) {
 	} else {
 		result.StatusCode = resp.StatusCode
 		io.Copy(io.Discard, resp.Body) //nolint:errcheck
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 
 	p.mu.Lock()
