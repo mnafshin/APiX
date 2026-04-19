@@ -24,10 +24,21 @@
     "mitm"
   ],
   "activationEvents": [
-    "onCommand:apix.openTrafficPanel",
+    "onCommand:apix.startEngine",
+    "onCommand:apix.stopEngine",
+    "onCommand:apix.clearHistory",
+    "onCommand:apix.addBreakpoint",
+    "onCommand:apix.deleteBreakpoint",
+    "onCommand:apix.toggleBreakpoint",
+    "onCommand:apix.replayRequest",
+    "onCommand:apix.copyAsCurl",
     "onCommand:apix.exportHAR",
     "onCommand:apix.importHAR",
-    "onCommand:apix.copyAsCurl",
+    "onCommand:apix.openTrafficPanel",
+    "onCommand:apix.refreshTraffic",
+    "onCommand:apix.mocks.refresh",
+    "onCommand:apix.mocks.toggle",
+    "onCommand:apix.mocks.delete",
     "onView:apix.trafficView",
     "onView:apix.breakpointsView",
     "onView:apix.mocksView"
