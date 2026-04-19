@@ -21,7 +21,7 @@ type CertAuthority struct {
 	mu       sync.RWMutex
 	caCert   *x509.Certificate
 	caKey    *rsa.PrivateKey
-	cache    map[string]*tls.Certificate
+	cache    *certLRU
 	certPath string
 	keyPath  string
 }
@@ -29,7 +29,7 @@ type CertAuthority struct {
 // NewCertAuthority loads or generates a CA at the given paths.
 func NewCertAuthority(certPath, keyPath string) (*CertAuthority, error) {
 	ca := &CertAuthority{
-		cache:    make(map[string]*tls.Certificate),
+		cache:    newCertLRU(1000),
 		certPath: certPath,
 		keyPath:  keyPath,
 	}
@@ -131,12 +131,9 @@ func (ca *CertAuthority) save() error {
 
 // CertForHost returns (cached or newly generated) a TLS certificate for host.
 func (ca *CertAuthority) CertForHost(host string) (*tls.Certificate, error) {
-	ca.mu.RLock()
-	if cert, ok := ca.cache[host]; ok {
-		ca.mu.RUnlock()
+	if cert, ok := ca.cache.get(host); ok {
 		return cert, nil
 	}
-	ca.mu.RUnlock()
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -174,9 +171,7 @@ func (ca *CertAuthority) CertForHost(host string) (*tls.Certificate, error) {
 		PrivateKey:  key,
 	}
 
-	ca.mu.Lock()
-	ca.cache[host] = tlsCert
-	ca.mu.Unlock()
+	ca.cache.put(host, tlsCert)
 	return tlsCert, nil
 }
 
