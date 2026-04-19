@@ -4,6 +4,7 @@
 # HTTP Proxy Settings
 http_port: "8080"              # Port for HTTP and HTTPS CONNECT proxy
 grpc_port: "9090"              # Port for gRPC API (VS Code extension, CLI)
+grpc_bind_address: "127.0.0.1" # Loopback by default; use 0.0.0.0 for remote engine mode (requires TLS + auth)
 
 # Storage
 db_path: "~/.apix/apix.db"     # SQLite database location (auto-created if missing)
@@ -14,6 +15,8 @@ db_path: "~/.apix/apix.db"     # SQLite database location (auto-created if missi
 
 # TLS/HTTPS Configuration (for remote engines, e.g., vscode.dev)
 tls_enabled: false
+grpc_cert_path: "/etc/apix/grpc-server.pem"      # Required when tls_enabled=true
+grpc_key_path: "/etc/apix/grpc-server-key.pem"   # Required when tls_enabled=true
 ca_cert_path: "~/.apix/ca.pem"      # Generated automatically if missing
 ca_key_path: "~/.apix/ca-key.pem"   # Generated automatically if missing
 
