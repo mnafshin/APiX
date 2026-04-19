@@ -177,7 +177,9 @@ func main() {
 		ExpectContinueTimeout: time.Duration(cfg.UpstreamExpectContinueTimeoutSec) * time.Second,
 	}
 	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts, cfg)
+	tlsProxy.SetPlugins(pluginRT)
 	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)
+	httpProxy.SetPlugins(pluginRT)
 
 	// 9. Start gRPC server.
 	wg.Add(1)
