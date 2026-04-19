@@ -331,6 +331,11 @@ Configuration validation: run `apix-engine --config-check` to validate your conf
 | `replay_skip_tls_verify` | `false` | Skip TLS verification for replayed requests (testing only) |
 | `metrics_enabled` | `false` | Enable Prometheus metrics endpoint |
 | `metrics_port` | `9091` | Port for the Prometheus metrics endpoint |
+| `mcp_enabled` | `false` | Enable MCP HTTP endpoint for AI assistants |
+| `mcp_port` | `9093` | MCP server listen port |
+| `mcp_bind_address` | `127.0.0.1` | MCP bind address (loopback by default) |
+| `mcp_allow_replay` | `false` | Expose replay tool over MCP (network side effect) |
+| `mcp_allow_compose` | `false` | Expose compose/send tool over MCP (network side effect) |
 | `slowlog_threshold_ms` | `1000` | Threshold for slow-request logging |
 | `plugin_paths` | `[]` | Extra plugin artifact paths validated at startup |
 | `url_patterns` | `[]` | Preconfigured URL regex patterns validated at startup |
@@ -360,6 +365,23 @@ APIX_AUTH_TOKEN=your-secret
 [Service]
 EnvironmentFile=/etc/apix/secrets
 ExecStart=/usr/local/bin/apix-engine
+```
+
+## MCP Server (AI Assistants)
+
+APiX can expose a JSON-RPC MCP endpoint at `POST /mcp` for assistants like Copilot, Claude, and Cursor.
+
+- Always available: `apix.status`, `apix.history.query`
+- Optional (side effects): `apix.replay.request`, `apix.compose.request`
+- If `auth_token`/`APIX_AUTH_TOKEN` is configured, MCP requires `Authorization: Bearer <token>`.
+- For non-loopback MCP bind addresses, config validation enforces `tls_enabled: true` and an auth token.
+
+Example:
+
+```bash
+curl -sS http://127.0.0.1:9093/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
 ## Remote Engine (vscode.dev)

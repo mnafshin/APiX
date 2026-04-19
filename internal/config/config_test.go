@@ -45,6 +45,15 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.AuthToken != "" {
 		t.Errorf("AuthToken: expected empty by default, got %q", cfg.AuthToken)
 	}
+	if cfg.MCPEnabled {
+		t.Error("MCPEnabled: expected false by default")
+	}
+	if cfg.MCPPort != "9093" {
+		t.Errorf("MCPPort: got %q want %q", cfg.MCPPort, "9093")
+	}
+	if cfg.MCPBindAddress != "127.0.0.1" {
+		t.Errorf("MCPBindAddress: got %q want 127.0.0.1", cfg.MCPBindAddress)
+	}
 }
 
 func TestLoadConfig_YAMLOverride(t *testing.T) {
@@ -54,6 +63,8 @@ http_port: "9999"
 grpc_port: "8888"
 max_body_size_mb: 64
 dial_timeout_sec: 5
+mcp_enabled: true
+mcp_port: "9100"
 `)
 	cfg := LoadConfig(path)
 
@@ -69,9 +80,27 @@ dial_timeout_sec: 5
 	if cfg.DialTimeoutSec != 5 {
 		t.Errorf("DialTimeoutSec: got %d want 5", cfg.DialTimeoutSec)
 	}
+	if !cfg.MCPEnabled {
+		t.Error("MCPEnabled should be true from YAML override")
+	}
+	if cfg.MCPPort != "9100" {
+		t.Errorf("MCPPort: got %q want %q", cfg.MCPPort, "9100")
+	}
 	// Unspecified fields stay at defaults.
 	if cfg.HTTPIdleTimeout != 120 {
 		t.Errorf("HTTPIdleTimeout should stay at default 120, got %d", cfg.HTTPIdleTimeout)
+	}
+}
+
+func TestLoadConfig_MCPBindAddress_DefaultsToLoopback(t *testing.T) {
+	t.Parallel()
+	path := writeTemp(t, `
+mcp_enabled: true
+mcp_bind_address: ""
+`)
+	cfg := LoadConfig(path)
+	if cfg.MCPBindAddress != "127.0.0.1" {
+		t.Errorf("MCPBindAddress: got %q want 127.0.0.1", cfg.MCPBindAddress)
 	}
 }
 

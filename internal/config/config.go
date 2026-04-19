@@ -63,6 +63,13 @@ type Config struct {
 	// per peer address per second. Stream RPCs count as 1 call on open.
 	// 0 disables rate limiting (local desktop mode default).
 	GRPCRateLimitPerSec int `yaml:"grpc_rate_limit_per_sec"`
+	// MCP server settings for AI assistants (Copilot/Claude/Cursor).
+	// Disabled by default and bound to loopback for local-only access.
+	MCPEnabled      bool   `yaml:"mcp_enabled"`
+	MCPPort         string `yaml:"mcp_port"`
+	MCPBindAddress  string `yaml:"mcp_bind_address"`
+	MCPAllowReplay  bool   `yaml:"mcp_allow_replay"`
+	MCPAllowCompose bool   `yaml:"mcp_allow_compose"`
 
 	// Plugin paths — each entry is a path to a plugin shared library or
 	// script. Validated at startup via --config-check.
@@ -146,6 +153,11 @@ func LoadConfig(path string) *Config {
 		VacuumIntervalHours: 24,
 		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
+		MCPEnabled:          false,
+		MCPPort:             "9093",
+		MCPBindAddress:      "127.0.0.1",
+		MCPAllowReplay:      false,
+		MCPAllowCompose:     false,
 	}
 
 	// #nosec G304 -- APiX intentionally loads a user-selected config path.
@@ -178,6 +190,9 @@ func LoadConfig(path string) *Config {
 		if cfg.TLSEnabled && cfg.AuthToken != "" {
 			cfg.GRPCBindAddress = "0.0.0.0"
 		}
+	}
+	if cfg.MCPBindAddress == "" {
+		cfg.MCPBindAddress = "127.0.0.1"
 	}
 
 	return cfg

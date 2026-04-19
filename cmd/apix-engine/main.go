@@ -195,16 +195,25 @@ func main() {
 		}
 	}()
 
-	// 11. Wait for shutdown signal.
+	// 11. Start MCP server (optional).
+	if cfg.MCPEnabled {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			server.StartMCPServer(ctx, eng, replayEng, cfg)
+		}()
+	}
+
+	// 12. Wait for shutdown signal.
 	<-stop
 	logging.Infof(ctx, "Shutting down…")
 	cancel()
 
-	// 12. Close proxies to release file descriptors.
+	// 13. Close proxies to release file descriptors.
 	httpProxy.Close()
 	tlsProxy.Close()
 
-	// 13. Wait for all goroutines to finish, with a 15-second timeout.
+	// 14. Wait for all goroutines to finish, with a 15-second timeout.
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()

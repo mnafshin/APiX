@@ -29,6 +29,73 @@ func TestValidate_ValidConfig(t *testing.T) {
 	}
 }
 
+func TestValidate_MCPRemoteRequiresTLSAndToken(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	mcpPort := mustFreePort(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		MCPEnabled:          true,
+		MCPPort:             mcpPort,
+		MCPBindAddress:      "0.0.0.0",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for remote MCP without TLS/auth")
+	}
+	if !strings.Contains(err.Error(), "tls_enabled") {
+		t.Fatalf("expected tls_enabled requirement in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "APIX_AUTH_TOKEN") {
+		t.Fatalf("expected auth token requirement in error, got: %v", err)
+	}
+}
+
+func TestValidate_MCPAllowsRemoteWithTLSAndToken(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	mcpPort := mustFreePort(t)
+	certPath, keyPath := writeTLSPair(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		TLSEnabled:          true,
+		GRPCCertPath:        certPath,
+		GRPCKeyPath:         keyPath,
+		AuthToken:           "secret",
+		MCPEnabled:          true,
+		MCPPort:             mcpPort,
+		MCPBindAddress:      "0.0.0.0",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid config for remote MCP with TLS/auth, got: %v", err)
+	}
+}
+
+func TestValidate_MCPFlagRequiresMCPEnabled(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		MCPAllowReplay:      true,
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if !strings.Contains(err.Error(), "mcp_allow_replay requires mcp_enabled") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestValidate_InvalidHTTPPort(t *testing.T) {
 	cfg := &Config{
 		HTTPPort:            "notaport",
