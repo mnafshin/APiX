@@ -67,17 +67,11 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	req := tx.Request
 	if req != nil {
 		// Prefer storing the original headers captured before plugins modified them.
-		var hdrSrc http.Header
-		if len(tx.OriginalRequestHeaders) > 0 {
-			hdrSrc = tx.OriginalRequestHeaders
-		} else if req.Raw != nil {
-			hdrSrc = req.Raw.Header
-		} else if req.Headers != nil {
-			hdrSrc = req.Headers
-		} else {
-			hdrSrc = http.Header{}
+		var rawHeader http.Header
+		if req.Raw != nil {
+			rawHeader = req.Raw.Header
 		}
-		hdrs := httputil.HeadersToMap(hdrSrc)
+		hdrs := httputil.HeadersToMap(firstNonEmptyHeader(tx.OriginalRequestHeaders, rawHeader, req.Headers))
 
 		rec := &storage.RequestRecord{
 			ID:         tx.ID,
