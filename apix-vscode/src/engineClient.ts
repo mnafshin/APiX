@@ -16,6 +16,7 @@ import {
     WebSocketFrame,
     RewriteRule,
     RewriteRuleList,
+    RequestTemplate,
 } from './types';
 
 const PROTO_PATH = path.resolve(__dirname, '../../proto/apix.proto');
@@ -209,6 +210,49 @@ export class EngineClient {
                     };
                     resolve(resp);
                 }
+            });
+        });
+    }
+
+    async composeRequest(request: HttpRequest, followRedirects = true): Promise<HttpResponse> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.composeRequest({ request, followRedirects }, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else {
+                    resolve({
+                        statusCode: response.statusCode || 0,
+                        statusText: response.statusText || '',
+                        headers: response.headers || {},
+                        body: response.body || '',
+                    });
+                }
+            });
+        });
+    }
+
+    async saveRequestTemplate(template: RequestTemplate): Promise<RequestTemplate> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.saveRequestTemplate(template, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve(response as RequestTemplate); }
+            });
+        });
+    }
+
+    async listRequestTemplates(): Promise<RequestTemplate[]> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.listRequestTemplates({}, this.metadata, (err: grpc.ServiceError | null, response: any) => {
+                if (err) { reject(err); } else { resolve((response.templates || []) as RequestTemplate[]); }
+            });
+        });
+    }
+
+    async deleteRequestTemplate(id: string): Promise<void> {
+        this.ensureStub();
+        return new Promise((resolve, reject) => {
+            this.stub.deleteRequestTemplate({ id }, this.metadata, (err: grpc.ServiceError | null) => {
+                if (err) { reject(err); } else { resolve(); }
             });
         });
     }

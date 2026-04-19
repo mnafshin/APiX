@@ -91,6 +91,15 @@ type replayOptions struct {
 	followRedirects bool
 }
 
+type templatesSaveOptions struct {
+	id      string
+	name    string
+	method  string
+	url     string
+	headers headerFlags
+	body    string
+}
+
 type breakpointAddOptions struct {
 	urlPattern string
 	methods    stringSliceFlags
@@ -200,6 +209,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
+		writeLine(errw, "  templates save|list|delete")
 		writeLine(errw, "  replay")
 		writeLine(errw, "  cert status")
 		writeLine(errw, "  config show")
@@ -261,6 +271,8 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		return app.wrapErr(app.cmdPaused(fs.Args()[1:]))
 	case "send":
 		return app.wrapErr(app.cmdSend(fs.Args()[1:]))
+	case "templates":
+		return app.wrapErr(app.cmdTemplates(fs.Args()[1:]))
 	case "replay":
 		return app.wrapErr(app.cmdReplay(fs.Args()[1:]))
 	case "cert":
@@ -1287,19 +1299,127 @@ func (a *app) cmdSend(args []string) error {
 	}
 	ctx, cancel := a.unaryContext()
 	defer cancel()
-	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
-		Source: &apix.ReplaySpec_RawRequest{RawRequest: &apix.HttpRequest{
+	resp, err := client.ComposeRequest(ctx, &apix.ComposeSpec{
+		Request: &apix.HttpRequest{
 			Method:  opts.method,
 			Url:     opts.url,
 			Headers: headers,
 			Body:    []byte(opts.body),
-		}},
+		},
 		FollowRedirects: opts.followRedirects,
 	})
 	if err != nil {
 		return err
 	}
 	return a.renderResponse(resp)
+}
+
+func (a *app) cmdTemplates(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: templates save|list|delete")
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	switch args[0] {
+	case "save":
+		fs := flag.NewFlagSet("templates save", flag.ContinueOnError)
+		fs.SetOutput(a.errw)
+		opts := templatesSaveOptions{method: "GET"}
+		fs.StringVar(&opts.id, "id", "", "template ID (optional; generated if omitted)")
+		fs.StringVar(&opts.name, "name", "", "template name")
+		fs.StringVar(&opts.method, "method", "GET", "HTTP method")
+		fs.StringVar(&opts.url, "url", "", "request URL")
+		fs.Var(&opts.headers, "header", "repeatable header key:value")
+		fs.StringVar(&opts.body, "body", "", "request body")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if opts.url == "" {
+			return fmt.Errorf("templates save requires --url")
+		}
+		headers, err := opts.headers.Map()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		resp, err := client.SaveRequestTemplate(ctx, &apix.RequestTemplate{
+			Id:   opts.id,
+			Name: opts.name,
+			Request: &apix.HttpRequest{
+				Method:  opts.method,
+				Url:     opts.url,
+				Headers: headers,
+				Body:    []byte(opts.body),
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"id":         resp.Id,
+				"name":       resp.Name,
+				"method":     resp.GetRequest().GetMethod(),
+				"url":        resp.GetRequest().GetUrl(),
+				"headers":    resp.GetRequest().GetHeaders(),
+				"body":       string(resp.GetRequest().GetBody()),
+				"updated_at": resp.UpdatedAt,
+			})
+		}
+		writef(a.out, "Saved template %s\n", resp.Id)
+		return nil
+	case "list":
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		resp, err := client.ListRequestTemplates(ctx, &apix.Empty{})
+		if err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			items := make([]map[string]any, 0, len(resp.Templates))
+			for _, tpl := range resp.Templates {
+				items = append(items, map[string]any{
+					"id":         tpl.Id,
+					"name":       tpl.Name,
+					"method":     tpl.GetRequest().GetMethod(),
+					"url":        tpl.GetRequest().GetUrl(),
+					"headers":    tpl.GetRequest().GetHeaders(),
+					"body":       string(tpl.GetRequest().GetBody()),
+					"updated_at": tpl.UpdatedAt,
+				})
+			}
+			return emitJSON(a.out, items)
+		}
+		if len(resp.Templates) == 0 {
+			writeLine(a.out, "No saved templates")
+			return nil
+		}
+		tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+		writeLine(tw, "ID\tNAME\tMETHOD\tURL")
+		for _, tpl := range resp.Templates {
+			writef(tw, "%s\t%s\t%s\t%s\n", tpl.Id, tpl.Name, tpl.GetRequest().GetMethod(), tpl.GetRequest().GetUrl())
+		}
+		return tw.Flush()
+	case "delete":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: templates delete <id>")
+		}
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		if _, err := client.DeleteRequestTemplate(ctx, &apix.RequestTemplateID{Id: args[1]}); err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{"deleted": true, "id": args[1]})
+		}
+		writef(a.out, "Deleted template %s\n", args[1])
+		return nil
+	default:
+		return fmt.Errorf("unknown templates subcommand: %s", args[0])
+	}
 }
 
 func (a *app) cmdReplay(args []string) error {
@@ -1475,8 +1595,8 @@ func completionScript(shell string) (string, error) {
 _apix() {
   local cur prev words cword
   _init_completion || return
-  local commands="status plugins history watch breakpoints paused send replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond show status"
+  local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
+  local subcommands="list get clear add delete enable disable watch forward drop respond save show status"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
 complete -F _apix apix
@@ -1492,6 +1612,7 @@ _apix() {
     'breakpoints:Breakpoint commands'
     'paused:Paused request commands'
     'send:Send a raw request'
+    'templates:Manage saved request templates'
     'replay:Replay a stored request'
     'cert:Certificate commands'
     'config:Configuration commands'
@@ -1503,7 +1624,7 @@ _apix() {
 }
 _apix "$@"
 `
-	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send replay cert config completion doctor help"
+	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
 `
 	switch shell {
 	case "bash":

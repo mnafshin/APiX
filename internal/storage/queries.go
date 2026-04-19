@@ -49,6 +49,17 @@ type BreakpointRecord struct {
 	CreatedAt   time.Time
 }
 
+// RequestTemplateRecord is the Go representation of a row in request_templates.
+type RequestTemplateRecord struct {
+	ID        string
+	Name      string
+	Method    string
+	URL       string
+	Headers   map[string]string
+	Body      []byte
+	UpdatedAt time.Time
+}
+
 // SaveRequest inserts a request record (upsert on conflict).
 func (d *DB) SaveRequest(r *RequestRecord) error {
 	hdrs, err := json.Marshal(r.Headers)
@@ -247,6 +258,65 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 		bps = append(bps, bp)
 	}
 	return bps, rows.Err()
+}
+
+// SaveRequestTemplate inserts or replaces a request template by ID.
+func (d *DB) SaveRequestTemplate(tpl *RequestTemplateRecord) error {
+	hdrs, err := json.Marshal(tpl.Headers)
+	if err != nil {
+		return fmt.Errorf("marshal template headers: %w", err)
+	}
+	_, err = d.db.Exec(
+		`INSERT OR REPLACE INTO request_templates (id, name, method, url, headers, body, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		tpl.ID, tpl.Name, tpl.Method, tpl.URL, string(hdrs), tpl.Body, tpl.UpdatedAt.UnixMilli(),
+	)
+	return err
+}
+
+// ListRequestTemplates returns templates ordered by most-recent update first.
+func (d *DB) ListRequestTemplates() ([]*RequestTemplateRecord, error) {
+	rows, err := d.db.Query(
+		`SELECT id, name, method, url, headers, body, updated_at
+		 FROM request_templates
+		 ORDER BY updated_at DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list request templates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var templates []*RequestTemplateRecord
+	for rows.Next() {
+		var (
+			id, name, method, rawURL, hdrs string
+			body                           []byte
+			updatedAtMs                    int64
+		)
+		if err := rows.Scan(&id, &name, &method, &rawURL, &hdrs, &body, &updatedAtMs); err != nil {
+			return nil, fmt.Errorf("scan request template: %w", err)
+		}
+		tpl := &RequestTemplateRecord{
+			ID:        id,
+			Name:      name,
+			Method:    method,
+			URL:       rawURL,
+			Body:      body,
+			UpdatedAt: time.UnixMilli(updatedAtMs),
+		}
+		if err := json.Unmarshal([]byte(hdrs), &tpl.Headers); err != nil {
+			logging.Warnf(context.Background(), "failed to unmarshal template headers for id %s: %v", id, err)
+			tpl.Headers = map[string]string{}
+		}
+		templates = append(templates, tpl)
+	}
+	return templates, rows.Err()
+}
+
+// DeleteRequestTemplate removes a request template by ID.
+func (d *DB) DeleteRequestTemplate(id string) error {
+	_, err := d.db.Exec(`DELETE FROM request_templates WHERE id = ?`, id)
+	return err
 }
 
 func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*RequestRecord, []*ResponseRecord, error) {

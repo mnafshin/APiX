@@ -612,6 +612,60 @@ func TestListTransactions_MethodFilter(t *testing.T) {
 	}
 }
 
+func TestRequestTemplates_CRUDAndUpsert(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	now := time.Now().Add(-time.Minute).UTC()
+	tpl := &RequestTemplateRecord{
+		ID:        "tpl-1",
+		Name:      "List users",
+		Method:    "GET",
+		URL:       "https://api.example.com/users",
+		Headers:   map[string]string{"Accept": "application/json"},
+		Body:      nil,
+		UpdatedAt: now,
+	}
+	if err := db.SaveRequestTemplate(tpl); err != nil {
+		t.Fatalf("SaveRequestTemplate: %v", err)
+	}
+
+	// Upsert by ID should update fields.
+	tpl.Name = "List users v2"
+	tpl.Method = "POST"
+	tpl.Body = []byte(`{"q":"active"}`)
+	tpl.UpdatedAt = now.Add(time.Minute)
+	if err := db.SaveRequestTemplate(tpl); err != nil {
+		t.Fatalf("SaveRequestTemplate upsert: %v", err)
+	}
+
+	templates, err := db.ListRequestTemplates()
+	if err != nil {
+		t.Fatalf("ListRequestTemplates: %v", err)
+	}
+	if len(templates) != 1 {
+		t.Fatalf("expected 1 template, got %d", len(templates))
+	}
+	got := templates[0]
+	if got.ID != "tpl-1" || got.Name != "List users v2" || got.Method != "POST" {
+		t.Fatalf("unexpected template: %#v", got)
+	}
+	if string(got.Body) != `{"q":"active"}` {
+		t.Fatalf("unexpected body: %q", string(got.Body))
+	}
+
+	if err := db.DeleteRequestTemplate("tpl-1"); err != nil {
+		t.Fatalf("DeleteRequestTemplate: %v", err)
+	}
+	templates, err = db.ListRequestTemplates()
+	if err != nil {
+		t.Fatalf("ListRequestTemplates after delete: %v", err)
+	}
+	if len(templates) != 0 {
+		t.Fatalf("expected 0 templates after delete, got %d", len(templates))
+	}
+}
+
 // ── Benchmark: Storage Write Rate ─────────────────────────────────────────
 
 func BenchmarkStorage_SaveRequest(b *testing.B) {

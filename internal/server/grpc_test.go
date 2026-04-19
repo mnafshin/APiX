@@ -3,6 +3,7 @@ package server_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -608,9 +609,12 @@ func TestWatchPausedRequests(t *testing.T) {
 
 func TestReplayRequest_RawRequest(t *testing.T) {
 	t.Parallel()
+	var receivedBody string
 
 	// Start a local HTTP echo server so the replay engine can reach it.
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		receivedBody = string(b)
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong")) //nolint:errcheck
 	}))
@@ -625,6 +629,7 @@ func TestReplayRequest_RawRequest(t *testing.T) {
 			RawRequest: &apix.HttpRequest{
 				Method: "GET",
 				Url:    upstream.URL + "/ping",
+				Body:   []byte("hello"),
 			},
 		},
 		FollowRedirects: false,
@@ -637,6 +642,9 @@ func TestReplayRequest_RawRequest(t *testing.T) {
 	}
 	if string(resp.Body) != "pong" {
 		t.Errorf("Body: got %q want %q", string(resp.Body), "pong")
+	}
+	if receivedBody != "hello" {
+		t.Errorf("upstream body: got %q want %q", receivedBody, "hello")
 	}
 }
 
@@ -668,6 +676,107 @@ func TestReplayRequest_UnknownID(t *testing.T) {
 	}
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.Internal {
 		t.Errorf("expected codes.Internal, got %v", err)
+	}
+}
+
+func TestComposeRequest(t *testing.T) {
+	t.Parallel()
+	var receivedMethod, receivedBody string
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		b, _ := io.ReadAll(r.Body)
+		receivedBody = string(b)
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte("created")) //nolint:errcheck
+	}))
+	defer upstream.Close()
+
+	f := newFixture(t)
+	defer f.stop()
+
+	resp, err := f.client.ComposeRequest(context.Background(), &apix.ComposeSpec{
+		Request: &apix.HttpRequest{
+			Method: "POST",
+			Url:    upstream.URL + "/compose",
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			Body: []byte(`{"name":"apix"}`),
+		},
+		FollowRedirects: true,
+	})
+	if err != nil {
+		t.Fatalf("ComposeRequest: %v", err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusCreated)
+	}
+	if string(resp.Body) != "created" {
+		t.Fatalf("body: got %q want %q", string(resp.Body), "created")
+	}
+	if receivedMethod != "POST" || receivedBody != `{"name":"apix"}` {
+		t.Fatalf("upstream received method=%q body=%q", receivedMethod, receivedBody)
+	}
+}
+
+func TestRequestTemplatesCRUD(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	ctx := context.Background()
+	saved, err := f.client.SaveRequestTemplate(ctx, &apix.RequestTemplate{
+		Id:   "tpl-1",
+		Name: "health-check",
+		Request: &apix.HttpRequest{
+			Method: "GET",
+			Url:    "https://example.com/health",
+			Headers: map[string]string{
+				"Accept": "application/json",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SaveRequestTemplate: %v", err)
+	}
+	if saved.Id != "tpl-1" {
+		t.Fatalf("saved id: got %q", saved.Id)
+	}
+
+	// Update existing template by ID (upsert).
+	if _, err := f.client.SaveRequestTemplate(ctx, &apix.RequestTemplate{
+		Id:   "tpl-1",
+		Name: "health-check-updated",
+		Request: &apix.HttpRequest{
+			Method: "POST",
+			Url:    "https://example.com/health",
+			Body:   []byte(`{"active":true}`),
+		},
+	}); err != nil {
+		t.Fatalf("SaveRequestTemplate upsert: %v", err)
+	}
+
+	listResp, err := f.client.ListRequestTemplates(ctx, &apix.Empty{})
+	if err != nil {
+		t.Fatalf("ListRequestTemplates: %v", err)
+	}
+	if len(listResp.Templates) != 1 {
+		t.Fatalf("expected 1 template, got %d", len(listResp.Templates))
+	}
+	if listResp.Templates[0].Name != "health-check-updated" || listResp.Templates[0].Request.Method != "POST" {
+		t.Fatalf("unexpected template after upsert: %#v", listResp.Templates[0])
+	}
+
+	if _, err := f.client.DeleteRequestTemplate(ctx, &apix.RequestTemplateID{Id: "tpl-1"}); err != nil {
+		t.Fatalf("DeleteRequestTemplate: %v", err)
+	}
+	listResp, err = f.client.ListRequestTemplates(ctx, &apix.Empty{})
+	if err != nil {
+		t.Fatalf("ListRequestTemplates after delete: %v", err)
+	}
+	if len(listResp.Templates) != 0 {
+		t.Fatalf("expected 0 templates after delete, got %d", len(listResp.Templates))
 	}
 }
 

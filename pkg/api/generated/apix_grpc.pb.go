@@ -19,26 +19,30 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Engine_GetStatus_FullMethodName           = "/apix.Engine/GetStatus"
-	Engine_GetVersion_FullMethodName          = "/apix.Engine/GetVersion"
-	Engine_CaptureTraffic_FullMethodName      = "/apix.Engine/CaptureTraffic"
-	Engine_ListPlugins_FullMethodName         = "/apix.Engine/ListPlugins"
-	Engine_SetBreakpoint_FullMethodName       = "/apix.Engine/SetBreakpoint"
-	Engine_DeleteBreakpoint_FullMethodName    = "/apix.Engine/DeleteBreakpoint"
-	Engine_ListBreakpoints_FullMethodName     = "/apix.Engine/ListBreakpoints"
-	Engine_WatchPausedRequests_FullMethodName = "/apix.Engine/WatchPausedRequests"
-	Engine_ResumeRequest_FullMethodName       = "/apix.Engine/ResumeRequest"
-	Engine_ReplayRequest_FullMethodName       = "/apix.Engine/ReplayRequest"
-	Engine_GetHistory_FullMethodName          = "/apix.Engine/GetHistory"
-	Engine_GetWebSocketFrames_FullMethodName  = "/apix.Engine/GetWebSocketFrames"
-	Engine_ClearHistory_FullMethodName        = "/apix.Engine/ClearHistory"
-	Engine_ExportHAR_FullMethodName           = "/apix.Engine/ExportHAR"
-	Engine_ImportHAR_FullMethodName           = "/apix.Engine/ImportHAR"
-	Engine_AddRewriteRule_FullMethodName      = "/apix.Engine/AddRewriteRule"
-	Engine_UpdateRewriteRule_FullMethodName   = "/apix.Engine/UpdateRewriteRule"
-	Engine_DeleteRewriteRule_FullMethodName   = "/apix.Engine/DeleteRewriteRule"
-	Engine_ListRewriteRules_FullMethodName    = "/apix.Engine/ListRewriteRules"
-	Engine_ToggleRewriteRule_FullMethodName   = "/apix.Engine/ToggleRewriteRule"
+	Engine_GetStatus_FullMethodName             = "/apix.Engine/GetStatus"
+	Engine_GetVersion_FullMethodName            = "/apix.Engine/GetVersion"
+	Engine_CaptureTraffic_FullMethodName        = "/apix.Engine/CaptureTraffic"
+	Engine_ListPlugins_FullMethodName           = "/apix.Engine/ListPlugins"
+	Engine_SetBreakpoint_FullMethodName         = "/apix.Engine/SetBreakpoint"
+	Engine_DeleteBreakpoint_FullMethodName      = "/apix.Engine/DeleteBreakpoint"
+	Engine_ListBreakpoints_FullMethodName       = "/apix.Engine/ListBreakpoints"
+	Engine_WatchPausedRequests_FullMethodName   = "/apix.Engine/WatchPausedRequests"
+	Engine_ResumeRequest_FullMethodName         = "/apix.Engine/ResumeRequest"
+	Engine_ReplayRequest_FullMethodName         = "/apix.Engine/ReplayRequest"
+	Engine_ComposeRequest_FullMethodName        = "/apix.Engine/ComposeRequest"
+	Engine_SaveRequestTemplate_FullMethodName   = "/apix.Engine/SaveRequestTemplate"
+	Engine_ListRequestTemplates_FullMethodName  = "/apix.Engine/ListRequestTemplates"
+	Engine_DeleteRequestTemplate_FullMethodName = "/apix.Engine/DeleteRequestTemplate"
+	Engine_GetHistory_FullMethodName            = "/apix.Engine/GetHistory"
+	Engine_GetWebSocketFrames_FullMethodName    = "/apix.Engine/GetWebSocketFrames"
+	Engine_ClearHistory_FullMethodName          = "/apix.Engine/ClearHistory"
+	Engine_ExportHAR_FullMethodName             = "/apix.Engine/ExportHAR"
+	Engine_ImportHAR_FullMethodName             = "/apix.Engine/ImportHAR"
+	Engine_AddRewriteRule_FullMethodName        = "/apix.Engine/AddRewriteRule"
+	Engine_UpdateRewriteRule_FullMethodName     = "/apix.Engine/UpdateRewriteRule"
+	Engine_DeleteRewriteRule_FullMethodName     = "/apix.Engine/DeleteRewriteRule"
+	Engine_ListRewriteRules_FullMethodName      = "/apix.Engine/ListRewriteRules"
+	Engine_ToggleRewriteRule_FullMethodName     = "/apix.Engine/ToggleRewriteRule"
 )
 
 // EngineClient is the client API for Engine service.
@@ -71,6 +75,14 @@ type EngineClient interface {
 	// ----- Replay -----
 	// Replay a stored or synthetic request and return the response.
 	ReplayRequest(ctx context.Context, in *ReplaySpec, opts ...grpc.CallOption) (*HttpResponse, error)
+	// Execute a composed standalone request and return the response.
+	ComposeRequest(ctx context.Context, in *ComposeSpec, opts ...grpc.CallOption) (*HttpResponse, error)
+	// Save (create/update by id) a reusable request template.
+	SaveRequestTemplate(ctx context.Context, in *RequestTemplate, opts ...grpc.CallOption) (*RequestTemplate, error)
+	// List saved request templates.
+	ListRequestTemplates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RequestTemplateList, error)
+	// Delete a saved request template by id.
+	DeleteRequestTemplate(ctx context.Context, in *RequestTemplateID, opts ...grpc.CallOption) (*Empty, error)
 	// ----- History -----
 	// Retrieve stored request/response pairs from SQLite.
 	GetHistory(ctx context.Context, in *HistoryQuery, opts ...grpc.CallOption) (grpc.ServerStreamingClient[HttpTransaction], error)
@@ -210,6 +222,46 @@ func (c *engineClient) ReplayRequest(ctx context.Context, in *ReplaySpec, opts .
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HttpResponse)
 	err := c.cc.Invoke(ctx, Engine_ReplayRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ComposeRequest(ctx context.Context, in *ComposeSpec, opts ...grpc.CallOption) (*HttpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HttpResponse)
+	err := c.cc.Invoke(ctx, Engine_ComposeRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) SaveRequestTemplate(ctx context.Context, in *RequestTemplate, opts ...grpc.CallOption) (*RequestTemplate, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestTemplate)
+	err := c.cc.Invoke(ctx, Engine_SaveRequestTemplate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ListRequestTemplates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RequestTemplateList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestTemplateList)
+	err := c.cc.Invoke(ctx, Engine_ListRequestTemplates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) DeleteRequestTemplate(ctx context.Context, in *RequestTemplateID, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, Engine_DeleteRequestTemplate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -364,6 +416,14 @@ type EngineServer interface {
 	// ----- Replay -----
 	// Replay a stored or synthetic request and return the response.
 	ReplayRequest(context.Context, *ReplaySpec) (*HttpResponse, error)
+	// Execute a composed standalone request and return the response.
+	ComposeRequest(context.Context, *ComposeSpec) (*HttpResponse, error)
+	// Save (create/update by id) a reusable request template.
+	SaveRequestTemplate(context.Context, *RequestTemplate) (*RequestTemplate, error)
+	// List saved request templates.
+	ListRequestTemplates(context.Context, *Empty) (*RequestTemplateList, error)
+	// Delete a saved request template by id.
+	DeleteRequestTemplate(context.Context, *RequestTemplateID) (*Empty, error)
 	// ----- History -----
 	// Retrieve stored request/response pairs from SQLite.
 	GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error
@@ -420,6 +480,18 @@ func (UnimplementedEngineServer) ResumeRequest(context.Context, *ResumeAction) (
 }
 func (UnimplementedEngineServer) ReplayRequest(context.Context, *ReplaySpec) (*HttpResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReplayRequest not implemented")
+}
+func (UnimplementedEngineServer) ComposeRequest(context.Context, *ComposeSpec) (*HttpResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ComposeRequest not implemented")
+}
+func (UnimplementedEngineServer) SaveRequestTemplate(context.Context, *RequestTemplate) (*RequestTemplate, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SaveRequestTemplate not implemented")
+}
+func (UnimplementedEngineServer) ListRequestTemplates(context.Context, *Empty) (*RequestTemplateList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRequestTemplates not implemented")
+}
+func (UnimplementedEngineServer) DeleteRequestTemplate(context.Context, *RequestTemplateID) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteRequestTemplate not implemented")
 }
 func (UnimplementedEngineServer) GetHistory(*HistoryQuery, grpc.ServerStreamingServer[HttpTransaction]) error {
 	return status.Errorf(codes.Unimplemented, "method GetHistory not implemented")
@@ -638,6 +710,78 @@ func _Engine_ReplayRequest_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Engine_ComposeRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ComposeSpec)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ComposeRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ComposeRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ComposeRequest(ctx, req.(*ComposeSpec))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_SaveRequestTemplate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestTemplate)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).SaveRequestTemplate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_SaveRequestTemplate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).SaveRequestTemplate(ctx, req.(*RequestTemplate))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ListRequestTemplates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ListRequestTemplates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ListRequestTemplates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ListRequestTemplates(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_DeleteRequestTemplate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestTemplateID)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).DeleteRequestTemplate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_DeleteRequestTemplate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).DeleteRequestTemplate(ctx, req.(*RequestTemplateID))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Engine_GetHistory_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(HistoryQuery)
 	if err := stream.RecvMsg(m); err != nil {
@@ -842,6 +986,22 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReplayRequest",
 			Handler:    _Engine_ReplayRequest_Handler,
+		},
+		{
+			MethodName: "ComposeRequest",
+			Handler:    _Engine_ComposeRequest_Handler,
+		},
+		{
+			MethodName: "SaveRequestTemplate",
+			Handler:    _Engine_SaveRequestTemplate_Handler,
+		},
+		{
+			MethodName: "ListRequestTemplates",
+			Handler:    _Engine_ListRequestTemplates_Handler,
+		},
+		{
+			MethodName: "DeleteRequestTemplate",
+			Handler:    _Engine_DeleteRequestTemplate_Handler,
 		},
 		{
 			MethodName: "ClearHistory",

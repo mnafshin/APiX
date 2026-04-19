@@ -80,6 +80,17 @@ CREATE TABLE IF NOT EXISTS rewrite_rules (
     response_content_type TEXT NOT NULL DEFAULT ''
 );`
 
+const CreateRequestTemplatesTable = `
+CREATE TABLE IF NOT EXISTS request_templates (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL DEFAULT '',
+    method      TEXT NOT NULL,
+    url         TEXT NOT NULL,
+    headers     TEXT NOT NULL DEFAULT '{}',
+    body        BLOB,
+    updated_at  INTEGER NOT NULL
+);`
+
 // AllTables is the ordered list of DDL statements to apply during DB init.
 // Order matters for foreign key dependencies.
 var AllTables = []string{
@@ -89,10 +100,12 @@ var AllTables = []string{
 	CreatePluginsTable,
 	CreateWebSocketFramesTable,
 	CreateRewriteRulesTable,
+	CreateRequestTemplatesTable,
 	// Indexes — created after tables so IF NOT EXISTS is safe on re-open.
 	`CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_method    ON requests(method)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_url       ON requests(url)`,
 	`CREATE INDEX IF NOT EXISTS idx_ws_frames_txid     ON ws_frames(transaction_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_rewrite_rules_priority ON rewrite_rules(priority ASC)`,
+	`CREATE INDEX IF NOT EXISTS idx_request_templates_updated_at ON request_templates(updated_at DESC)`,
 }
