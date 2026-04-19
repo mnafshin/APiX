@@ -82,31 +82,17 @@ func requestedSubprotocols(headers http.Header) []string {
 	return subprotocols
 }
 
-func copyWebSocketRequestHeaders(headers http.Header) http.Header {
-	out := make(http.Header)
-	for key, values := range headers {
-		switch strings.ToLower(key) {
-		case "connection", "upgrade", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "host":
-			continue
-		default:
-			for _, value := range values {
-				out.Add(key, value)
-			}
-		}
+// copyHeadersExcluding copies src headers, skipping any header whose canonical
+// name matches one of the excluded names (case-insensitive).
+func copyHeadersExcluding(src http.Header, exclude ...string) http.Header {
+	skip := make(map[string]struct{}, len(exclude))
+	for _, h := range exclude {
+		skip[http.CanonicalHeaderKey(h)] = struct{}{}
 	}
-	return out
-}
-
-func copyWebSocketResponseHeaders(headers http.Header) http.Header {
 	out := make(http.Header)
-	for key, values := range headers {
-		switch strings.ToLower(key) {
-		case "connection", "upgrade", "sec-websocket-accept", "sec-websocket-extensions":
-			continue
-		default:
-			for _, value := range values {
-				out.Add(key, value)
-			}
+	for key, values := range src {
+		if _, ok := skip[key]; !ok {
+			out[key] = append([]string(nil), values...)
 		}
 	}
 	return out
