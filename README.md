@@ -149,12 +149,24 @@ make proto
 ```
 
 ## Additional docs
+---
 
-- `docs/DEPLOYMENT.md` — deployment patterns
-- `docs/CONFIG_VALIDATION.md` — validation rules
-- `docs/cli_mcp.md` — MCP usage
-- `docs/TESTING.md` — testing strategy
-- `CONTRIBUTING.md` — contribution guide
+# README backup and replacement
+
+# This will replace the "Additional docs" section in README.md
+
+## Documentation
+
+See [`docs/INDEX.md`](docs/INDEX.md) for the complete documentation index.
+
+**Quick links:**
+- **Getting started:** [`docs/getting-started.md`](docs/getting-started.md)
+- **Deployment:** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- **Configuration:** [`docs/CONFIG_VALIDATION.md`](docs/CONFIG_VALIDATION.md)
+- **Architecture:** [`docs/ARCHITECTURE/`](docs/ARCHITECTURE/)
+- **CLI & MCP:** [`docs/REFERENCE/cli_mcp.md`](docs/REFERENCE/cli_mcp.md)
+- **Testing:** [`docs/TESTING.md`](docs/TESTING.md)
+- **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## License
 
