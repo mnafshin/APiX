@@ -23,7 +23,7 @@ import (
 // Engine is the central coordinator for APiX. It implements proxy.TrafficEngine
 // and provides helpers for all gRPC handlers.
 type Engine struct {
-	mu              sync.Mutex
+	mu              sync.RWMutex
 	db              storage.TransactionRepository
 	bpManager       BreakpointEvaluator
 	pluginRT        *pluginrt.Runtime
@@ -98,12 +98,12 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Timestamp: time.Now().UnixMilli(),
 			Protocol:  req.Protocol,
 		}
-		e.mu.Lock()
+		e.mu.RLock()
 		subscribers := make([]chan *apix.HttpRequest, 0, len(e.subscribers))
 		for ch := range e.subscribers {
 			subscribers = append(subscribers, ch)
 		}
-		e.mu.Unlock()
+		e.mu.RUnlock()
 		var dropped int
 		for _, sub := range subscribers {
 			select {
