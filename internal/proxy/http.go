@@ -274,29 +274,7 @@ func (p *HTTPProxy) readRequestBody(r *http.Request, maxBytes int64) ([]byte, er
 // runPluginRequest runs the OnRequest plugin chain with panic recovery.
 // Returns the (possibly modified) ProxyRequest, or an error on failure.
 func (p *HTTPProxy) runPluginRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
-	if p.plugins == nil {
-		return req, nil
-	}
-	var runErr error
-	func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				logging.Errorf(ctx, "HTTP proxy panic in plugin OnRequest (recovered): %v", rec)
-				runErr = fmt.Errorf("plugin panic")
-			}
-		}()
-		modified, err := p.plugins.RunRequest(ctx, req)
-		if err != nil {
-			logging.Errorf(ctx, "plugin OnRequest error: %v", err)
-			runErr = err
-			return
-		}
-		req = modified
-	}()
-	if runErr != nil {
-		return nil, runErr
-	}
-	return req, nil
+	return runPluginRequest(ctx, p.plugins, req, "http proxy")
 }
 
 // writeMockedResponse writes a plugin-provided mocked response to w.
@@ -432,37 +410,16 @@ func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyReq
 	if p.plugins == nil {
 		return resp, body, nil
 	}
-	var pluginErr error
-	func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				logging.Errorf(ctx, "HTTP proxy panic in plugin OnResponse (recovered): %v", rec)
-			}
-		}()
-		resp.Body = io.NopCloser(bytes.NewReader(body))
-		modResp, err := p.plugins.RunResponse(ctx, req, resp)
-		if err != nil {
-			logging.Errorf(ctx, "plugin OnResponse error: %v", err)
-			pluginErr = err
-			return
-		}
-		if modResp != nil {
-			resp = modResp
-			if modResp.Body != nil {
-				limited := io.LimitReader(modResp.Body, maxBodyBytes)
-				newBody, readErr := io.ReadAll(limited)
-				if readErr != nil {
-					logging.Errorf(ctx, "plugin modified response body read error: %v", readErr)
-				} else {
-					body = newBody
-				}
-			}
-		}
-	}()
-	if pluginErr != nil {
-		return nil, nil, pluginErr
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	modResp := runPluginResponse(ctx, p.plugins, req, resp, "http proxy")
+	if modResp == nil {
+		return resp, body, nil
 	}
-	return resp, body, nil
+	if modResp.Body != nil {
+		newBody := drainPluginResponseBody(ctx, modResp, maxBodyBytes, "http proxy")
+		return modResp, newBody, nil
+	}
+	return modResp, body, nil
 }
 
 func (p *HTTPProxy) handleWebSocket(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, start time.Time) {
