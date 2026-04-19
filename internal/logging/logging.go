@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/google/uuid"
 )
@@ -23,20 +22,18 @@ const ctxKeyRequestID ctxKey = "apix.request_id"
 // RequestIDHeader is the header used to carry a request ID.
 const RequestIDHeader = "X-Request-ID"
 
-// global holds the active *slog.Logger. Stored as unsafe.Pointer for
-// lock-free reads; written only during Init / InitWithFormat.
-var global unsafe.Pointer // *slog.Logger
+// global holds the active *slog.Logger with lock-free loads/stores.
+var global atomic.Pointer[slog.Logger]
 
 func getLogger() *slog.Logger {
-	p := atomic.LoadPointer(&global)
-	if p == nil {
-		return slog.Default()
+	if l := global.Load(); l != nil {
+		return l
 	}
-	return (*slog.Logger)(p)
+	return slog.Default()
 }
 
 func setLogger(l *slog.Logger) {
-	atomic.StorePointer(&global, unsafe.Pointer(l))
+	global.Store(l)
 }
 
 // Init initializes the logger with the text handler writing to w.

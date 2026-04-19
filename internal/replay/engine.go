@@ -81,9 +81,12 @@ func NewEngine(db *storage.DB, cfg *ClientConfig) *Engine {
 
 	// Build transport with dialer so Dial timeout is honoured.
 	dialer := &net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}
-	tlsCfg := &tls.Config{}
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	if cfg != nil && cfg.SkipTLSVerify {
-		tlsCfg = &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+		tlsCfg = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //nolint:gosec
+		}
 	}
 
 	transport := &http.Transport{
