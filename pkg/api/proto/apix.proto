@@ -90,6 +90,10 @@ message BreakpointRule {
   repeated string methods = 3; // empty = all methods
   bool enabled = 4;
   string label = 5; // human-readable label (optional)
+  string header_name = 6; // optional request header name to match
+  string header_value = 7; // optional value for header_name (empty = header existence)
+  string body_pattern = 8; // optional regex matched against request/response body
+  repeated int32 status_codes = 9; // optional response status codes (response-phase)
 }
 
 message BreakpointID {

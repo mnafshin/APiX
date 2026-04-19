@@ -272,10 +272,15 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx.Response = proxyResp
+	tx.ResponseBody = respBody
+	tx, done, err = p.evaluateResponseBreakpoint(ctx, w, tx)
+	if err != nil || done {
+		return
+	}
+
 	// 10. Store transaction.
 	if p.engine != nil {
-		tx.Response = proxyResp
-		tx.ResponseBody = respBody
 		tx.DurationMs = time.Since(start).Milliseconds()
 		if err := p.engine.StoreTransaction(tx); err != nil {
 			logging.Errorf(ctx, "store transaction: %v", err)
@@ -287,7 +292,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.String(), proxyResp.StatusCode, dur)
 	_ = reqID
 
-	writeProxyResponse(w, proxyResp, respBody)
+	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
 // readRequestBody buffers r.Body up to maxBytes.
@@ -347,6 +352,33 @@ func (p *HTTPProxy) evaluateBreakpoint(ctx context.Context, w http.ResponseWrite
 				}
 			}
 			writeProxyResponse(w, tx.Response, respBody)
+		} else {
+			http.Error(w, "no synthetic response provided", http.StatusBadGateway)
+		}
+		return tx, true, nil
+	}
+	return tx, false, nil
+}
+
+// evaluateResponseBreakpoint checks response-phase breakpoint conditions.
+func (p *HTTPProxy) evaluateResponseBreakpoint(ctx context.Context, w http.ResponseWriter, tx *Transaction) (*Transaction, bool, error) {
+	if p.engine == nil || tx == nil || tx.Response == nil {
+		return tx, false, nil
+	}
+	modified, action, err := p.engine.PauseResponse(tx, tx.Response.StatusCode, tx.ResponseBody)
+	if err != nil {
+		logging.Errorf(ctx, "pause response: %v", err)
+		http.Error(w, fmt.Sprintf("pause response: %v", err), http.StatusBadGateway)
+		return tx, true, err
+	}
+	tx = modified
+	switch action {
+	case ResumeDrop:
+		http.Error(w, "response dropped by breakpoint", http.StatusBadGateway)
+		return tx, true, nil
+	case ResumeRespond:
+		if tx.Response != nil {
+			writeProxyResponse(w, tx.Response, tx.ResponseBody)
 		} else {
 			http.Error(w, "no synthetic response provided", http.StatusBadGateway)
 		}

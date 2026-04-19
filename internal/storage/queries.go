@@ -37,12 +37,16 @@ type ResponseRecord struct {
 
 // BreakpointRecord is the Go representation of a row in the breakpoints table.
 type BreakpointRecord struct {
-	ID         string
-	URLPattern string
-	Methods    []string
-	Enabled    bool
-	Label      string
-	CreatedAt  time.Time
+	ID          string
+	URLPattern  string
+	Methods     []string
+	Enabled     bool
+	Label       string
+	HeaderName  string
+	HeaderValue string
+	BodyPattern string
+	StatusCodes []int32
+	CreatedAt   time.Time
 }
 
 // SaveRequest inserts a request record (upsert on conflict).
@@ -175,19 +179,23 @@ func (d *DB) DeleteAllTransactions() error {
 }
 
 // SaveBreakpoint inserts or replaces a breakpoint record.
-func (d *DB) SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label string) error {
+func (d *DB) SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label, headerName, headerValue, bodyPattern string, statusCodes []int32) error {
 	methodsJSON, err := json.Marshal(methods)
 	if err != nil {
 		return fmt.Errorf("marshal methods: %w", err)
+	}
+	statusCodesJSON, err := json.Marshal(statusCodes)
+	if err != nil {
+		return fmt.Errorf("marshal status codes: %w", err)
 	}
 	enabledInt := 0
 	if enabled {
 		enabledInt = 1
 	}
 	_, err = d.db.Exec(
-		`INSERT OR REPLACE INTO breakpoints (id, url_pattern, methods, enabled, label, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		id, urlPattern, string(methodsJSON), enabledInt, label, time.Now().UnixMilli(),
+		`INSERT OR REPLACE INTO breakpoints (id, url_pattern, methods, enabled, label, header_name, header_value, body_pattern, status_codes, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, urlPattern, string(methodsJSON), enabledInt, label, headerName, headerValue, bodyPattern, string(statusCodesJSON), time.Now().UnixMilli(),
 	)
 	return err
 }
@@ -201,7 +209,7 @@ func (d *DB) DeleteBreakpoint(id string) error {
 // ListBreakpoints returns all breakpoint records.
 func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 	rows, err := d.db.Query(
-		`SELECT id, url_pattern, methods, enabled, label, created_at FROM breakpoints`,
+		`SELECT id, url_pattern, methods, enabled, label, header_name, header_value, body_pattern, status_codes, created_at FROM breakpoints`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list breakpoints: %w", err)
@@ -211,23 +219,30 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 	var bps []*BreakpointRecord
 	for rows.Next() {
 		var (
-			id, urlPattern, methodsJSON, label string
-			enabledInt                         int
-			createdAtMs                        int64
+			id, urlPattern, methodsJSON, label, headerName, headerValue, bodyPattern, statusCodesJSON string
+			enabledInt                                                                                int
+			createdAtMs                                                                               int64
 		)
-		if err := rows.Scan(&id, &urlPattern, &methodsJSON, &enabledInt, &label, &createdAtMs); err != nil {
+		if err := rows.Scan(&id, &urlPattern, &methodsJSON, &enabledInt, &label, &headerName, &headerValue, &bodyPattern, &statusCodesJSON, &createdAtMs); err != nil {
 			return nil, fmt.Errorf("scan breakpoint: %w", err)
 		}
 		bp := &BreakpointRecord{
-			ID:         id,
-			URLPattern: urlPattern,
-			Enabled:    enabledInt == 1,
-			Label:      label,
-			CreatedAt:  time.UnixMilli(createdAtMs),
+			ID:          id,
+			URLPattern:  urlPattern,
+			Enabled:     enabledInt == 1,
+			Label:       label,
+			HeaderName:  headerName,
+			HeaderValue: headerValue,
+			BodyPattern: bodyPattern,
+			CreatedAt:   time.UnixMilli(createdAtMs),
 		}
 		if err := json.Unmarshal([]byte(methodsJSON), &bp.Methods); err != nil {
 			logging.Warnf(context.Background(), "failed to unmarshal methods for breakpoint %s: %v", id, err)
 			bp.Methods = nil
+		}
+		if err := json.Unmarshal([]byte(statusCodesJSON), &bp.StatusCodes); err != nil {
+			logging.Warnf(context.Background(), "failed to unmarshal status codes for breakpoint %s: %v", id, err)
+			bp.StatusCodes = nil
 		}
 		bps = append(bps, bp)
 	}
@@ -245,74 +260,74 @@ func (d *DB) listTransactionsQuery(query string, args ...interface{}) ([]*Reques
 
 // AddRewriteRule inserts a new rewrite rule.
 func (d *DB) AddRewriteRule(rule *apix.RewriteRule) error {
-var match *apix.MatchCriteria
-if rule.Match != nil {
-match = rule.Match
-} else {
-match = &apix.MatchCriteria{}
-}
-enabledInt := 0
-if rule.Enabled {
-enabledInt = 1
-}
-_, err := d.db.Exec(
-`INSERT OR REPLACE INTO rewrite_rules
+	var match *apix.MatchCriteria
+	if rule.Match != nil {
+		match = rule.Match
+	} else {
+		match = &apix.MatchCriteria{}
+	}
+	enabledInt := 0
+	if rule.Enabled {
+		enabledInt = 1
+	}
+	_, err := d.db.Exec(
+		`INSERT OR REPLACE INTO rewrite_rules
  (id, name, enabled, priority, url_pattern, method, header_name, header_value,
   body_pattern, status_code, action, param_key, param_value, body_template,
   response_status, response_body, response_content_type)
  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-rule.Id, rule.Name, enabledInt, rule.Priority,
-match.UrlPattern, match.Method, match.HeaderName, match.HeaderValue,
-match.BodyPattern, match.StatusCode,
-int32(rule.Action), rule.ParamKey, rule.ParamValue, rule.BodyTemplate,
-rule.ResponseStatus, rule.ResponseBody, rule.ResponseContentType,
-)
-return err
+		rule.Id, rule.Name, enabledInt, rule.Priority,
+		match.UrlPattern, match.Method, match.HeaderName, match.HeaderValue,
+		match.BodyPattern, match.StatusCode,
+		int32(rule.Action), rule.ParamKey, rule.ParamValue, rule.BodyTemplate,
+		rule.ResponseStatus, rule.ResponseBody, rule.ResponseContentType,
+	)
+	return err
 }
 
 // UpdateRewriteRule replaces an existing rewrite rule.
 func (d *DB) UpdateRewriteRule(rule *apix.RewriteRule) error {
-return d.AddRewriteRule(rule)
+	return d.AddRewriteRule(rule)
 }
 
 // DeleteRewriteRule removes a rewrite rule by ID.
 func (d *DB) DeleteRewriteRule(id string) error {
-_, err := d.db.Exec("DELETE FROM rewrite_rules WHERE id = ?", id)
-return err
+	_, err := d.db.Exec("DELETE FROM rewrite_rules WHERE id = ?", id)
+	return err
 }
 
 // GetRewriteRule retrieves a single rewrite rule by ID.
 func (d *DB) GetRewriteRule(id string) (*apix.RewriteRule, error) {
-row := d.db.QueryRow(
-`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
+	row := d.db.QueryRow(
+		`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
         body_pattern, status_code, action, param_key, param_value, body_template,
         response_status, response_body, response_content_type
  FROM rewrite_rules WHERE id = ?`, id)
-rule, err := scanRewriteRule(row)
-if err == sql.ErrNoRows {
-return nil, nil
-}
-return rule, err
+	rule, err := scanRewriteRule(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return rule, err
 }
 
 // ListRewriteRules returns all rewrite rules ordered by priority.
 func (d *DB) ListRewriteRules() ([]*apix.RewriteRule, error) {
-rows, err := d.db.Query(
-`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
+	rows, err := d.db.Query(
+		`SELECT id, name, enabled, priority, url_pattern, method, header_name, header_value,
         body_pattern, status_code, action, param_key, param_value, body_template,
         response_status, response_body, response_content_type
  FROM rewrite_rules ORDER BY priority ASC`)
-if err != nil {
-return nil, fmt.Errorf("list rewrite rules: %w", err)
-}
-defer func() { _ = rows.Close() }()
-var rules []*apix.RewriteRule
-for rows.Next() {
-rule, err := scanRewriteRuleRow(rows)
-if err != nil {
-return nil, fmt.Errorf("scan rewrite rule: %w", err)
-}
-rules = append(rules, rule)
-}
-return rules, rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("list rewrite rules: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var rules []*apix.RewriteRule
+	for rows.Next() {
+		rule, err := scanRewriteRuleRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan rewrite rule: %w", err)
+		}
+		rules = append(rules, rule)
+	}
+	return rules, rows.Err()
 }

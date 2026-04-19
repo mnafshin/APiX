@@ -3,6 +3,7 @@ package breakpoints
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ type Manager struct {
 	mu          sync.RWMutex
 	rules       map[string]*BreakpointRule // id → rule
 	compiled    map[string]*regexp.Regexp  // id → compiled URLPattern
+	bodyRe      map[string]*regexp.Regexp  // id → compiled BodyPattern (optional)
 	pausedReqs  map[string]*PausedEntry    // request_id → entry
 	subscribers map[chan *PausedEntry]struct{}
 }
@@ -27,6 +29,7 @@ func NewManager() *Manager {
 	return &Manager{
 		rules:       make(map[string]*BreakpointRule),
 		compiled:    make(map[string]*regexp.Regexp),
+		bodyRe:      make(map[string]*regexp.Regexp),
 		pausedReqs:  make(map[string]*PausedEntry),
 		subscribers: make(map[chan *PausedEntry]struct{}),
 	}
@@ -60,12 +63,38 @@ func (m *Manager) AddRule(rule *BreakpointRule) (*BreakpointRule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid url_pattern %q: %w", rule.URLPattern, err)
 	}
+	var bodyRE *regexp.Regexp
+	if rule.BodyPattern != "" {
+		if len(rule.BodyPattern) > 500 {
+			return nil, fmt.Errorf("body_pattern exceeds 500 characters")
+		}
+		bodyRE, err = regexp.Compile(rule.BodyPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid body_pattern %q: %w", rule.BodyPattern, err)
+		}
+	}
+	if rule.HeaderName != "" && len(rule.HeaderName) > 200 {
+		return nil, fmt.Errorf("header_name exceeds 200 characters")
+	}
+	if len(rule.HeaderValue) > 1000 {
+		return nil, fmt.Errorf("header_value exceeds 1000 characters")
+	}
+	for _, statusCode := range rule.StatusCodes {
+		if statusCode < 100 || statusCode > 599 {
+			return nil, fmt.Errorf("invalid status code: %d", statusCode)
+		}
+	}
 	if rule.ID == "" {
 		rule.ID = uuid.NewString()
 	}
 	m.mu.Lock()
 	m.rules[rule.ID] = rule
 	m.compiled[rule.ID] = re
+	if bodyRE != nil {
+		m.bodyRe[rule.ID] = bodyRE
+	} else {
+		delete(m.bodyRe, rule.ID)
+	}
 	m.mu.Unlock()
 	return rule, nil
 }
@@ -79,6 +108,7 @@ func (m *Manager) RemoveRule(id string) error {
 	}
 	delete(m.rules, id)
 	delete(m.compiled, id)
+	delete(m.bodyRe, id)
 	return nil
 }
 
@@ -96,6 +126,20 @@ func (m *Manager) ListRules() []*BreakpointRule {
 // Evaluate checks req against all enabled rules. Returns the matching rule ID
 // or empty string if no rule matches. Uses a timeout to prevent ReDoS attacks.
 func (m *Manager) Evaluate(method, rawURL string) string {
+	return m.EvaluateRequest(method, rawURL, nil, nil)
+}
+
+// EvaluateRequest checks rules against request attributes only.
+func (m *Manager) EvaluateRequest(method, rawURL string, headers http.Header, body []byte) string {
+	return m.evaluate(method, rawURL, headers, body, 0, false)
+}
+
+// EvaluateResponse checks rules against response attributes.
+func (m *Manager) EvaluateResponse(method, rawURL string, headers http.Header, body []byte, statusCode int) string {
+	return m.evaluate(method, rawURL, headers, body, statusCode, true)
+}
+
+func (m *Manager) evaluate(method, rawURL string, headers http.Header, body []byte, statusCode int, responsePhase bool) string {
 	// Timeout to avoid long-running regex matches (protect against ReDoS).
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -107,10 +151,11 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 		id   string
 		rule *BreakpointRule
 		re   *regexp.Regexp
+		body *regexp.Regexp
 	}
 	entries := make([]entry, 0, len(m.rules))
 	for id, r := range m.rules {
-		entries = append(entries, entry{id: id, rule: r, re: m.compiled[id]})
+		entries = append(entries, entry{id: id, rule: r, re: m.compiled[id], body: m.bodyRe[id]})
 	}
 	m.mu.RUnlock()
 
@@ -118,6 +163,15 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 	go func() {
 		for _, e := range entries {
 			if e.rule == nil || !e.rule.Enabled {
+				continue
+			}
+			if responsePhase {
+				// Response phase only evaluates rules that specify status codes.
+				if len(e.rule.StatusCodes) == 0 {
+					continue
+				}
+			} else if len(e.rule.StatusCodes) > 0 {
+				// Request phase skips response-only rules.
 				continue
 			}
 			// Check method: empty methods list means match all.
@@ -160,6 +214,15 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 			}()
 
 			if matched {
+				if !matchesHeader(e.rule.HeaderName, e.rule.HeaderValue, headers) {
+					continue
+				}
+				if responsePhase && !matchesStatusCode(e.rule.StatusCodes, statusCode) {
+					continue
+				}
+				if !matchesBody(ctx, e.body, body) {
+					continue
+				}
 				done <- e.id
 				return
 			}
@@ -174,6 +237,48 @@ func (m *Manager) Evaluate(method, rawURL string) string {
 		// Timeout or context cancelled: return no match to avoid blocking.
 		return ""
 	}
+}
+
+func matchesHeader(name, value string, headers http.Header) bool {
+	if name == "" {
+		return true
+	}
+	if headers == nil {
+		return false
+	}
+	got := headers.Get(name)
+	if got == "" {
+		return false
+	}
+	if value == "" {
+		return true
+	}
+	return got == value
+}
+
+func matchesStatusCode(codes []int32, statusCode int) bool {
+	if len(codes) == 0 {
+		return true
+	}
+	for _, c := range codes {
+		if int(c) == statusCode {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesBody(ctx context.Context, re *regexp.Regexp, body []byte) bool {
+	if re == nil {
+		return true
+	}
+	select {
+	case regexEvalSem <- struct{}{}:
+	case <-ctx.Done():
+		return false
+	}
+	defer func() { <-regexEvalSem }()
+	return re.MatchString(string(body))
 }
 
 // Pause holds req until resumed, broadcasting to all Watch subscribers.
