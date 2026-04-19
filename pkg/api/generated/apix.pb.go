@@ -1367,6 +1367,8 @@ func (x *HistoryQuery) GetBodyFilter() string {
 type GetWebSocketFramesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TransactionId string                 `protobuf:"bytes,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`   // max frames to return; 0 = no limit
+	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"` // number of frames to skip
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1406,6 +1408,20 @@ func (x *GetWebSocketFramesRequest) GetTransactionId() string {
 		return x.TransactionId
 	}
 	return ""
+}
+
+func (x *GetWebSocketFramesRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *GetWebSocketFramesRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
 }
 
 type WebSocketFrame struct {
@@ -2077,9 +2093,11 @@ const file_apix_proto_rawDesc = "" +
 	"\rstatus_filter\x18\x05 \x01(\x05R\fstatusFilter\x12\x19\n" +
 	"\bsince_ms\x18\x06 \x01(\x03R\asinceMs\x12\x1f\n" +
 	"\vbody_filter\x18\a \x01(\tR\n" +
-	"bodyFilter\"B\n" +
+	"bodyFilter\"p\n" +
 	"\x19GetWebSocketFramesRequest\x12%\n" +
-	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\"\xaa\x01\n" +
+	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x03 \x01(\x05R\x06offset\"\xaa\x01\n" +
 	"\x0eWebSocketFrame\x12%\n" +
 	"\x0etransaction_id\x18\x01 \x01(\tR\rtransactionId\x12\x1c\n" +
 	"\tdirection\x18\x02 \x01(\tR\tdirection\x12\x16\n" +
