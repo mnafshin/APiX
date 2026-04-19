@@ -276,4 +276,4 @@ When opening a PR that touches the engine, proxy, or gRPC server, please check:
 3. **Does the change reach across a layer boundary?** → e.g. proxy calling storage directly, or gRPC handler calling `engine.DB()`.
 4. **Does the change add an abstraction with only one implementation?** → Only add interfaces when you need to mock, swap, or test in isolation.
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full development workflow.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for the full development workflow.
