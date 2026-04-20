@@ -164,6 +164,8 @@ not yet wired into the runtime request pipeline.
 | **Policy Engine** | Apply conditional rules (allow/block/modify) | `policy_engine.rules` |
 | **OpenTelemetry** | Export traces to OTEL collector | `otel_tracing.exporter_endpoint` |
 | **Load Generator** | Synthetic traffic generation | `load_generator.requests_per_second` |
+| **Env Subst** | Replace `{{ENV_VAR}}` placeholders in request components | `env_subst.*` |
+| **Mock Response** | Return synthetic responses for matching requests | `mock_response.*` |
 
 **Configuration (in `config.yaml`):**
 ```yaml
