@@ -308,7 +308,18 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 
 	// Observe metrics + slowlog.
 	dur := time.Since(start)
-	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, tx.Response.StatusCode, dur)
+	observeRequest(
+		ctx,
+		p.cfg,
+		proxyReq.Method,
+		proxyReq.URL.String(),
+		tx.Response.StatusCode,
+		dur,
+		tx.ID,
+		proxyReq.Raw.RemoteAddr,
+		len(tx.RequestBody),
+		len(tx.ResponseBody),
+	)
 	_ = reqID
 
 	writeProxyResponseToConn(ctx, conn, tx.Response)
@@ -490,7 +501,18 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 			logging.Errorf(ctx, "tls proxy h2: store transaction: %v", err)
 		}
 	}
-	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, tx.Response.StatusCode, time.Since(start))
+	observeRequest(
+		ctx,
+		p.cfg,
+		proxyReq.Method,
+		proxyReq.URL.String(),
+		tx.Response.StatusCode,
+		time.Since(start),
+		tx.ID,
+		proxyReq.Raw.RemoteAddr,
+		len(tx.RequestBody),
+		len(tx.ResponseBody),
+	)
 	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 

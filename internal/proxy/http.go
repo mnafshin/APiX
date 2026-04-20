@@ -584,7 +584,18 @@ func (p *HTTPProxy) storeAndWriteResponse(ctx context.Context, w http.ResponseWr
 			logging.Errorf(ctx, "store transaction: %v", err)
 		}
 	}
-	observeRequest(ctx, p.cfg, tx.Request.Method, tx.Request.URL.String(), tx.Response.StatusCode, time.Since(start))
+	observeRequest(
+		ctx,
+		p.cfg,
+		tx.Request.Method,
+		tx.Request.URL.String(),
+		tx.Response.StatusCode,
+		time.Since(start),
+		tx.ID,
+		tx.Request.Raw.RemoteAddr,
+		len(tx.RequestBody),
+		len(tx.ResponseBody),
+	)
 	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
