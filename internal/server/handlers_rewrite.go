@@ -16,6 +16,12 @@ func (s *EngineServer) AddRewriteRule(ctx context.Context, rule *apix.RewriteRul
 	if err := s.db.AddRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "add rewrite rule: %v", err)
 	}
+	s.auditLog(ctx, "add_rewrite_rule", rule.Id, map[string]any{
+		"name":     rule.Name,
+		"action":   rule.Action.String(),
+		"enabled":  rule.Enabled,
+		"priority": rule.Priority,
+	})
 	return rule, nil
 }
 
@@ -26,6 +32,12 @@ func (s *EngineServer) UpdateRewriteRule(ctx context.Context, rule *apix.Rewrite
 	if err := s.db.UpdateRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "update rewrite rule: %v", err)
 	}
+	s.auditLog(ctx, "update_rewrite_rule", rule.Id, map[string]any{
+		"name":     rule.Name,
+		"action":   rule.Action.String(),
+		"enabled":  rule.Enabled,
+		"priority": rule.Priority,
+	})
 	return rule, nil
 }
 
@@ -36,6 +48,7 @@ func (s *EngineServer) DeleteRewriteRule(ctx context.Context, req *apix.RewriteR
 	if err := s.db.DeleteRewriteRule(req.RuleId); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete rewrite rule: %v", err)
 	}
+	s.auditLog(ctx, "delete_rewrite_rule", req.RuleId, nil)
 	return &apix.Empty{}, nil
 }
 
@@ -62,5 +75,6 @@ func (s *EngineServer) ToggleRewriteRule(ctx context.Context, req *apix.RewriteR
 	if err := s.db.UpdateRewriteRule(rule); err != nil {
 		return nil, status.Errorf(codes.Internal, "toggle rewrite rule: %v", err)
 	}
+	s.auditLog(ctx, "toggle_rewrite_rule", rule.Id, map[string]any{"enabled": rule.Enabled})
 	return rule, nil
 }

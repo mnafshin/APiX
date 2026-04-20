@@ -109,6 +109,7 @@ Validate config:
 | `history_max_age_days` / `history_max_rows` | `0` / `0` | Retention pruning controls |
 | `metrics_enabled` / `metrics_port` | `false` / `9091` | Prometheus metrics endpoint |
 | `access_log_enabled` / `access_log_format` / `access_log_path` | `false` / `json` / `stdout` | Per-request access logging |
+| `audit_log_enabled` / `audit_log_path` | `false` / `stdout` | Structured audit trail for state-changing gRPC operations |
 | `otel_enabled` / `otel_endpoint` / `otel_service_name` / `otel_insecure` / `otel_sample_rate` | `false` / `localhost:4317` / `apix-proxy` / `true` / `1.0` | Built-in OTLP tracing exporter plugin |
 | `health_port` | `9092` | `/healthz` endpoint |
 | `log_format` / `log_level` | `text` / `info` | Engine log output shape and verbosity |

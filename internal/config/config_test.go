@@ -90,6 +90,12 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.AccessLogPath != "stdout" {
 		t.Errorf("AccessLogPath: got %q want stdout", cfg.AccessLogPath)
 	}
+	if cfg.AuditLogEnabled {
+		t.Error("AuditLogEnabled: expected false by default")
+	}
+	if cfg.AuditLogPath != "stdout" {
+		t.Errorf("AuditLogPath: got %q want stdout", cfg.AuditLogPath)
+	}
 }
 
 func TestLoadConfig_YAMLOverride(t *testing.T) {
@@ -115,6 +121,8 @@ otel_sample_rate: 0.25
 access_log_enabled: true
 access_log_format: "combined"
 access_log_path: "/tmp/apix-access.log"
+audit_log_enabled: true
+audit_log_path: "/tmp/apix-audit.log"
 `)
 	cfg := LoadConfig(path)
 
@@ -177,6 +185,12 @@ access_log_path: "/tmp/apix-access.log"
 	}
 	if cfg.AccessLogPath != "/tmp/apix-access.log" {
 		t.Errorf("AccessLogPath: got %q want /tmp/apix-access.log", cfg.AccessLogPath)
+	}
+	if !cfg.AuditLogEnabled {
+		t.Error("AuditLogEnabled should be true from YAML override")
+	}
+	if cfg.AuditLogPath != "/tmp/apix-audit.log" {
+		t.Errorf("AuditLogPath: got %q want /tmp/apix-audit.log", cfg.AuditLogPath)
 	}
 	// Unspecified fields stay at defaults.
 	if cfg.HTTPIdleTimeout != 120 {

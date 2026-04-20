@@ -39,6 +39,11 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 	if err := s.db.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label, added.HeaderName, added.HeaderValue, added.BodyPattern, added.StatusCodes); err != nil {
 		logging.Errorf(ctx, "grpc: save breakpoint: %v", err)
 	}
+	s.auditLog(ctx, "set_breakpoint", added.ID, map[string]any{
+		"url_pattern": added.URLPattern,
+		"methods":     added.Methods,
+		"enabled":     added.Enabled,
+	})
 	return &apix.BreakpointResponse{
 		Breakpoint: &apix.BreakpointRule{
 			Id:          added.ID,
@@ -61,6 +66,7 @@ func (s *EngineServer) DeleteBreakpoint(ctx context.Context, req *apix.Breakpoin
 	if err := s.db.DeleteBreakpoint(req.Id); err != nil {
 		logging.Errorf(ctx, "grpc: delete breakpoint from storage: %v", err)
 	}
+	s.auditLog(ctx, "delete_breakpoint", req.Id, nil)
 	return &apix.Empty{}, nil
 }
 
@@ -159,5 +165,8 @@ func (s *EngineServer) ResumeRequest(ctx context.Context, req *apix.ResumeAction
 	if err := s.breakpointMgr.Resume(req.RequestId, decision); err != nil {
 		return nil, status.Errorf(codes.NotFound, "resume request: %v", err)
 	}
+	s.auditLog(ctx, "resume_request", req.RequestId, map[string]any{
+		"action": req.Action.String(),
+	})
 	return &apix.Empty{}, nil
 }
