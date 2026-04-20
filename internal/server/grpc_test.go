@@ -445,6 +445,35 @@ func TestGetHistory(t *testing.T) {
 	}
 }
 
+func TestGetHistoryIncludesRequestID(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	defer f.stop()
+
+	rec := &storage.RequestRecord{
+		ID:        "req-rid",
+		Method:    "GET",
+		URL:       "https://rid.example.com/",
+		Headers:   map[string]string{"X-Request-ID": "rid-123"},
+		Timestamp: time.Now(),
+	}
+	if err := f.db.SaveRequest(rec); err != nil {
+		t.Fatalf("SaveRequest: %v", err)
+	}
+
+	stream, err := f.client.GetHistory(context.Background(), &apix.HistoryQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("GetHistory: %v", err)
+	}
+	tx, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("Recv: %v", err)
+	}
+	if tx.RequestId != "rid-123" {
+		t.Fatalf("request_id: got %q want %q", tx.RequestId, "rid-123")
+	}
+}
+
 func TestGetWebSocketFrames(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)

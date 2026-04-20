@@ -66,7 +66,7 @@ export class TrafficItem extends vscode.TreeItem {
         const summary = status ? `${status} ${duration}`.trim() : duration || '—';
         this.description = isWebSocket ? `WS ${summary}`.trim() : summary;
         this.tooltip = new vscode.MarkdownString(
-            `**${isWebSocket ? 'WS ' : ''}${method}** ${url}\n\nStatus: ${status || '—'}  Duration: ${duration || '—'}`
+            `**${isWebSocket ? 'WS ' : ''}${method}** ${url}\n\nStatus: ${status || '—'}  Duration: ${duration || '—'}\n\nRequest ID: ${tx.requestId || tx.id || '—'}`
         );
         this.contextValue = 'httpTransaction';
         this.iconPath = this._iconForStatus(status);

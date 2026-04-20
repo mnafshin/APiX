@@ -20,6 +20,7 @@ export interface HttpResponse {
 
 export interface HttpTransaction {
     id: string;
+    requestId: string;
     request: HttpRequest;
     response: HttpResponse;
     timestamp: number; // Unix ms

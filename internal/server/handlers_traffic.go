@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strings"
 
 	gql "github.com/mnafshin/apix/internal/graphql"
 	"github.com/mnafshin/apix/internal/har"
@@ -58,6 +59,7 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 			Id:         r.ID,
 			Timestamp:  r.Timestamp.UnixMilli(),
 			DurationMs: r.DurationMs,
+			RequestId:  requestIDFromHeaders(r.ID, r.Headers),
 			Request: &apix.HttpRequest{
 				Id:        r.ID,
 				Method:    r.Method,
@@ -107,6 +109,15 @@ func respBody(resp *apix.HttpResponse) []byte {
 		return nil
 	}
 	return resp.Body
+}
+
+func requestIDFromHeaders(fallback string, headers map[string]string) string {
+	for key, value := range headers {
+		if strings.EqualFold(key, "X-Request-ID") && value != "" {
+			return value
+		}
+	}
+	return fallback
 }
 
 func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, stream grpc.ServerStreamingServer[apix.WebSocketFrame]) error {
