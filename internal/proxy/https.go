@@ -312,28 +312,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		}
 	}
 
-	// Store transaction.
-	if p.engine != nil {
-		tx.DurationMs = time.Since(start).Milliseconds()
-		if err := p.engine.StoreTransaction(tx); err != nil {
-			logging.Errorf(ctx, "tls proxy: store transaction: %v", err)
-		}
-	}
-
-	// Observe metrics + slowlog.
-	dur := time.Since(start)
-	observeRequest(
-		ctx,
-		p.cfg,
-		proxyReq.Method,
-		proxyReq.URL.String(),
-		tx.Response.StatusCode,
-		dur,
-		tx.ID,
-		proxyReq.Raw.RemoteAddr,
-		len(tx.RequestBody),
-		len(tx.ResponseBody),
-	)
+	storeAndObserve(ctx, p.cfg, p.engine, tx, start, "tls proxy: store transaction")
 	_ = reqID
 
 	writeProxyResponseToConn(ctx, conn, tx.Response)
@@ -517,24 +496,7 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 		}
 	}
 
-	if p.engine != nil {
-		tx.DurationMs = time.Since(start).Milliseconds()
-		if err := p.engine.StoreTransaction(tx); err != nil {
-			logging.Errorf(ctx, "tls proxy h2: store transaction: %v", err)
-		}
-	}
-	observeRequest(
-		ctx,
-		p.cfg,
-		proxyReq.Method,
-		proxyReq.URL.String(),
-		tx.Response.StatusCode,
-		time.Since(start),
-		tx.ID,
-		proxyReq.Raw.RemoteAddr,
-		len(tx.RequestBody),
-		len(tx.ResponseBody),
-	)
+	storeAndObserve(ctx, p.cfg, p.engine, tx, start, "tls proxy h2: store transaction")
 	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
