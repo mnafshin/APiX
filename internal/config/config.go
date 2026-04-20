@@ -33,6 +33,10 @@ type Config struct {
 	HTTPReadTimeout                  int    `yaml:"http_read_timeout_sec"`
 	HTTPWriteTimeout                 int    `yaml:"http_write_timeout_sec"`
 	HTTPIdleTimeout                  int    `yaml:"http_idle_timeout_sec"`
+	MaxHeadersPerRequest             int    `yaml:"max_headers_per_request"`
+	MaxHeaderValueBytes              int    `yaml:"max_header_value_bytes"`
+	MaxTotalHeaderBytes              int    `yaml:"max_total_header_bytes"`
+	MaxURLLength                     int    `yaml:"max_url_length"`
 	MaxBodySizeMB                    int    `yaml:"max_body_size_mb"`
 	ReplaySkipTLSVerify              bool   `yaml:"replay_skip_tls_verify"`
 	// BreakpointPauseTimeoutSec is the maximum number of seconds a request will
@@ -165,6 +169,10 @@ func LoadConfig(path string) *Config {
 		HTTPReadTimeout:                  30,
 		HTTPWriteTimeout:                 120,
 		HTTPIdleTimeout:                  120,
+		MaxHeadersPerRequest:             200,
+		MaxHeaderValueBytes:              8 * 1024,
+		MaxTotalHeaderBytes:              1 * 1024 * 1024,
+		MaxURLLength:                     8 * 1024,
 		MaxBodySizeMB:                    32,
 		BreakpointPauseTimeoutSec:        120,
 		// Observability defaults

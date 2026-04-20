@@ -118,6 +118,9 @@ func NewGRPCServer(cfg *config.Config, extraOpts ...grpc.ServerOption) *grpc.Ser
 			authStreamInterceptor(cfg.AuthToken),
 		),
 	}
+	if cfg.MaxTotalHeaderBytes > 0 {
+		opts = append(opts, grpc.MaxHeaderListSize(uint32(cfg.MaxTotalHeaderBytes)))
+	}
 	opts = append(opts, extraOpts...)
 	return grpc.NewServer(opts...)
 }

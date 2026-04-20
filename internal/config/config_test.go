@@ -39,6 +39,18 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.MaxIdleConnsPerHost != 10 {
 		t.Errorf("MaxIdleConnsPerHost: got %d want 10", cfg.MaxIdleConnsPerHost)
 	}
+	if cfg.MaxHeadersPerRequest != 200 {
+		t.Errorf("MaxHeadersPerRequest: got %d want 200", cfg.MaxHeadersPerRequest)
+	}
+	if cfg.MaxHeaderValueBytes != 8192 {
+		t.Errorf("MaxHeaderValueBytes: got %d want 8192", cfg.MaxHeaderValueBytes)
+	}
+	if cfg.MaxTotalHeaderBytes != 1048576 {
+		t.Errorf("MaxTotalHeaderBytes: got %d want 1048576", cfg.MaxTotalHeaderBytes)
+	}
+	if cfg.MaxURLLength != 8192 {
+		t.Errorf("MaxURLLength: got %d want 8192", cfg.MaxURLLength)
+	}
 	if cfg.TLSEnabled {
 		t.Error("TLSEnabled: expected false by default")
 	}
@@ -87,6 +99,10 @@ http_port: "9999"
 grpc_port: "8888"
 max_body_size_mb: 64
 dial_timeout_sec: 5
+max_headers_per_request: 150
+max_header_value_bytes: 4096
+max_total_header_bytes: 262144
+max_url_length: 4096
 mcp_enabled: true
 mcp_port: "9100"
 log_format: "json"
@@ -113,6 +129,18 @@ access_log_path: "/tmp/apix-access.log"
 	}
 	if cfg.DialTimeoutSec != 5 {
 		t.Errorf("DialTimeoutSec: got %d want 5", cfg.DialTimeoutSec)
+	}
+	if cfg.MaxHeadersPerRequest != 150 {
+		t.Errorf("MaxHeadersPerRequest: got %d want 150", cfg.MaxHeadersPerRequest)
+	}
+	if cfg.MaxHeaderValueBytes != 4096 {
+		t.Errorf("MaxHeaderValueBytes: got %d want 4096", cfg.MaxHeaderValueBytes)
+	}
+	if cfg.MaxTotalHeaderBytes != 262144 {
+		t.Errorf("MaxTotalHeaderBytes: got %d want 262144", cfg.MaxTotalHeaderBytes)
+	}
+	if cfg.MaxURLLength != 4096 {
+		t.Errorf("MaxURLLength: got %d want 4096", cfg.MaxURLLength)
 	}
 	if !cfg.MCPEnabled {
 		t.Error("MCPEnabled should be true from YAML override")
