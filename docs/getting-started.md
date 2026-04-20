@@ -8,7 +8,8 @@
 
    ```sh
    go build -o apix-engine ./cmd/apix-engine/
-   go build -o apix-cli   ./cmd/apix-cli/
+   go build -o apix       ./cmd/apix-cli/
+   cp apix apix-cli
    ```
 
 2. **Start the engine** (HTTP proxy on `:8080`, gRPC on `:9090`):
@@ -20,8 +21,10 @@
    Verify it is running:
 
    ```sh
-   ./apix-cli status
+   ./apix status
    ```
+
+   `apix-cli` is kept as a compatibility alias for existing scripts.
 
 ---
 
@@ -36,7 +39,7 @@ Quick-start:
 curl -x http://localhost:8080 https://httpbin.org/get
 
 # List captured traffic
-./apix-cli history list
+./apix history list
 ```
 
 You should see the captured request and its response in the output.
@@ -51,14 +54,14 @@ Quick-start:
 
 ```sh
 # Add a breakpoint matching any URL containing "httpbin"
-./apix-cli breakpoints add --pattern "httpbin"
+./apix breakpoints add --pattern "httpbin"
 
 # In another terminal, send a matching request
 curl -x http://localhost:8080 https://httpbin.org/get
 
 # Watch the paused request, then forward it
-./apix-cli paused watch         # shows the paused request ID
-./apix-cli paused forward <id>  # forward with original request
+./apix paused watch         # shows the paused request ID
+./apix paused forward <id>  # forward with original request
 ```
 
 ---
@@ -71,10 +74,10 @@ Quick-start:
 
 ```sh
 # List captured requests to find an ID
-./apix-cli history list
+./apix history list
 
 # Replay a specific request
-./apix-cli replay --id <request-id>
+./apix replay --id <request-id>
 ```
 
 ---
@@ -82,7 +85,7 @@ Quick-start:
 ## 4 — Validate your configuration
 
 ```sh
-./apix-cli --config-check
+./apix --config-check
 ```
 
 This runs all config checks (port availability, plugin paths, regex patterns) and exits 0 on success or 1 with a full error list on failure.

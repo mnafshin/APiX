@@ -2,7 +2,8 @@
 
 # Default Go binary output
 ENGINE_BIN := apix-engine
-CLI_BIN := apix-cli
+CLI_BIN := apix
+CLI_LEGACY_BIN := apix-cli
 
 # Go build
 build:
@@ -11,6 +12,7 @@ build:
 # CLI build
 build-cli:
 	go build -o $(CLI_BIN) ./cmd/apix-cli/
+	cp $(CLI_BIN) $(CLI_LEGACY_BIN)
 
 # Go tests
 test:
@@ -51,21 +53,26 @@ ext-install:
 
 # Clean build artifacts
 clean:
-	rm -f $(ENGINE_BIN) $(CLI_BIN) coverage.out
+	rm -f $(ENGINE_BIN) $(CLI_BIN) $(CLI_LEGACY_BIN) coverage.out
 	rm -rf apix-vscode/out apix-vscode/*.vsix
 
 # Cross-compile engine for all platforms
 build-all:
 	mkdir -p dist
 	GOOS=darwin GOARCH=arm64 go build -o dist/apix-engine-darwin-arm64 ./cmd/apix-engine/
+	GOOS=darwin GOARCH=arm64 go build -o dist/apix-darwin-arm64 ./cmd/apix-cli/
 	GOOS=darwin GOARCH=arm64 go build -o dist/apix-cli-darwin-arm64 ./cmd/apix-cli/
 	GOOS=darwin GOARCH=amd64 go build -o dist/apix-engine-darwin-amd64 ./cmd/apix-engine/
+	GOOS=darwin GOARCH=amd64 go build -o dist/apix-darwin-amd64 ./cmd/apix-cli/
 	GOOS=darwin GOARCH=amd64 go build -o dist/apix-cli-darwin-amd64 ./cmd/apix-cli/
 	GOOS=linux GOARCH=amd64 go build -o dist/apix-engine-linux-amd64 ./cmd/apix-engine/
+	GOOS=linux GOARCH=amd64 go build -o dist/apix-linux-amd64 ./cmd/apix-cli/
 	GOOS=linux GOARCH=amd64 go build -o dist/apix-cli-linux-amd64 ./cmd/apix-cli/
 	GOOS=linux GOARCH=arm64 go build -o dist/apix-engine-linux-arm64 ./cmd/apix-engine/
+	GOOS=linux GOARCH=arm64 go build -o dist/apix-linux-arm64 ./cmd/apix-cli/
 	GOOS=linux GOARCH=arm64 go build -o dist/apix-cli-linux-arm64 ./cmd/apix-cli/
 	GOOS=windows GOARCH=amd64 go build -o dist/apix-engine-windows-amd64.exe ./cmd/apix-engine/
+	GOOS=windows GOARCH=amd64 go build -o dist/apix-windows-amd64.exe ./cmd/apix-cli/
 	GOOS=windows GOARCH=amd64 go build -o dist/apix-cli-windows-amd64.exe ./cmd/apix-cli/
 
 # Dev: build engine + extension together
@@ -77,7 +84,7 @@ smoke:
 help:
 	@echo "Available targets:"
 	@echo "  build          - Build engine binary"
-	@echo "  build-cli      - Build CLI binary"
+	@echo "  build-cli      - Build apix (and apix-cli compatibility alias)"
 	@echo "  test           - Run Go tests"
 	@echo "  test-coverage  - Run Go tests with coverage report"
 	@echo "  test-one       - Run single test (TEST=name PKG=path)"
