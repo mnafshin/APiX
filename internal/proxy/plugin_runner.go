@@ -41,30 +41,36 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 }
 
 // runPluginResponse executes the RunResponse hook via type assertion.
-// Returns the (possibly modified) response, or the original resp on failure.
+// Returns the (possibly modified) response, or an error when the plugin fails.
 // Callers may pass nil or a value that does not implement ResponsePlugin —
 // in both cases the original resp is returned unchanged.
-func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string) *plugins.ProxyResponse {
+func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string) (*plugins.ProxyResponse, error) {
 	rp, ok := chain.(ResponsePlugin)
 	if !ok || rp == nil {
-		return resp
+		return resp, nil
 	}
+	var runErr error
 	func() {
 		defer func() {
 			if rec := recover(); rec != nil {
 				logging.Errorf(ctx, "%s: panic in plugin OnResponse (recovered): %v", logTag, rec)
+				runErr = fmt.Errorf("plugin panic")
 			}
 		}()
 		modResp, err := rp.RunResponse(ctx, req, resp)
 		if err != nil {
 			logging.Errorf(ctx, "%s: plugin OnResponse error: %v", logTag, err)
+			runErr = err
 			return
 		}
 		if modResp != nil {
 			resp = modResp
 		}
 	}()
-	return resp
+	if runErr != nil {
+		return nil, runErr
+	}
+	return resp, nil
 }
 
 // drainPluginResponseBody reads the response body from a plugin-modified response.
