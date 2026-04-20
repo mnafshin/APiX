@@ -18,6 +18,8 @@ let trafficProvider: TrafficProvider | undefined;
 let breakpointsProvider: BreakpointsProvider | undefined;
 let mocksProvider: MocksProvider | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
+let pausedRetryTimer: ReturnType<typeof setTimeout> | undefined;
+let pausedRetryDelayMs = 1000;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('apix');
@@ -41,6 +43,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     processManager = new EngineProcessManager(context);
     engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken);
+    processManager.onUnexpectedExit = (message: string) => {
+        statusBarItem!.text = '$(debug-disconnect) APiX: Disconnected';
+        statusBarItem!.tooltip = message;
+        statusBarItem!.command = 'apix.startEngine';
+    };
+    processManager.onRestarting = (attempt: number, delayMs: number) => {
+        statusBarItem!.text = '$(sync~spin) APiX: Reconnecting...';
+        statusBarItem!.tooltip = `APiX: reconnect attempt ${attempt} in ${Math.round(delayMs / 1000)}s`;
+        statusBarItem!.command = 'apix.startEngine';
+    };
+    processManager.onRestart = () => {
+        outputChannel?.appendLine('[APiX] Engine restarted; re-initializing extension streams…');
+        startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!, mocksProvider)
+            .catch(err => outputChannel?.appendLine(`APiX: reconnect failed — ${err?.message || err}`));
+    };
 
     trafficProvider = new TrafficProvider(engineClient, outputChannel);
     breakpointsProvider = new BreakpointsProvider(engineClient, outputChannel);
@@ -153,13 +170,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
             .catch(err => outputChannel?.appendLine(`APiX: auto-start failed — ${err?.message || err}`));
 
-        // Re-establish gRPC streams after auto-restart (exponential backoff kicks in
-        // when engine exits unexpectedly; this callback runs once the new process is ready).
-        processManager!.onRestart = () => {
-            outputChannel?.appendLine('[APiX] Reconnecting gRPC streams after engine restart…');
-            startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
-                .catch(err => outputChannel?.appendLine(`APiX: reconnect failed — ${err?.message || err}`));
-        };
     }
 }
 
@@ -167,6 +177,10 @@ export function deactivate(): void {
     // Cancel any active streams
     pausedRequestsStream?.cancel();
     pausedRequestsStream = undefined;
+    if (pausedRetryTimer) {
+        clearTimeout(pausedRetryTimer);
+        pausedRetryTimer = undefined;
+    }
     
     // Stop engine process
     processManager?.stop();
@@ -198,7 +212,13 @@ async function startEngine(
     mocksProvider?: MocksProvider
 ): Promise<void> {
     if (pm.isRunning()) {
-        vscode.window.showInformationMessage('APiX Engine is already running.');
+        statusBarItem!.text = '$(circle-filled) APiX: Running';
+        statusBarItem!.tooltip = 'APiX: Running — click to open traffic panel';
+        statusBarItem!.command = 'apix.openTrafficPanel';
+        breakpointsProvider.refresh();
+        trafficProvider.refresh();
+        mocksProvider?.refresh();
+        _startWatchPausedRequests(context, client);
         return;
     }
     try {
@@ -235,6 +255,10 @@ async function startEngine(
 async function stopEngine(pm: EngineProcessManager): Promise<void> {
     pausedRequestsStream?.cancel();
     pausedRequestsStream = undefined;
+    if (pausedRetryTimer) {
+        clearTimeout(pausedRetryTimer);
+        pausedRetryTimer = undefined;
+    }
     pm.stop();
     statusBarItem!.text = '$(circle-outline) APiX: Stopped';
     statusBarItem!.tooltip = 'APiX HTTP Proxy — click to start';
@@ -244,17 +268,36 @@ async function stopEngine(pm: EngineProcessManager): Promise<void> {
 
 function _startWatchPausedRequests(context: vscode.ExtensionContext, client: EngineClient): void {
     try {
+        if (pausedRetryTimer) {
+            clearTimeout(pausedRetryTimer);
+            pausedRetryTimer = undefined;
+        }
         pausedRequestsStream?.cancel();
         const stream = client.watchPausedRequests(
             (paused) => {
+                pausedRetryDelayMs = 1000;
                 RequestEditor.showEditor(context.extensionUri, client, paused);
             },
             (err) => {
                 // Log to output channel so user can inspect stream errors
                 outputChannel?.appendLine(`[APiX] WatchPausedRequests stream error: ${err?.message || err}`);
+                if (processManager?.isRunning()) {
+                    const delay = pausedRetryDelayMs;
+                    pausedRetryDelayMs = Math.min(pausedRetryDelayMs * 2, 30000);
+                    pausedRetryTimer = setTimeout(() => {
+                        _startWatchPausedRequests(context, client);
+                    }, delay);
+                }
             },
             () => {
                 console.log('[APiX] WatchPausedRequests stream ended.');
+                if (processManager?.isRunning()) {
+                    const delay = pausedRetryDelayMs;
+                    pausedRetryDelayMs = Math.min(pausedRetryDelayMs * 2, 30000);
+                    pausedRetryTimer = setTimeout(() => {
+                        _startWatchPausedRequests(context, client);
+                    }, delay);
+                }
             }
         );
         pausedRequestsStream = stream;
