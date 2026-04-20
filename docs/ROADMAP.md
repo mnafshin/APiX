@@ -2,7 +2,7 @@
 
 > Living document — last updated 2026-04-20
 
-APiX is evolving from a capable HTTP/HTTPS intercepting proxy into a **top-class API debugging toolkit**. This roadmap organizes 80+ open issues into a phased plan across five workstreams.
+APiX is evolving from a capable HTTP/HTTPS intercepting proxy into a **top-class API debugging toolkit** and ultimately a **zero-friction developer platform**. This roadmap organizes 90+ open issues into a phased plan across seven workstreams.
 
 ---
 
@@ -14,6 +14,7 @@ APiX is evolving from a capable HTTP/HTTPS intercepting proxy into a **top-class
 | **v2.2** | Developer Experience | 22 | Mid-term |
 | **v2.3** | Power Features | 15 | Mid-term |
 | **v3.0** | Platform & Differentiation | 15 | Long-term |
+| **v4.0** | Zero-Friction Developer Tool | 12 | Vision |
 
 ### Workstreams
 
@@ -24,6 +25,8 @@ APiX is evolving from a capable HTTP/HTTPS intercepting proxy into a **top-class
 | 🎨 **UX Evolution** | `ux-evolution` | CLI and VS Code extension usability improvements |
 | 📊 **Observability** | `observability` | Logging, tracing, metrics, monitoring |
 | 🚀 **Features** | `enhancement` | New capabilities and integrations |
+| 🧩 **Platform** | `platform` | Record, mock, guard, diff, share — workflow-level capabilities |
+| 🎯 **Developer Experience** | `developer-experience` | Zero-config adoption: process wrapping, SDK hooks, project init |
 
 ---
 
@@ -245,23 +248,77 @@ Phase 3 (Power)
   ├── #362 diff view ──→ #368 traffic diff CLI
   └── #389 size metrics ──→ #391 percentile metrics ──→ #392 Grafana dashboard
 
-Phase 4 (Platform)
+Phase 4 (Platform v3.0)
   ├── #372 scripting ──→ #371 load testing
   └── #369 session recording ──→ #370 multi-engine
+
+Phase 5 (Zero-Friction v4.0)
+  ├── #405 apix run (env injection) ──→ #416 apix system (system-wide proxy)
+  ├── #405 apix run ──→ #406 apix record ──→ #407 apix mock
+  ├── #406 apix record ──→ #410 apix diff
+  ├── #406 apix record ──→ #413 apix share
+  ├── #406 apix record ──→ #409 apix learn (OpenAPI gen)
+  ├── #405 apix run ──→ #408 apix guard
+  ├── #414 apix init (.apix/ project dir) ── standalone
+  ├── #411 apix doctor ── uses live engine or recordings
+  ├── #412 apix export ── uses live engine or recordings
+  └── #415 SDK hooks (Go, Python, Node.js) ── standalone
 ```
+
+---
+
+## Phase 5 — v4.0: Zero-Friction Developer Tool
+
+*Focus: Make APiX the tool developers reach for daily. Process wrapping, record/mock workflows, traffic guard, API diagnostics, and project-native config.*
+
+### 🎯 Zero-Config Adoption (3)
+
+| # | Issue | Effort |
+|---|-------|--------|
+| #405 | `apix run` — wrap any process with automatic proxy routing | M |
+| #416 | `apix system` — system-wide proxy toggle (macOS/Linux/Windows) | M |
+| #414 | `apix init` — project-native `.apix/` configuration directory | S |
+
+### 🧩 Record & Replay Workflow (3)
+
+| # | Issue | Effort |
+|---|-------|--------|
+| #406 | `apix record` — capture traffic sessions to replayable files | M |
+| #407 | `apix mock` — serve recorded traffic as a mock API server | L |
+| #413 | `apix share` — collaborative session sharing | M |
+
+### 🧩 Analysis & Intelligence (3)
+
+| # | Issue | Effort |
+|---|-------|--------|
+| #409 | `apix learn` — auto-generate OpenAPI spec from traffic | L |
+| #410 | `apix diff` — detect API changes between sessions | L |
+| #411 | `apix doctor` — API usage health diagnostics | L |
+
+### 🧩 Integration & Export (3)
+
+| # | Issue | Effort |
+|---|-------|--------|
+| #408 | `apix guard` — traffic allowlist enforcement for CI/CD | M |
+| #412 | `apix export` — generate code/collections from traffic | M |
+| #415 | Language-native SDK hooks (Go, Python, Node.js) | L |
+
+**Phase 5 total: 12 issues**
 
 ---
 
 ## Success Metrics
 
-| Metric | Current | v2.1 Target | v3.0 Target |
-|--------|---------|-------------|-------------|
-| Test coverage | 71.5% | 80% | 90% |
-| Open bugs | 3 | 0 | 0 |
-| Security issues | 7 | 2 | 0 |
-| Code smells (HIGH) | 5 | 0 | 0 |
-| CLI UX score | 5.5/10 | 7/10 | 9/10 |
-| Extension UX score | 6/10 | 7.5/10 | 9/10 |
+| Metric | Current | v2.1 Target | v3.0 Target | v4.0 Target |
+|--------|---------|-------------|-------------|-------------|
+| Test coverage | 71.5% | 80% | 90% | 90%+ |
+| Open bugs | 3 | 0 | 0 | 0 |
+| Security issues | 7 | 2 | 0 | 0 |
+| Code smells (HIGH) | 5 | 0 | 0 | 0 |
+| CLI UX score | 5.5/10 | 7/10 | 9/10 | 10/10 |
+| Extension UX score | 6/10 | 7.5/10 | 9/10 | 10/10 |
+| Steps to first capture | 4 | 3 | 2 | 1 (`apix run`) |
+| SDK languages supported | 0 | 0 | 0 | 3 |
 
 ---
 
