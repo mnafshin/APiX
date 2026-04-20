@@ -34,6 +34,7 @@
     "onCommand:apix.composeRequest",
     "onCommand:apix.copyAsCurl",
     "onCommand:apix.copyRequestId",
+    "onCommand:apix.setAuthToken",
     "onCommand:apix.exportHAR",
     "onCommand:apix.importHAR",
     "onCommand:apix.openTrafficPanel",
@@ -97,6 +98,11 @@
         "command": "apix.copyRequestId",
         "title": "APiX: Copy Request ID",
         "icon": "$(clippy)"
+      },
+      {
+        "command": "apix.setAuthToken",
+        "title": "APiX: Set Auth Token",
+        "icon": "$(key)"
       },
       {
         "command": "apix.exportHAR",
@@ -290,7 +296,8 @@
         "apix.engine.authToken": {
           "type": "string",
           "default": "",
-          "description": "Optional bearer token for authenticating with a remote engine."
+          "description": "Deprecated. Use the 'APiX: Set Auth Token' command (stored in VS Code SecretStorage).",
+          "deprecationMessage": "Deprecated: use the APiX: Set Auth Token command. Existing values are migrated to SecretStorage on activation."
         },
         "apix.engine.binaryPath": {
           "type": "string",

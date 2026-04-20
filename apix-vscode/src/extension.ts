@@ -10,6 +10,8 @@ import { RequestEditor } from './requestEditor';
 import { HttpTransaction } from './types';
 import { buildCurlCommand } from './trafficFormats';
 
+const AUTH_TOKEN_SECRET_KEY = 'apix.authToken';
+
 let engineClient: EngineClient | undefined;
 let processManager: EngineProcessManager | undefined;
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -27,7 +29,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const grpcPort: number = config.get('engine.grpcPort', 9090);
     const autoStart: boolean = config.get('engine.autoStart', true);
     const tlsEnabled: boolean = config.get('engine.tlsEnabled', false);
-    const authToken: string = config.get('engine.authToken', '');
 
     // Status bar item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -42,6 +43,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     context.subscriptions.push(outputChannel);
 
     processManager = new EngineProcessManager(context);
+    const authToken = await resolveAuthToken(context, config, outputChannel);
     engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken);
     processManager.onUnexpectedExit = (message: string) => {
         statusBarItem!.text = '$(debug-disconnect) APiX: Disconnected';
@@ -129,6 +131,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ),
         vscode.commands.registerCommand('apix.copyRequestId', (itemOrTxOrID: TrafficItem | HttpTransaction | string) =>
             copyRequestId(itemOrTxOrID)
+        ),
+        vscode.commands.registerCommand('apix.setAuthToken', () =>
+            setAuthToken(context, config, engineClient!)
         ),
         vscode.commands.registerCommand('apix.exportHAR', (itemOrTx?: TrafficItem | HttpTransaction) =>
             exportHAR(engineClient!, itemOrTx)
@@ -429,4 +434,81 @@ async function importHAR(client: EngineClient, provider: TrafficProvider): Promi
     } catch (err: any) {
         vscode.window.showErrorMessage(`APiX: Failed to import HAR — ${err?.message || err}`);
     }
+}
+
+async function resolveAuthToken(
+    context: vscode.ExtensionContext,
+    config: vscode.WorkspaceConfiguration,
+    output?: vscode.OutputChannel
+): Promise<string> {
+    const legacy = (config.get<string>('engine.authToken', '') || '').trim();
+    const secret = (await context.secrets.get(AUTH_TOKEN_SECRET_KEY))?.trim() || '';
+    if (secret) {
+        return secret;
+    }
+    if (!legacy) {
+        return '';
+    }
+
+    await context.secrets.store(AUTH_TOKEN_SECRET_KEY, legacy);
+    await clearLegacyAuthTokenSetting(config, output);
+    output?.appendLine('[APiX] Migrated apix.engine.authToken to VS Code SecretStorage.');
+    return legacy;
+}
+
+async function clearLegacyAuthTokenSetting(
+    config: vscode.WorkspaceConfiguration,
+    output?: vscode.OutputChannel
+): Promise<void> {
+    const inspected = config.inspect<string>('engine.authToken');
+    const tasks: Promise<void>[] = [];
+    if (inspected?.workspaceValue !== undefined) {
+        tasks.push(Promise.resolve(config.update('engine.authToken', '', vscode.ConfigurationTarget.Workspace)));
+    }
+    if (inspected?.workspaceFolderValue !== undefined) {
+        tasks.push(Promise.resolve(config.update('engine.authToken', '', vscode.ConfigurationTarget.WorkspaceFolder)));
+    }
+    if (inspected?.globalValue !== undefined) {
+        tasks.push(Promise.resolve(config.update('engine.authToken', '', vscode.ConfigurationTarget.Global)));
+    }
+    if (tasks.length === 0) {
+        return;
+    }
+    const results = await Promise.allSettled(tasks);
+    for (const result of results) {
+        if (result.status === 'rejected') {
+            output?.appendLine(`[APiX] Failed to clear deprecated apix.engine.authToken setting: ${result.reason}`);
+        }
+    }
+}
+
+async function setAuthToken(
+    context: vscode.ExtensionContext,
+    config: vscode.WorkspaceConfiguration,
+    client: EngineClient
+): Promise<void> {
+    const current = (await context.secrets.get(AUTH_TOKEN_SECRET_KEY)) || '';
+    const token = await vscode.window.showInputBox({
+        title: 'APiX: Set Auth Token',
+        prompt: 'Enter the bearer token used for remote engine authentication. Leave empty to clear it.',
+        password: true,
+        value: current,
+    });
+    if (token === undefined) {
+        return;
+    }
+
+    const trimmed = token.trim();
+    if (trimmed === '') {
+        await context.secrets.delete(AUTH_TOKEN_SECRET_KEY);
+        client.setAuthToken('');
+        await clearLegacyAuthTokenSetting(config, outputChannel);
+        vscode.window.showInformationMessage('APiX: Auth token cleared.');
+        return;
+    }
+
+    await context.secrets.store(AUTH_TOKEN_SECRET_KEY, trimmed);
+    client.setAuthToken(trimmed);
+    await clearLegacyAuthTokenSetting(config, outputChannel);
+    vscode.window.showInformationMessage('APiX: Auth token saved to SecretStorage.');
 }

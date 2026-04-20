@@ -26,17 +26,17 @@ export class EngineClient {
     private client: grpc.Client | null = null;
     private stub: any = null;
     private metadata: grpc.Metadata;
+    private authToken: string;
 
     constructor(
         private readonly host: string,
         private readonly port: number,
         private readonly tlsEnabled: boolean,
-        private readonly authToken: string
+        authToken: string
     ) {
+        this.authToken = authToken.trim();
         this.metadata = new grpc.Metadata();
-        if (authToken) {
-            this.metadata.add('authorization', `Bearer ${authToken}`);
-        }
+        this.applyAuthMetadata();
 
         try {
             const packageDef = protoLoader.loadSync(PROTO_PATH, {
@@ -50,28 +50,27 @@ export class EngineClient {
             const EngineService = grpcObj.apix.Engine;
             const address = `${host}:${port}`;
 
-            let credentials: grpc.ChannelCredentials;
-            if (tlsEnabled) {
-                const sslCreds = grpc.credentials.createSsl();
-                if (authToken) {
-                    const callCreds = grpc.credentials.createFromMetadataGenerator((_, cb) => {
-                        const meta = new grpc.Metadata();
-                        meta.add('authorization', `Bearer ${authToken}`);
-                        cb(null, meta);
-                    });
-                    credentials = grpc.credentials.combineChannelCredentials(sslCreds, callCreds);
-                } else {
-                    credentials = sslCreds;
-                }
-            } else {
-                credentials = grpc.credentials.createInsecure();
-            }
+            const credentials = tlsEnabled
+                ? grpc.credentials.createSsl()
+                : grpc.credentials.createInsecure();
 
             this.stub = new EngineService(address, credentials);
             this.client = this.stub as grpc.Client;
         } catch (err) {
             console.error('EngineClient: failed to load proto or create stub:', err);
         }
+    }
+
+    private applyAuthMetadata(): void {
+        this.metadata = new grpc.Metadata();
+        if (this.authToken) {
+            this.metadata.add('authorization', `Bearer ${this.authToken}`);
+        }
+    }
+
+    setAuthToken(token: string): void {
+        this.authToken = token.trim();
+        this.applyAuthMetadata();
     }
 
     private ensureStub(): void {
