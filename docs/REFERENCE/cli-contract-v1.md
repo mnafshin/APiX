@@ -1,8 +1,10 @@
 # APiX CLI Contract v1
 
-This document defines the **user-facing compatibility contract** for the first contract-first APiX CLI shipped from `cmd/apix-cli`.
+This document defines the **user-facing compatibility contract** for the first contract-first APiX CLI shipped from `cmd/apix-cli`, exposed as the `apix` command.
 
 It is the reference for scripts, CI jobs, and future MCP/agent integrations that depend on stable CLI behavior. Implementation details may evolve internally, but the behavior described here should be treated as the compatibility surface for the v1 CLI.
+
+`apix-cli` remains available as a compatibility alias; new docs and examples use `apix`.
 
 ## Contract scope
 

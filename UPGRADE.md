@@ -34,6 +34,8 @@ Check version compatibility in [`docs/REFERENCE/compatibility-matrix.md`](docs/R
 
 ## v2.0.x -> v2.1.x notes
 
+- `apix` is now the canonical command identity for the CLI surface.
+- `apix-cli` remains available as a compatibility alias for existing scripts.
 - If you currently store `auth_token` in config, APiX now enforces strict file permissions by default.
 - You can migrate secrets to `auth_token_file` for cleaner secret management in deployments.
 - New proxy safety knobs are available:
@@ -49,4 +51,3 @@ Check version compatibility in [`docs/REFERENCE/compatibility-matrix.md`](docs/R
 4. Start old version and run `./apix-cli status`.
 
 If rollback is required because of compatibility, keep your previous version pinned and open an issue with the failing workflow and versions.
-

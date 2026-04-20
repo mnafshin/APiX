@@ -51,7 +51,7 @@ make build-cli
 In another terminal:
 
 ```bash
-./apix-cli status
+./apix status
 curl -x http://localhost:8080 https://example.com
 ```
 
@@ -65,7 +65,7 @@ Then run the extension from VS Code (`Run Extension`), or package/install from `
 
 ## CLI surface
 
-`apix-cli` currently includes:
+`apix` currently includes:
 
 - `status`, `plugins`
 - `history list|get|clear`
@@ -77,7 +77,9 @@ Then run the extension from VS Code (`Run Extension`), or package/install from `
 - `replay`
 - `cert`, `config`, `doctor`, `completion`
 
-Use `apix-cli help` for details.
+Use `apix help` for details.
+
+> Compatibility note: `apix-cli` remains available as a compatibility alias.
 
 ## Configuration
 

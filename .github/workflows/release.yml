@@ -41,7 +41,9 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: go build -o apix-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/apix-cli/
+        run: |
+          go build -o apix-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/apix-cli/
+          go build -o apix-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }} ./cmd/apix-cli/
       - uses: actions/upload-artifact@v4
         with:
           name: engine-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -49,7 +51,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: apix-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          path: |
+            apix-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+            apix-cli-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
 
   build-extension:
     name: Package VS Code Extension
