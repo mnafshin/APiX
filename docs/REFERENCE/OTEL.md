@@ -1,14 +1,24 @@
 # OpenTelemetry Collector (OTel) integration
 
-APiX exposes Prometheus-format metrics at `/metrics` when `metrics_enabled` is set in `config.yaml`. The recommended integration path is to run the OpenTelemetry Collector to scrape APiX's Prometheus endpoint and forward metrics via OTLP to your observability backend.
+APiX supports both:
 
-Quick start
+- Prometheus metrics at `/metrics` (when `metrics_enabled: true`)
+- built-in OTLP trace export via the `otel-tracing` plugin (when `otel_enabled: true`)
 
-1. Enable metrics in `config.yaml`:
+The recommended integration path is to run the OpenTelemetry Collector and forward to your observability backend.
+
+Quick start (metrics + traces)
+
+1. Enable OTel settings in `config.yaml`:
 
 ```yaml
 metrics_enabled: true
 metrics_port: "9091"
+otel_enabled: true
+otel_endpoint: "localhost:4317"
+otel_service_name: "apix-proxy"
+otel_insecure: true
+otel_sample_rate: 1.0
 ```
 
 2. Start APiX:
@@ -30,7 +40,12 @@ docker run --rm \
 Notes
 
 - If the Collector runs in Docker and APiX runs on the host, use `host.docker.internal:9091` (macOS/Windows) as the scrape target or use host networking on Linux.
-- Adjust the OTLP exporter endpoint and TLS/insecure settings to match your backend.
+- Adjust `otel_endpoint` and `otel_insecure` for your backend.
 - The sample config is intentionally minimal — production deployments should tune receivers/exporters and add security.
+
+Common targets:
+
+- Jaeger all-in-one OTLP gRPC endpoint: `localhost:4317`
+- Grafana Tempo OTLP gRPC endpoint: `<tempo-host>:4317`
 
 See `docs/otel-collector-config.yaml` for an example collector configuration.

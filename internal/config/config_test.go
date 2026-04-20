@@ -54,6 +54,21 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.MCPBindAddress != "127.0.0.1" {
 		t.Errorf("MCPBindAddress: got %q want 127.0.0.1", cfg.MCPBindAddress)
 	}
+	if cfg.OTelEnabled {
+		t.Error("OTelEnabled: expected false by default")
+	}
+	if cfg.OTelEndpoint != "localhost:4317" {
+		t.Errorf("OTelEndpoint: got %q want localhost:4317", cfg.OTelEndpoint)
+	}
+	if cfg.OTelServiceName != "apix-proxy" {
+		t.Errorf("OTelServiceName: got %q want apix-proxy", cfg.OTelServiceName)
+	}
+	if !cfg.OTelInsecure {
+		t.Error("OTelInsecure: expected true by default")
+	}
+	if cfg.OTelSampleRate != 1.0 {
+		t.Errorf("OTelSampleRate: got %v want 1.0", cfg.OTelSampleRate)
+	}
 }
 
 func TestLoadConfig_YAMLOverride(t *testing.T) {
@@ -67,6 +82,11 @@ mcp_enabled: true
 mcp_port: "9100"
 log_format: "json"
 log_level: "debug"
+otel_enabled: true
+otel_endpoint: "otel-collector:4317"
+otel_service_name: "apix-dev"
+otel_insecure: false
+otel_sample_rate: 0.25
 `)
 	cfg := LoadConfig(path)
 
@@ -93,6 +113,21 @@ log_level: "debug"
 	}
 	if cfg.LogLevel != "debug" {
 		t.Errorf("LogLevel: got %q want debug", cfg.LogLevel)
+	}
+	if !cfg.OTelEnabled {
+		t.Error("OTelEnabled should be true from YAML override")
+	}
+	if cfg.OTelEndpoint != "otel-collector:4317" {
+		t.Errorf("OTelEndpoint: got %q want otel-collector:4317", cfg.OTelEndpoint)
+	}
+	if cfg.OTelServiceName != "apix-dev" {
+		t.Errorf("OTelServiceName: got %q want apix-dev", cfg.OTelServiceName)
+	}
+	if cfg.OTelInsecure {
+		t.Error("OTelInsecure should be false from YAML override")
+	}
+	if cfg.OTelSampleRate != 0.25 {
+		t.Errorf("OTelSampleRate: got %v want 0.25", cfg.OTelSampleRate)
 	}
 	// Unspecified fields stay at defaults.
 	if cfg.HTTPIdleTimeout != 120 {

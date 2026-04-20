@@ -52,8 +52,13 @@ type Config struct {
 	// VacuumIntervalHours is how often (in hours) to run SQLite VACUUM to
 	// reclaim free pages and defragment the database. 0 disables periodic
 	// VACUUM. Default: 24 (once per day).
-	VacuumIntervalHours int `yaml:"vacuum_interval_hours"`
-	SlowlogThresholdMs  int `yaml:"slowlog_threshold_ms"`
+	VacuumIntervalHours int     `yaml:"vacuum_interval_hours"`
+	SlowlogThresholdMs  int     `yaml:"slowlog_threshold_ms"`
+	OTelEnabled         bool    `yaml:"otel_enabled"`
+	OTelEndpoint        string  `yaml:"otel_endpoint"`
+	OTelServiceName     string  `yaml:"otel_service_name"`
+	OTelInsecure        bool    `yaml:"otel_insecure"`
+	OTelSampleRate      float64 `yaml:"otel_sample_rate"`
 
 	// History retention
 	HistoryMaxAgeDays int `yaml:"history_max_age_days"` // 0 = keep forever
@@ -88,8 +93,8 @@ type Config struct {
 
 // MapLocalRule maps a URL regex pattern to a local file response.
 type MapLocalRule struct {
-	URLPattern  string `yaml:"url_pattern"`
-	FilePath    string `yaml:"file_path"`
+	URLPattern string `yaml:"url_pattern"`
+	FilePath   string `yaml:"file_path"`
 	// LocalPath is a backwards-compatible alias for file_path.
 	LocalPath   string `yaml:"local_path"`
 	ContentType string `yaml:"content_type"`
@@ -166,6 +171,11 @@ func LoadConfig(path string) *Config {
 		VacuumIntervalHours: 24,
 		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
+		OTelEnabled:         false,
+		OTelEndpoint:        "localhost:4317",
+		OTelServiceName:     "apix-proxy",
+		OTelInsecure:        true,
+		OTelSampleRate:      1.0,
 		LogFormat:           "text",
 		LogLevel:            "info",
 		MCPEnabled:          false,

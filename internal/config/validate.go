@@ -194,6 +194,17 @@ func (c *Config) validate(allowBoundPorts bool) error {
 			errs = append(errs, fmt.Errorf("log_level %q is invalid — use debug|info|warn|error", c.LogLevel))
 		}
 	}
+	if c.OTelEnabled {
+		if strings.TrimSpace(c.OTelEndpoint) == "" {
+			errs = append(errs, fmt.Errorf("otel_endpoint must be set when otel_enabled is true"))
+		}
+		if strings.TrimSpace(c.OTelServiceName) == "" {
+			errs = append(errs, fmt.Errorf("otel_service_name must be set when otel_enabled is true"))
+		}
+		if c.OTelSampleRate <= 0 || c.OTelSampleRate > 1 {
+			errs = append(errs, fmt.Errorf("otel_sample_rate must be > 0 and <= 1 when otel_enabled is true (got %v)", c.OTelSampleRate))
+		}
+	}
 
 	// ── map-local rules ────────────────────────────────────────────────────
 	for i, rule := range c.MapLocalRules {
