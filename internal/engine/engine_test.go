@@ -14,6 +14,7 @@ import (
 	"github.com/mnafshin/apix/internal/pluginrt"
 	"github.com/mnafshin/apix/internal/proxy"
 	"github.com/mnafshin/apix/internal/storage"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
@@ -46,6 +47,23 @@ func makeTransaction(id, method, rawURL string) *proxy.Transaction {
 			Raw:     raw,
 		},
 	}
+}
+
+type pairSaveSpyRepo struct {
+	saveRequestCalls     int
+	saveResponseCalls    int
+	saveTransactionCalls int
+}
+
+func (r *pairSaveSpyRepo) SaveRequest(_ *storage.RequestRecord) error   { r.saveRequestCalls++; return nil }
+func (r *pairSaveSpyRepo) SaveResponse(_ *storage.ResponseRecord) error { r.saveResponseCalls++; return nil }
+func (r *pairSaveSpyRepo) SaveWebSocketFrame(_ *storage.WebSocketFrameRecord) error {
+	return nil
+}
+func (r *pairSaveSpyRepo) ListRewriteRules() ([]*apix.RewriteRule, error) { return nil, nil }
+func (r *pairSaveSpyRepo) SaveTransaction(_ *storage.RequestRecord, _ *storage.ResponseRecord) error {
+	r.saveTransactionCalls++
+	return nil
 }
 
 // TestStoreTransaction verifies that a stored transaction is retrievable from the DB.
@@ -135,6 +153,32 @@ func TestStoreTransactionWithResponse(t *testing.T) {
 	}
 	if resp.StatusCode != 200 {
 		t.Errorf("status code: got %d want 200", resp.StatusCode)
+	}
+}
+
+func TestStoreTransactionUsesAtomicPairSaveWhenSupported(t *testing.T) {
+	t.Parallel()
+	repo := &pairSaveSpyRepo{}
+	e := engine.New(repo, breakpoints.NewManager(), pluginrt.NewRuntime())
+
+	tx := makeTransaction("tx-pair-save", "GET", "http://example.com/pair")
+	tx.Response = &proxy.ProxyResponse{
+		StatusCode: 200,
+		Status:     "200 OK",
+		Headers:    http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{}`)),
+	}
+	tx.RequestBody = []byte(`{"in":true}`)
+	tx.ResponseBody = []byte(`{"out":true}`)
+
+	if err := e.StoreTransaction(tx); err != nil {
+		t.Fatalf("StoreTransaction: %v", err)
+	}
+	if repo.saveTransactionCalls != 1 {
+		t.Fatalf("expected SaveTransaction to be called once, got %d", repo.saveTransactionCalls)
+	}
+	if repo.saveRequestCalls != 0 || repo.saveResponseCalls != 0 {
+		t.Fatalf("expected SaveRequest/SaveResponse fallback not used, got request=%d response=%d", repo.saveRequestCalls, repo.saveResponseCalls)
 	}
 }
 

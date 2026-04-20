@@ -31,6 +31,10 @@ type Engine struct {
 	pauseTimeoutSec int // 0 = no timeout
 }
 
+type pairTransactionSaver interface {
+	SaveTransaction(req *storage.RequestRecord, resp *storage.ResponseRecord) error
+}
+
 // New creates a new Engine wiring together all sub-systems.
 func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pluginrt.Runtime) *Engine {
 	return &Engine{
@@ -62,7 +66,11 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		tx.ID = uuid.NewString()
 	}
 
-	var retErr error
+	var (
+		retErr  error
+		reqRec  *storage.RequestRecord
+		respRec *storage.ResponseRecord
+	)
 
 	req := tx.Request
 	if req != nil {
@@ -73,7 +81,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 		}
 		hdrs := httputil.HeadersToMap(firstNonEmptyHeader(tx.OriginalRequestHeaders, rawHeader, req.Headers))
 
-		rec := &storage.RequestRecord{
+		reqRec = &storage.RequestRecord{
 			ID:         tx.ID,
 			Method:     req.Method,
 			URL:        req.URL.String(),
@@ -82,10 +90,6 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			Timestamp:  time.Now(),
 			DurationMs: tx.DurationMs,
 			Protocol:   req.Protocol,
-		}
-		if err := e.db.SaveRequest(rec); err != nil {
-			logging.Errorf(context.Background(), "engine: save request: %v", err)
-			retErr = err
 		}
 
 		// Publish to capture subscribers.
@@ -122,14 +126,35 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	resp := tx.Response
 	if resp != nil {
 		hdrs := httputil.HeadersToMap(resp.Headers)
-		rec := &storage.ResponseRecord{
+		respRec = &storage.ResponseRecord{
 			RequestID:  tx.ID,
 			StatusCode: resp.StatusCode,
 			StatusText: resp.Status,
 			Headers:    hdrs,
 			Body:       tx.ResponseBody,
 		}
-		if err := e.db.SaveResponse(rec); err != nil {
+	}
+
+	// Persist request/response. When both records exist and the repository
+	// supports an atomic pair write, use it to avoid split auto-commit writes.
+	if reqRec != nil && respRec != nil {
+		if saver, ok := e.db.(pairTransactionSaver); ok {
+			if err := saver.SaveTransaction(reqRec, respRec); err != nil {
+				logging.Errorf(context.Background(), "engine: save transaction: %v", err)
+				retErr = err
+			}
+			return retErr
+		}
+	}
+
+	if reqRec != nil {
+		if err := e.db.SaveRequest(reqRec); err != nil {
+			logging.Errorf(context.Background(), "engine: save request: %v", err)
+			retErr = err
+		}
+	}
+	if respRec != nil {
+		if err := e.db.SaveResponse(respRec); err != nil {
 			logging.Errorf(context.Background(), "engine: save response: %v", err)
 			if retErr == nil {
 				retErr = err

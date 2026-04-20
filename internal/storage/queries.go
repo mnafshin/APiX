@@ -89,6 +89,54 @@ func (d *DB) SaveResponse(r *ResponseRecord) error {
 	return err
 }
 
+// SaveTransaction writes request/response records in a single SQL transaction.
+// It is primarily used by the engine path to avoid split auto-commit writes.
+func (d *DB) SaveTransaction(req *RequestRecord, resp *ResponseRecord) error {
+	if req == nil && resp == nil {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if req != nil {
+		hdrs, marshalErr := json.Marshal(req.Headers)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal request headers: %w", marshalErr)
+		}
+		if _, execErr := tx.Exec(
+			`INSERT OR REPLACE INTO requests (id, method, url, headers, body, timestamp, duration_ms, protocol)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			req.ID, req.Method, req.URL, string(hdrs), req.Body,
+			req.Timestamp.UnixMilli(), req.DurationMs, req.Protocol,
+		); execErr != nil {
+			return execErr
+		}
+	}
+
+	if resp != nil {
+		hdrs, marshalErr := json.Marshal(resp.Headers)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal response headers: %w", marshalErr)
+		}
+		if _, execErr := tx.Exec(
+			`INSERT OR REPLACE INTO responses (request_id, status_code, status_text, headers, body)
+			 VALUES (?, ?, ?, ?, ?)`,
+			resp.RequestID, resp.StatusCode, resp.StatusText, string(hdrs), resp.Body,
+		); execErr != nil {
+			return execErr
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
 // GetTransaction retrieves a request+response pair by request ID.
 func (d *DB) GetTransaction(id string) (*RequestRecord, *ResponseRecord, error) {
 	req, err := scanRequest(d.db.QueryRow(
