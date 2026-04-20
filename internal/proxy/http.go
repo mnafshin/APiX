@@ -596,24 +596,7 @@ func (p *HTTPProxy) storeAndWriteResponse(ctx context.Context, w http.ResponseWr
 		http.Error(w, "proxy transaction incomplete", http.StatusBadGateway)
 		return
 	}
-	if p.engine != nil {
-		tx.DurationMs = time.Since(start).Milliseconds()
-		if err := p.engine.StoreTransaction(tx); err != nil {
-			logging.Errorf(ctx, "store transaction: %v", err)
-		}
-	}
-	observeRequest(
-		ctx,
-		p.cfg,
-		tx.Request.Method,
-		tx.Request.URL.String(),
-		tx.Response.StatusCode,
-		time.Since(start),
-		tx.ID,
-		tx.Request.Raw.RemoteAddr,
-		len(tx.RequestBody),
-		len(tx.ResponseBody),
-	)
+	storeAndObserve(ctx, p.cfg, p.engine, tx, start, "store transaction")
 	writeProxyResponse(w, tx.Response, tx.ResponseBody)
 }
 
