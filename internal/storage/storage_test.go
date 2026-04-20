@@ -173,6 +173,44 @@ func TestSaveAndGetResponse(t *testing.T) {
 	}
 }
 
+func TestSaveTransaction(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	now := time.Now().Truncate(time.Millisecond)
+	req := &RequestRecord{
+		ID:        "req-tx-1",
+		Method:    "PUT",
+		URL:       "https://api.example.com/tx",
+		Headers:   map[string]string{"Content-Type": "application/json"},
+		Body:      []byte(`{"x":1}`),
+		Timestamp: now,
+		Protocol:  "HTTP/1.1",
+	}
+	resp := &ResponseRecord{
+		RequestID:  "req-tx-1",
+		StatusCode: 202,
+		StatusText: "Accepted",
+		Headers:    map[string]string{"X-Test": "true"},
+		Body:       []byte(`{"ok":true}`),
+	}
+
+	if err := db.SaveTransaction(req, resp); err != nil {
+		t.Fatalf("SaveTransaction: %v", err)
+	}
+
+	gotReq, gotResp, err := db.GetTransaction("req-tx-1")
+	if err != nil {
+		t.Fatalf("GetTransaction: %v", err)
+	}
+	if gotReq == nil || gotResp == nil {
+		t.Fatalf("expected both records, got req=%v resp=%v", gotReq, gotResp)
+	}
+	if gotReq.Method != "PUT" || gotResp.StatusCode != 202 {
+		t.Fatalf("unexpected transaction values: req=%+v resp=%+v", gotReq, gotResp)
+	}
+}
+
 func makeRequest(id, method, url string) *RequestRecord {
 	return &RequestRecord{
 		ID:        id,
