@@ -22,4 +22,3 @@ Use the CLI:
 ```
 
 For API contract values, call `GetVersion` via gRPC tooling or client code.
-

@@ -24,4 +24,3 @@ APiX uses explicit stability labels for user-facing surfaces.
 1. Add explicit deprecation note in docs and release notes.
 2. Keep behavior available for at least one minor release when practical.
 3. Provide migration steps in [`UPGRADE.md`](../../UPGRADE.md).
-
