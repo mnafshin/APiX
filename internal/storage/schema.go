@@ -105,6 +105,8 @@ var AllTables = []string{
 	`CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_method    ON requests(method)`,
 	`CREATE INDEX IF NOT EXISTS idx_requests_url       ON requests(url)`,
+	`CREATE INDEX IF NOT EXISTS idx_requests_method_url_ts ON requests(method, url, timestamp DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_responses_status   ON responses(status_code)`,
 	`CREATE INDEX IF NOT EXISTS idx_ws_frames_txid     ON ws_frames(transaction_id)`,
 	`CREATE INDEX IF NOT EXISTS idx_rewrite_rules_priority ON rewrite_rules(priority ASC)`,
 	`CREATE INDEX IF NOT EXISTS idx_request_templates_updated_at ON request_templates(updated_at DESC)`,
