@@ -75,7 +75,7 @@ func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt Plu
 func NewWithConfig(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt PluginRuntime, cfg *config.Config) *Engine {
 	e := New(db, bpManager, rt)
 	if cfg != nil {
-		e.pauseTimeoutSec = cfg.BreakpointPauseTimeoutSec
+		e.SetBreakpointPauseTimeoutSec(cfg.BreakpointPauseTimeoutSec)
 	}
 	return e
 }
@@ -227,8 +227,8 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 
 	pauseCtx := tx.Request.Raw.Context()
 	var cancelPause context.CancelFunc
-	if e.pauseTimeoutSec > 0 {
-		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(e.pauseTimeoutSec)*time.Second)
+	if timeoutSec := e.breakpointPauseTimeoutSec(); timeoutSec > 0 {
+		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(timeoutSec)*time.Second)
 		defer cancelPause()
 	}
 
@@ -287,8 +287,8 @@ func (e *Engine) PauseResponse(tx *proxy.Transaction, statusCode int, responseBo
 
 	pauseCtx := tx.Request.Raw.Context()
 	var cancelPause context.CancelFunc
-	if e.pauseTimeoutSec > 0 {
-		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(e.pauseTimeoutSec)*time.Second)
+	if timeoutSec := e.breakpointPauseTimeoutSec(); timeoutSec > 0 {
+		pauseCtx, cancelPause = context.WithTimeout(pauseCtx, time.Duration(timeoutSec)*time.Second)
 		defer cancelPause()
 	}
 
@@ -487,4 +487,16 @@ func (e *Engine) storageAccess() (StorageAccess, error) {
 		return nil, errors.New("engine storage access is unavailable")
 	}
 	return db, nil
+}
+
+func (e *Engine) SetBreakpointPauseTimeoutSec(timeoutSec int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.pauseTimeoutSec = timeoutSec
+}
+
+func (e *Engine) breakpointPauseTimeoutSec() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.pauseTimeoutSec
 }

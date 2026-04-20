@@ -84,6 +84,16 @@ message StatusResponse {
   bool tls_enabled = 5;
 }
 
+message ConfigReloadRequest {
+  string path = 1; // optional explicit config path; empty uses engine startup path
+}
+
+message ConfigReloadResponse {
+  string config_path = 1;
+  repeated string applied_fields = 2;
+  repeated string skipped_fields = 3;
+}
+
 // VersionRequest asks the engine for its API version information.
 message VersionRequest {}
 
@@ -290,6 +300,8 @@ message RewriteRuleRequest {
 service Engine {
   // ----- Health -----
   rpc GetStatus(StatusRequest) returns (StatusResponse);
+  // ReloadConfig hot-reloads runtime-safe config fields without restarting.
+  rpc ReloadConfig(ConfigReloadRequest) returns (ConfigReloadResponse);
   // GetVersion returns the engine's API version and compatibility contract.
   // Clients should call this on connect and compare api_version against their
   // own expectation. The min_client_version field indicates the oldest client

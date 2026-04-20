@@ -732,6 +732,13 @@ func (p *HTTPProxy) SetPlugins(chain any) {
 	p.plugins = chain
 }
 
+func (p *HTTPProxy) SetRateLimits(ratePerSec, maxConcurrent int) {
+	if p.limiter == nil {
+		p.limiter = &proxyRateLimiter{}
+	}
+	p.limiter.update(ratePerSec, maxConcurrent)
+}
+
 // Close gracefully shuts down the HTTP proxy and closes idle connections.
 func (p *HTTPProxy) Close() {
 	if p.transport != nil {
