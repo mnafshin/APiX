@@ -115,6 +115,11 @@ func Errorf(ctx context.Context, format string, args ...interface{}) {
 	getLogger().ErrorContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
 }
 
+// Debugf logs a formatted debug-level message.
+func Debugf(ctx context.Context, format string, args ...interface{}) {
+	getLogger().DebugContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
+}
+
 // Fatalf logs a formatted fatal-level message and exits the process.
 func Fatalf(ctx context.Context, format string, args ...interface{}) {
 	getLogger().ErrorContext(ctx, fmt.Sprintf(format, args...), extraArgs(ctx)...)
