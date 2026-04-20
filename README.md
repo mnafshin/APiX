@@ -152,14 +152,6 @@ make proto
 ```
 
 ## Additional docs
----
-
-# README backup and replacement
-
-# This will replace the "Additional docs" section in README.md
-
-## Documentation
-
 See [`docs/INDEX.md`](docs/INDEX.md) for the complete documentation index.
 
 **Quick links:**

@@ -47,8 +47,8 @@ Browse [`how-to/`](how-to/) for step-by-step recipes:
 Deep-dive technical documentation:
 
 - [`ARCHITECTURE/design-principles.md`](ARCHITECTURE/design-principles.md) — core design tenets
-- [`ARCHITECTURE/proxy-mitm.md`](ARCHITECTURE/proxy_mitm.md) — HTTP proxy and TLS MITM
-- [`ARCHITECTURE/grpc-protobuf.md`](ARCHITECTURE/grpc_protobuf.md) — gRPC API contract
+- [`ARCHITECTURE/proxy_mitm.md`](ARCHITECTURE/proxy_mitm.md) — HTTP proxy and TLS MITM
+- [`ARCHITECTURE/grpc_protobuf.md`](ARCHITECTURE/grpc_protobuf.md) — gRPC API contract
 - [`ARCHITECTURE/storage-replay.md`](ARCHITECTURE/storage_replay.md) — SQLite storage and replay engine
 - [`ARCHITECTURE/extension-arch.md`](ARCHITECTURE/extension_arch.md) — VS Code extension internals
 
@@ -61,7 +61,7 @@ Stable contracts and schemas:
 - [`REFERENCE/cli-contract-v1.md`](REFERENCE/cli-contract-v1.md) — CLI flags, output formats, exit codes
 - [`REFERENCE/cli_mcp.md`](REFERENCE/cli_mcp.md) — MCP server integration and tools
 - [`REFERENCE/glossary.md`](REFERENCE/glossary.md) — terminology and concepts
-- [`REFERENCE/otel.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
+- [`REFERENCE/OTEL.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
 - [`REFERENCE/plugin-sdk.md`](REFERENCE/plugin-sdk.md) — plugin interfaces and lifecycle
 
 ---
@@ -71,11 +71,11 @@ Stable contracts and schemas:
 Comprehensive testing coverage:
 
 - [`TESTING.md`](TESTING.md) — overview of testing layers
-- [`testing/strategy.md`](testing/strategy.md) — testing approach and best practices
-- [`testing/release-smoke.md`](testing/release-smoke.md) — smoke tests
-- [`testing/resilience.md`](testing/resilience.md) — fault injection and resilience testing
-- [`testing/stateful-workflows.md`](testing/stateful-workflows.md) — end-to-end stateful workflows
-- [`testing/mcp-suite.md`](testing/mcp-suite.md) — MCP integration tests
+- [`testing/testing_strategy.md`](testing/testing_strategy.md) — testing approach and best practices
+- [`testing/testing_release_smoke.md`](testing/testing_release_smoke.md) — smoke tests
+- [`testing/testing_resilience.md`](testing/testing_resilience.md) — fault injection and resilience testing
+- [`testing/testing_stateful_workflows.md`](testing/testing_stateful_workflows.md) — end-to-end stateful workflows
+- [`testing/testing_mcp_suite.md`](testing/testing_mcp_suite.md) — MCP integration tests
 
 ---
 
