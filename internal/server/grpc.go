@@ -26,7 +26,7 @@ type EngineServer struct {
 	apix.UnimplementedEngineServer
 	traffic       TrafficSubscriber
 	breakpointMgr BreakpointManagerServer
-	db            ServerRepository
+	engine        EngineDomain
 	plugins       PluginLister
 	replayEngine  *replay.Engine
 	cfg           *config.Config
@@ -46,7 +46,7 @@ func NewEngineServer(eng *engine.Engine, re *replay.Engine, cfg *config.Config) 
 	return &EngineServer{
 		traffic:       eng,
 		breakpointMgr: eng.BreakpointManager(),
-		db:            eng.DB(),
+		engine:        eng,
 		plugins:       eng.PluginRuntime(),
 		replayEngine:  re,
 		cfg:           cfg,

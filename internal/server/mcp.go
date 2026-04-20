@@ -309,7 +309,7 @@ func (h *mcpHandler) callHistory(args map[string]interface{}) (interface{}, erro
 	sinceMS := int64Arg(args, "since_ms", 0)
 	bodyFilter := stringArg(args, "body_filter")
 
-	reqs, resps, err := h.srv.db.ListTransactions(limit, offset, urlFilter, methodFilter, statusFilter, bodyFilter)
+	reqs, resps, err := h.srv.engine.ListTransactions(limit, offset, urlFilter, methodFilter, statusFilter, bodyFilter)
 	if err != nil {
 		return nil, err
 	}

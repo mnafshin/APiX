@@ -36,7 +36,7 @@ func (s *EngineServer) GetHistory(req *apix.HistoryQuery, stream grpc.ServerStre
 	if limit <= 0 {
 		limit = 100
 	}
-	reqs, resps, err := s.db.ListTransactions(
+	reqs, resps, err := s.engine.ListTransactions(
 		limit, int(req.Offset),
 		req.UrlFilter, req.MethodFilter, int(req.StatusFilter), req.BodyFilter,
 	)
@@ -125,7 +125,7 @@ func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, s
 		return status.Error(codes.InvalidArgument, "transaction_id is required")
 	}
 
-	frames, err := s.db.ListWebSocketFrames(req.TransactionId)
+	frames, err := s.engine.ListWebSocketFrames(req.TransactionId)
 	if err != nil {
 		return status.Errorf(codes.Internal, "list websocket frames: %v", err)
 	}
@@ -162,7 +162,7 @@ func (s *EngineServer) GetWebSocketFrames(req *apix.GetWebSocketFramesRequest, s
 }
 
 func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.Empty, error) {
-	if err := s.db.DeleteAllTransactions(); err != nil {
+	if err := s.engine.DeleteAllTransactions(); err != nil {
 		return nil, status.Errorf(codes.Internal, "clear history: %v", err)
 	}
 	s.auditLog(ctx, "clear_history", "", nil)
@@ -170,7 +170,7 @@ func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.E
 }
 
 func (s *EngineServer) ExportHAR(_ context.Context, req *apix.ExportHARRequest) (*apix.ExportHARResponse, error) {
-	requests, responses, err := s.db.ExportTransactions(req.TransactionIds)
+	requests, responses, err := s.engine.ExportTransactions(req.TransactionIds)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "export HAR: %v", err)
 	}
@@ -195,11 +195,11 @@ func (s *EngineServer) ImportHAR(ctx context.Context, req *apix.ImportHARRequest
 		default:
 		}
 
-		if err := s.db.SaveRequest(tx.Request); err != nil {
+		if err := s.engine.SaveRequest(tx.Request); err != nil {
 			return nil, status.Errorf(codes.Internal, "import HAR request: %v", err)
 		}
 		if tx.Response != nil {
-			if err := s.db.SaveResponse(tx.Response); err != nil {
+			if err := s.engine.SaveResponse(tx.Response); err != nil {
 				return nil, status.Errorf(codes.Internal, "import HAR response: %v", err)
 			}
 		}

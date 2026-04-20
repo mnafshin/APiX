@@ -24,9 +24,9 @@ type BreakpointManagerServer interface {
 	Resume(requestID string, decision *breakpoints.ResumeDecision) error
 }
 
-// ServerRepository is the storage interface used by all gRPC handlers.
-// *storage.DB satisfies this interface.
-type ServerRepository interface {
+// EngineDomain is the orchestration interface used by gRPC handlers.
+// *engine.Engine satisfies this interface and delegates to storage internally.
+type EngineDomain interface {
 	SaveRequest(r *storage.RequestRecord) error
 	SaveResponse(r *storage.ResponseRecord) error
 	SaveRequestTemplate(tpl *storage.RequestTemplateRecord) error

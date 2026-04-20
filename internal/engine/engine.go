@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
 	"io"
@@ -358,4 +359,132 @@ func (e *Engine) PluginRuntime() PluginRuntime { return e.pluginRT }
 // RewriteRules loads the current list of rewrite rules from storage.
 func (e *Engine) RewriteRules() ([]*proxy.RewriteRuleProto, error) {
 	return e.db.ListRewriteRules()
+}
+
+func (e *Engine) SaveRequest(r *storage.RequestRecord) error {
+	return e.db.SaveRequest(r)
+}
+
+func (e *Engine) SaveResponse(r *storage.ResponseRecord) error {
+	return e.db.SaveResponse(r)
+}
+
+func (e *Engine) SaveRequestTemplate(tpl *storage.RequestTemplateRecord) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.SaveRequestTemplate(tpl)
+}
+
+func (e *Engine) ListRequestTemplates() ([]*storage.RequestTemplateRecord, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, err
+	}
+	return db.ListRequestTemplates()
+}
+
+func (e *Engine) DeleteRequestTemplate(id string) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.DeleteRequestTemplate(id)
+}
+
+func (e *Engine) SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label, headerName, headerValue, bodyPattern string, statusCodes []int32) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.SaveBreakpoint(id, urlPattern, methods, enabled, label, headerName, headerValue, bodyPattern, statusCodes)
+}
+
+func (e *Engine) DeleteBreakpoint(id string) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.DeleteBreakpoint(id)
+}
+
+func (e *Engine) ListTransactions(limit, offset int, urlFilter, methodFilter string, statusFilter int, bodyFilter string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, nil, err
+	}
+	return db.ListTransactions(limit, offset, urlFilter, methodFilter, statusFilter, bodyFilter)
+}
+
+func (e *Engine) ExportTransactions(transactionIDs []string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, nil, err
+	}
+	return db.ExportTransactions(transactionIDs)
+}
+
+func (e *Engine) DeleteAllTransactions() error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.DeleteAllTransactions()
+}
+
+func (e *Engine) AddRewriteRule(rule *apix.RewriteRule) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.AddRewriteRule(rule)
+}
+
+func (e *Engine) UpdateRewriteRule(rule *apix.RewriteRule) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.UpdateRewriteRule(rule)
+}
+
+func (e *Engine) DeleteRewriteRule(id string) error {
+	db, err := e.storageAccess()
+	if err != nil {
+		return err
+	}
+	return db.DeleteRewriteRule(id)
+}
+
+func (e *Engine) GetRewriteRule(id string) (*apix.RewriteRule, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, err
+	}
+	return db.GetRewriteRule(id)
+}
+
+func (e *Engine) ListRewriteRules() ([]*apix.RewriteRule, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, err
+	}
+	return db.ListRewriteRules()
+}
+
+func (e *Engine) ListWebSocketFrames(transactionID string) ([]*storage.WebSocketFrameRecord, error) {
+	db, err := e.storageAccess()
+	if err != nil {
+		return nil, err
+	}
+	return db.ListWebSocketFrames(transactionID)
+}
+
+func (e *Engine) storageAccess() (StorageAccess, error) {
+	db := e.DB()
+	if db == nil {
+		return nil, errors.New("engine storage access is unavailable")
+	}
+	return db, nil
 }
