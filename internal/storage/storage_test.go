@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"database/sql"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -25,6 +26,44 @@ func TestOpenAndClose(t *testing.T) {
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
+	}
+}
+
+func TestSchemaCreatesHistoryIndexes(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	rows, err := db.db.Query(`SELECT name FROM sqlite_master WHERE type = 'index'`)
+	if err != nil {
+		t.Fatalf("query indexes: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	indexes := map[string]bool{}
+	for rows.Next() {
+		var name sql.NullString
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan index name: %v", err)
+		}
+		if name.Valid {
+			indexes[name.String] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate indexes: %v", err)
+	}
+
+	required := []string{
+		"idx_requests_timestamp",
+		"idx_requests_method",
+		"idx_requests_url",
+		"idx_requests_method_url_ts",
+		"idx_responses_status",
+	}
+	for _, idx := range required {
+		if !indexes[idx] {
+			t.Errorf("missing index %q", idx)
+		}
 	}
 }
 
