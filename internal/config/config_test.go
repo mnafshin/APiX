@@ -65,6 +65,8 @@ max_body_size_mb: 64
 dial_timeout_sec: 5
 mcp_enabled: true
 mcp_port: "9100"
+log_format: "json"
+log_level: "debug"
 `)
 	cfg := LoadConfig(path)
 
@@ -85,6 +87,12 @@ mcp_port: "9100"
 	}
 	if cfg.MCPPort != "9100" {
 		t.Errorf("MCPPort: got %q want %q", cfg.MCPPort, "9100")
+	}
+	if cfg.LogFormat != "json" {
+		t.Errorf("LogFormat: got %q want json", cfg.LogFormat)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel: got %q want debug", cfg.LogLevel)
 	}
 	// Unspecified fields stay at defaults.
 	if cfg.HTTPIdleTimeout != 120 {

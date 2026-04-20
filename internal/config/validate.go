@@ -183,6 +183,18 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
+	// ── logging options ─────────────────────────────────────────────────────
+	if c.LogFormat != "" && c.LogFormat != "text" && c.LogFormat != "json" {
+		errs = append(errs, fmt.Errorf("log_format %q is invalid — use \"text\" or \"json\"", c.LogFormat))
+	}
+	if c.LogLevel != "" {
+		switch strings.ToLower(c.LogLevel) {
+		case "debug", "info", "warn", "error":
+		default:
+			errs = append(errs, fmt.Errorf("log_level %q is invalid — use debug|info|warn|error", c.LogLevel))
+		}
+	}
+
 	// ── map-local rules ────────────────────────────────────────────────────
 	for i, rule := range c.MapLocalRules {
 		if rule.URLPattern == "" {

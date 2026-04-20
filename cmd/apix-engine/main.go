@@ -36,25 +36,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
-	// Resolve log format: flag > LOG_FORMAT env var > default "text".
-	format := *logFormat
-	if format == "" {
-		format = os.Getenv("LOG_FORMAT")
-	}
-	if format == "" {
-		format = "text"
-	}
-	level := *logLevel
-	if level == "" {
-		level = os.Getenv("LOG_LEVEL")
-	}
-	if level == "" {
-		level = "info"
-	}
-	logging.InitWithFormatAndLevel(os.Stdout, format, level)
-
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())
+	format := firstNonEmpty(*logFormat, os.Getenv("LOG_FORMAT"), cfg.LogFormat, "text")
+	level := firstNonEmpty(*logLevel, os.Getenv("LOG_LEVEL"), cfg.LogLevel, "info")
+	logging.InitWithFormatAndLevel(os.Stdout, format, level)
 
 	// Initialize metrics (Prometheus endpoint + slowlog)
 	metrics.Init(cfg.MetricsEnabled)
@@ -236,4 +222,13 @@ func main() {
 	case <-time.After(15 * time.Second):
 		logging.Fatalf(ctx, "FATAL: shutdown timeout exceeded (15s), forcing exit")
 	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

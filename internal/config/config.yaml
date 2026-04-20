@@ -12,6 +12,10 @@ mcp_bind_address: "127.0.0.1"  # remote usage requires tls_enabled: true + auth 
 mcp_allow_replay: false
 mcp_allow_compose: false
 
+# Logging
+log_format: "text"  # text | json
+log_level: "info"   # debug | info | warn | error
+
 # HTTP server timeouts (prevents Slowloris attacks)
 http_read_header_timeout_sec: 10
 http_read_timeout_sec: 30
