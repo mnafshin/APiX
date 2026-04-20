@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -99,6 +101,100 @@ func TestUnregister(t *testing.T) {
 	if len(rt.List()) != 0 {
 		t.Error("expected 0 plugins after unregister")
 	}
+}
+
+func TestUnregisterDrainsInFlightAndSkipsNewRequests(t *testing.T) {
+	t.Parallel()
+	rt := NewRuntime()
+
+	enterCh := make(chan struct{}, 1)
+	releaseCh := make(chan struct{})
+	var calls int32
+	p := &mockPlugin{
+		name: "draining-plugin",
+		onRequestFn: func(_ context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+			atomic.AddInt32(&calls, 1)
+			select {
+			case enterCh <- struct{}{}:
+			default:
+			}
+			<-releaseCh
+			return req, nil
+		},
+	}
+	if err := rt.Register(p); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := rt.RunRequest(context.Background(), newProxyRequest("GET", "https://example.com/a"))
+		firstDone <- err
+	}()
+
+	select {
+	case <-enterCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first request to enter plugin")
+	}
+
+	unregisterDone := make(chan error, 1)
+	go func() {
+		unregisterDone <- rt.Unregister("draining-plugin")
+	}()
+	waitFor(t, 2*time.Second, func() bool {
+		return len(rt.List()) == 0
+	}, "plugin to enter draining state")
+
+	// While unregister is draining, new requests should not be routed to plugin.
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := rt.RunRequest(context.Background(), newProxyRequest("GET", "https://example.com/b"))
+		secondDone <- err
+	}()
+
+	select {
+	case err := <-secondDone:
+		if err != nil {
+			t.Fatalf("second RunRequest: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("second RunRequest should not block while plugin is draining")
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected plugin to run only once, got %d", got)
+	}
+
+	close(releaseCh)
+
+	select {
+	case err := <-firstDone:
+		if err != nil {
+			t.Fatalf("first RunRequest: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first RunRequest completion")
+	}
+	select {
+	case err := <-unregisterDone:
+		if err != nil {
+			t.Fatalf("Unregister: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Unregister completion")
+	}
+}
+
+func waitFor(t *testing.T, timeout time.Duration, cond func() bool, desc string) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", desc)
 }
 
 func TestRunRequestChain(t *testing.T) {
