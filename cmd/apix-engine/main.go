@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
 	"net/http"
 	"os"
@@ -45,54 +46,22 @@ func main() {
 	// Initialize metrics (Prometheus endpoint + slowlog)
 	metrics.Init(cfg.MetricsEnabled)
 	if cfg.MetricsEnabled {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			mux := http.NewServeMux()
-			mux.Handle("/metrics", metrics.Handler())
-			addr := ":" + cfg.MetricsPort
-			srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-			go func() {
-				<-ctx.Done()
-				shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := srv.Shutdown(shutCtx); err != nil {
-					logging.Errorf(ctx, "metrics server shutdown: %v", err)
-				}
-			}()
-			logging.Infof(ctx, "metrics endpoint listening on %s", addr)
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logging.Errorf(ctx, "metrics server error: %v", err)
-			}
-		}()
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", metrics.Handler())
+		addr := ":" + cfg.MetricsPort
+		startHTTPServer(ctx, wg, addr, mux, fmt.Sprintf("metrics endpoint listening on %s", addr), "metrics server")
 	}
 
 	// Always start the health endpoint (unless disabled via empty health_port).
 	if cfg.HealthPort != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			mux := http.NewServeMux()
-			mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(`{"status":"ok"}`))
-			})
-			addr := ":" + cfg.HealthPort
-			srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-			go func() {
-				<-ctx.Done()
-				shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				if err := srv.Shutdown(shutCtx); err != nil {
-					logging.Errorf(ctx, "health server shutdown: %v", err)
-				}
-			}()
-			logging.Infof(ctx, "health endpoint listening on %s/healthz", addr)
-			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				logging.Errorf(ctx, "health server error: %v", err)
-			}
-		}()
+		mux := http.NewServeMux()
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+		})
+		addr := ":" + cfg.HealthPort
+		startHTTPServer(ctx, wg, addr, mux, fmt.Sprintf("health endpoint listening on %s/healthz", addr), "health server")
 	}
 
 	// If invoked with --config-check bail out after validating the config.
@@ -106,24 +75,12 @@ func main() {
 	}
 
 	// 2. Open SQLite database.
-	db, err := storage.Open(cfg.DBPath)
-	if err != nil {
-		logging.Errorf(ctx, "open database: %v", err)
-		logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
-	}
+	db := initStorage(ctx, cfg)
 	defer func() {
 		if err := db.Close(); err != nil {
 			logging.Warnf(ctx, "close database: %v", err)
 		}
 	}()
-
-	// Start periodic VACUUM when configured (default: every 24 h).
-	if cfg.VacuumIntervalHours > 0 {
-		db.StartPeriodicVacuum(ctx, time.Duration(cfg.VacuumIntervalHours)*time.Hour)
-	}
-
-	// Start periodic history retention pruning (runs daily; no-op when both limits are 0).
-	db.StartPeriodicPrune(ctx, 24*time.Hour, cfg.HistoryMaxAgeDays, cfg.HistoryMaxRows)
 
 	// 3. Create CertAuthority.
 	ca, err := proxy.NewCertAuthority(cfg.CACertPath, cfg.CAKeyPath)
@@ -136,33 +93,7 @@ func main() {
 	bpManager := breakpoints.NewManager()
 
 	// 5. Create plugin runtime and register built-ins.
-	pluginRT := pluginrt.NewRuntime()
-	var otelTracingPlugin *builtins.OTelTracing
-	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
-		logging.Warnf(ctx, "register header-editor: %v", err)
-	}
-	if err := pluginRT.Register(&builtins.MockResponse{}); err != nil {
-		logging.Warnf(ctx, "register mock-response: %v", err)
-	}
-	if err := pluginRT.Register(&builtins.EnvSubst{}); err != nil {
-		logging.Warnf(ctx, "register env-subst: %v", err)
-	}
-	if cfg.OTelEnabled {
-		otelTracingPlugin, err = builtins.NewOTelTracing(ctx, builtins.OTelTracingConfig{
-			Endpoint:    cfg.OTelEndpoint,
-			ServiceName: cfg.OTelServiceName,
-			Insecure:    cfg.OTelInsecure,
-			SampleRate:  cfg.OTelSampleRate,
-		})
-		if err != nil {
-			logging.Fatalf(ctx, "initialize otel-tracing plugin: %v", err)
-		}
-		if err := pluginRT.Register(otelTracingPlugin); err != nil {
-			logging.Fatalf(ctx, "register otel-tracing plugin: %v", err)
-		}
-		logging.Infof(ctx, "otel tracing enabled (endpoint=%s service=%s sample_rate=%.2f)",
-			cfg.OTelEndpoint, cfg.OTelServiceName, cfg.OTelSampleRate)
-	}
+	pluginRT, otelTracingPlugin := initPlugins(ctx, cfg)
 
 	// 6. Create Engine.
 	eng := engine.NewWithConfig(db, bpManager, pluginRT, cfg)
@@ -179,18 +110,7 @@ func main() {
 	})
 
 	// 8. Create TLS + HTTP proxies.
-	transportOpts := proxy.TransportOptions{
-		MaxIdleConnsPerHost:   cfg.MaxIdleConnsPerHost,
-		IdleConnTimeout:       time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
-		DialTimeout:           time.Duration(cfg.DialTimeoutSec) * time.Second,
-		TLSHandshakeTimeout:   time.Duration(cfg.UpstreamTLSHandshakeTimeoutSec) * time.Second,
-		ResponseHeaderTimeout: time.Duration(cfg.UpstreamResponseHeaderTimeoutSec) * time.Second,
-		ExpectContinueTimeout: time.Duration(cfg.UpstreamExpectContinueTimeoutSec) * time.Second,
-	}
-	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts, cfg)
-	tlsProxy.SetPlugins(pluginRT)
-	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)
-	httpProxy.SetPlugins(pluginRT)
+	httpProxy, tlsProxy := initProxies(cfg, ca, eng, pluginRT)
 
 	// 9. Start gRPC server.
 	wg.Add(1)
@@ -255,4 +175,85 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func startHTTPServer(ctx context.Context, wg *sync.WaitGroup, addr string, handler http.Handler, startupMessage, logTag string) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			<-ctx.Done()
+			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := srv.Shutdown(shutCtx); err != nil {
+				logging.Errorf(ctx, "%s shutdown: %v", logTag, err)
+			}
+		}()
+		logging.Infof(ctx, "%s", startupMessage)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logging.Errorf(ctx, "%s error: %v", logTag, err)
+		}
+	}()
+}
+
+func initStorage(ctx context.Context, cfg *config.Config) *storage.DB {
+	db, err := storage.Open(cfg.DBPath)
+	if err != nil {
+		logging.Errorf(ctx, "open database: %v", err)
+		logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
+	}
+	if cfg.VacuumIntervalHours > 0 {
+		db.StartPeriodicVacuum(ctx, time.Duration(cfg.VacuumIntervalHours)*time.Hour)
+	}
+	db.StartPeriodicPrune(ctx, 24*time.Hour, cfg.HistoryMaxAgeDays, cfg.HistoryMaxRows)
+	return db
+}
+
+func initPlugins(ctx context.Context, cfg *config.Config) (*pluginrt.Runtime, *builtins.OTelTracing) {
+	pluginRT := pluginrt.NewRuntime()
+	var otelTracingPlugin *builtins.OTelTracing
+	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
+		logging.Warnf(ctx, "register header-editor: %v", err)
+	}
+	if err := pluginRT.Register(&builtins.MockResponse{}); err != nil {
+		logging.Warnf(ctx, "register mock-response: %v", err)
+	}
+	if err := pluginRT.Register(&builtins.EnvSubst{}); err != nil {
+		logging.Warnf(ctx, "register env-subst: %v", err)
+	}
+	if cfg.OTelEnabled {
+		var err error
+		otelTracingPlugin, err = builtins.NewOTelTracing(ctx, builtins.OTelTracingConfig{
+			Endpoint:    cfg.OTelEndpoint,
+			ServiceName: cfg.OTelServiceName,
+			Insecure:    cfg.OTelInsecure,
+			SampleRate:  cfg.OTelSampleRate,
+		})
+		if err != nil {
+			logging.Fatalf(ctx, "initialize otel-tracing plugin: %v", err)
+		}
+		if err := pluginRT.Register(otelTracingPlugin); err != nil {
+			logging.Fatalf(ctx, "register otel-tracing plugin: %v", err)
+		}
+		logging.Infof(ctx, "otel tracing enabled (endpoint=%s service=%s sample_rate=%.2f)",
+			cfg.OTelEndpoint, cfg.OTelServiceName, cfg.OTelSampleRate)
+	}
+	return pluginRT, otelTracingPlugin
+}
+
+func initProxies(cfg *config.Config, ca *proxy.CertAuthority, eng *engine.Engine, pluginRT *pluginrt.Runtime) (*proxy.HTTPProxy, *proxy.TLSProxy) {
+	transportOpts := proxy.TransportOptions{
+		MaxIdleConnsPerHost:   cfg.MaxIdleConnsPerHost,
+		IdleConnTimeout:       time.Duration(cfg.IdleConnTimeoutSec) * time.Second,
+		DialTimeout:           time.Duration(cfg.DialTimeoutSec) * time.Second,
+		TLSHandshakeTimeout:   time.Duration(cfg.UpstreamTLSHandshakeTimeoutSec) * time.Second,
+		ResponseHeaderTimeout: time.Duration(cfg.UpstreamResponseHeaderTimeoutSec) * time.Second,
+		ExpectContinueTimeout: time.Duration(cfg.UpstreamExpectContinueTimeoutSec) * time.Second,
+	}
+	tlsProxy := proxy.NewTLSProxy(ca, eng, transportOpts, cfg)
+	tlsProxy.SetPlugins(pluginRT)
+	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)
+	httpProxy.SetPlugins(pluginRT)
+	return httpProxy, tlsProxy
 }
