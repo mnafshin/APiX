@@ -204,20 +204,24 @@ go test -fuzz=FuzzEnvSubst_Body -fuzztime=1m ./internal/pluginrt/builtins
 
 ### 6. Benchmarks
 
-**Location:** `internal/*_bench.go`
+**Location:** `internal/**/*_test.go` (benchmarks are `func Benchmark...` in test files)
 
 **Purpose:** Establish performance baselines and detect regressions.
 
 **Benchmarks:**
-- `BenchmarkHTTPProxy_Serial` — Sequential request throughput (~66µs/req)
-- `BenchmarkHTTPProxy_Parallel` — Concurrent request throughput (~42µs/req)
-- `BenchmarkStorage_SaveRequest` — SQLite insert rate (~12µs/req)
-- `BenchmarkStorage_ListTransactions` — Query + scan with 1000 rows (~1ms)
-- `BenchmarkBreakpoints_Evaluate` — Regex matching with 10 rules (~7µs)
+- `BenchmarkHTTPProxy_Serial` — Sequential request throughput
+- `BenchmarkHTTPProxy_Parallel` — Concurrent request throughput
+- `BenchmarkStorage_SaveRequest` — SQLite insert rate
+- `BenchmarkStorage_ListTransactions` — Query + scan with seeded rows
+- `BenchmarkBreakpoints_Evaluate` — Regex breakpoint matching
+- `BenchmarkPluginRuntime_RunRequest_0Plugins` — runtime baseline overhead
+- `BenchmarkPluginRuntime_RunRequest_1Plugin` — single plugin overhead
+- `BenchmarkPluginRuntime_RunRequest_5Plugins` — medium chain overhead
+- `BenchmarkPluginRuntime_RunRequest_14Plugins` — full built-in chain overhead
 
 **Run:**
 ```bash
-go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakpoints
+go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakpoints ./internal/pluginrt
 
 # Run one benchmark
 go test -bench=BenchmarkStorage_SaveRequest -benchmem ./internal/storage
@@ -231,7 +235,7 @@ go test -bench=. -benchmem ./internal/proxy -benchstat=old.txt > new.txt
 - Use real components (proxy, storage, engine) not mocks
 - Reset timer after setup: `b.ResetTimer()`
 - Allocations matter: `-benchmem` shows allocs/op
-- Baseline: ~66µs proxy, ~12µs storage write, ~7µs pattern match
+- Track historical baseline in CI artifacts before asserting performance targets
 - Increases >10% should be investigated
 
 ## Infrastructure & Helpers
