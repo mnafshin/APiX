@@ -86,8 +86,17 @@ type Config struct {
 type MapLocalRule struct {
 	URLPattern  string `yaml:"url_pattern"`
 	FilePath    string `yaml:"file_path"`
+	// LocalPath is a backwards-compatible alias for file_path.
+	LocalPath   string `yaml:"local_path"`
 	ContentType string `yaml:"content_type"`
 	StatusCode  int    `yaml:"status_code"`
+}
+
+func (r MapLocalRule) EffectiveFilePath() string {
+	if r.FilePath != "" {
+		return r.FilePath
+	}
+	return r.LocalPath
 }
 
 // DefaultPath returns the config file path following these priorities:

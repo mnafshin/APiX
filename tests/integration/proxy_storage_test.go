@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -43,6 +44,10 @@ type proxyStack struct {
 // newProxyStack starts a real HTTP proxy on a random port wired to an
 // in-memory engine and storage. Caller must call stop() to clean up.
 func newProxyStack(t *testing.T) *proxyStack {
+	return newProxyStackWithConfig(t, nil)
+}
+
+func newProxyStackWithConfig(t *testing.T, cfg *config.Config) *proxyStack {
 	t.Helper()
 
 	// Open in-memory database.
@@ -67,12 +72,23 @@ func newProxyStack(t *testing.T) *proxyStack {
 		t.Fatalf("NewCertAuthority: %v", err)
 	}
 
-	cfg := &config.Config{
-		HTTPReadHeaderTimeout: 10,
-		HTTPReadTimeout:       30,
-		HTTPWriteTimeout:      120,
-		HTTPIdleTimeout:       120,
-		MaxBodySizeMB:         32,
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+	if cfg.HTTPReadHeaderTimeout == 0 {
+		cfg.HTTPReadHeaderTimeout = 10
+	}
+	if cfg.HTTPReadTimeout == 0 {
+		cfg.HTTPReadTimeout = 30
+	}
+	if cfg.HTTPWriteTimeout == 0 {
+		cfg.HTTPWriteTimeout = 120
+	}
+	if cfg.HTTPIdleTimeout == 0 {
+		cfg.HTTPIdleTimeout = 120
+	}
+	if cfg.MaxBodySizeMB == 0 {
+		cfg.MaxBodySizeMB = 32
 	}
 
 	// Wire up HTTP and TLS proxies.
@@ -214,6 +230,59 @@ func TestIntegration_ProxyStoresCorrectFields(t *testing.T) {
 	}
 	if !strings.Contains(string(respRec.Body), "stored response body") {
 		t.Errorf("stored response body: got %q", string(respRec.Body))
+	}
+}
+
+func TestIntegration_MapLocalRuleServesLocalFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	mockPath := filepath.Join(dir, "mock.json")
+	const wantBody = `{"ok":true}`
+	if err := os.WriteFile(mockPath, []byte(wantBody), 0o600); err != nil {
+		t.Fatalf("write mock file: %v", err)
+	}
+
+	stack := newProxyStackWithConfig(t, &config.Config{
+		MapLocalRules: []config.MapLocalRule{
+			{
+				URLPattern: "^https?://.*/local-config$",
+				LocalPath:  mockPath,
+				StatusCode: http.StatusCreated,
+			},
+		},
+	})
+	defer stack.stop()
+
+	var upstreamCalled atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled.Add(1)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("upstream"))
+	}))
+	defer upstream.Close()
+
+	resp, err := stack.client().Get(upstream.URL + "/local-config")
+	if err != nil {
+		t.Fatalf("proxy GET: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusCreated)
+	}
+	if string(body) != wantBody {
+		t.Fatalf("body: got %q want %q", string(body), wantBody)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content type: got %q want application/json", got)
+	}
+	if upstreamCalled.Load() != 0 {
+		t.Fatalf("upstream should not be called for map-local match, got %d calls", upstreamCalled.Load())
 	}
 }
 

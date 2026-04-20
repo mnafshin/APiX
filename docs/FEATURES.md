@@ -119,6 +119,28 @@ See [`how-to/replay.md`](how-to/replay.md) for step-by-step guide.
 
 ---
 
+### Map Local Rules
+
+Serve local files directly from the proxy when a request URL matches a configured regex.
+
+- Rules are configured in `config.yaml` under `map_local_rules`
+- `url_pattern` uses Go regex syntax and is validated on startup
+- `file_path` is the primary path key (`local_path` is accepted as an alias)
+- If a rule matches, APiX returns the local file and does not forward upstream
+- If the matched file is missing/unreadable, APiX returns `500` with an explicit map-local error
+- Content type is inferred from file extension or detected bytes when `content_type` is omitted
+- Map-local rules are config-driven (not persisted in SQLite)
+
+Example:
+```yaml
+map_local_rules:
+  - url_pattern: '^https://api.example.com/config$'
+    file_path: './mocks/config.json'
+    status_code: 200
+```
+
+---
+
 ### Request/Response Templates
 
 **Save and reuse request patterns** for frequently-used workflows.
