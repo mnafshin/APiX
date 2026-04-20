@@ -99,6 +99,9 @@ func copyHeadersExcluding(src http.Header, exclude ...string) http.Header {
 }
 
 func relayWebSocket(ctx context.Context, engine TransactionStore, transactionID string, clientConn, upstreamConn *websocket.Conn) {
+	relayCtx, cancelRelay := context.WithCancel(ctx)
+	defer cancelRelay()
+
 	var forwardCloseOnce sync.Once
 	var shutdownOnce sync.Once
 	shutdown := func() {
@@ -136,19 +139,29 @@ func relayWebSocket(ctx context.Context, engine TransactionStore, transactionID 
 	configureControlHandlers(clientConn, upstreamConn, webSocketDirectionClient)
 	configureControlHandlers(upstreamConn, clientConn, webSocketDirectionServer)
 
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 1)
+	var errOnce sync.Once
+	reportErr := func(err error) {
+		errOnce.Do(func() {
+			errCh <- err
+			cancelRelay()
+		})
+	}
 	var wg sync.WaitGroup
 	relay := func(src, dst *websocket.Conn, direction string) {
 		defer wg.Done()
 		for {
+			if relayCtx.Err() != nil {
+				return
+			}
 			messageType, payload, err := src.ReadMessage()
 			if err != nil {
-				errCh <- err
+				reportErr(err)
 				return
 			}
 			recordWebSocketFrame(ctx, engine, transactionID, direction, messageType, payload)
 			if err := dst.WriteMessage(messageType, payload); err != nil {
-				errCh <- err
+				reportErr(err)
 				return
 			}
 		}
@@ -159,12 +172,13 @@ func relayWebSocket(ctx context.Context, engine TransactionStore, transactionID 
 	go relay(upstreamConn, clientConn, webSocketDirectionServer)
 
 	select {
-	case <-ctx.Done():
+	case <-relayCtx.Done():
 	case err := <-errCh:
 		if !isExpectedWebSocketClose(err) {
 			logging.Warnf(ctx, "websocket relay ended: %v", err)
 		}
 	}
+	cancelRelay()
 	shutdown()
 	wg.Wait()
 }
