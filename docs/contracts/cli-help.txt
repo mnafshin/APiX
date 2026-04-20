@@ -1,0 +1,44 @@
+Usage: apix [global flags] <command> [args]
+
+Commands:
+  status
+  plugins list
+  history list|get|clear
+  watch [traffic]
+  filter
+  export
+  breakpoints list|add|delete|enable|disable
+  paused watch|forward|drop|respond
+  send
+  templates save|list|delete
+  replay
+  cert status
+  config show
+  setup [profile]
+  completion <bash|zsh|fish>
+  doctor
+  help
+
+  -config string
+    	path to config file (default: APiX search path)
+  -config-check
+    	validate config and exit (0=ok, 1=invalid)
+  -debug
+    	enable detailed diagnostic logs
+  -host string
+    	engine host (default "localhost")
+  -no-color
+    	disable color output
+  -output string
+    	output format: text|json|ndjson (default "text")
+  -port int
+    	engine gRPC port (default 9090)
+  -timeout duration
+    	per-command timeout (0 = sensible default)
+  -tls
+    	use TLS for gRPC connection
+  -token string
+    	auth token
+  -v	shorthand for --verbose
+  -verbose
+    	enable diagnostic logs

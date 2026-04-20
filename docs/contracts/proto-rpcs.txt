@@ -1,0 +1,25 @@
+service Engine {
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  rpc GetVersion(VersionRequest) returns (VersionResponse);
+  rpc CaptureTraffic(CaptureRequest) returns (stream HttpRequest);
+  rpc ListPlugins(PluginListRequest) returns (PluginListResponse);
+  rpc SetBreakpoint(BreakpointRule) returns (BreakpointResponse);
+  rpc DeleteBreakpoint(BreakpointID) returns (Empty);
+  rpc ListBreakpoints(Empty) returns (BreakpointList);
+  rpc WatchPausedRequests(Empty) returns (stream PausedRequest);
+  rpc ResumeRequest(ResumeAction) returns (Empty);
+  rpc ReplayRequest(ReplaySpec) returns (HttpResponse);
+  rpc ComposeRequest(ComposeSpec) returns (HttpResponse);
+  rpc SaveRequestTemplate(RequestTemplate) returns (RequestTemplate);
+  rpc ListRequestTemplates(Empty) returns (RequestTemplateList);
+  rpc DeleteRequestTemplate(RequestTemplateID) returns (Empty);
+  rpc GetHistory(HistoryQuery) returns (stream HttpTransaction);
+  rpc GetWebSocketFrames(GetWebSocketFramesRequest) returns (stream WebSocketFrame);
+  rpc ClearHistory(Empty) returns (Empty);
+  rpc ExportHAR(ExportHARRequest) returns (ExportHARResponse);
+  rpc ImportHAR(ImportHARRequest) returns (ImportHARResponse);
+  rpc AddRewriteRule(RewriteRule) returns (RewriteRule);
+  rpc UpdateRewriteRule(RewriteRule) returns (RewriteRule);
+  rpc DeleteRewriteRule(RewriteRuleRequest) returns (Empty);
+  rpc ListRewriteRules(Empty) returns (RewriteRuleList);
+  rpc ToggleRewriteRule(RewriteRuleRequest) returns (RewriteRule);

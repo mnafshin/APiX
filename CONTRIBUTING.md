@@ -131,6 +131,7 @@ All PRs must pass:
 - ✅ `go test ./... -race` — all tests pass, no race conditions
 - ✅ `go vet ./...` — no suspicious constructs
 - ✅ `tsc --noEmit` — TypeScript types valid
+- ✅ `scripts/docs/verify_contract_snapshots.sh` — CLI/config/proto docs contracts are current
 
 1. Create a file in `internal/pluginrt/builtins/`, e.g. `rate_limiter.go`:
 
@@ -202,3 +203,9 @@ When your PR touches docs (or behavior docs rely on), verify:
 - Config examples use keys that exist in `internal/config/config.go`
 - CLI examples match current commands/flags from `./apix-cli help`
 - Performance numbers are marked as measured only when benchmark-backed
+
+Refresh snapshots when user-facing contracts change:
+
+```bash
+scripts/docs/refresh_contract_snapshots.sh
+```
