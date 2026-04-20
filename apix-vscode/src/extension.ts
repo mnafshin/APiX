@@ -139,6 +139,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('apix.refreshTraffic', () => {
             trafficProvider?.refresh();
         }),
+        vscode.commands.registerCommand('apix.refreshBreakpoints', () => {
+            breakpointsProvider?.refresh();
+        }),
         vscode.commands.registerCommand('apix.mocks.refresh', () => {
             mocksProvider?.refresh();
         }),
@@ -181,6 +184,7 @@ export function deactivate(): void {
         clearTimeout(pausedRetryTimer);
         pausedRetryTimer = undefined;
     }
+    RequestEditor.closeAll();
     
     // Stop engine process
     processManager?.stop();
@@ -259,6 +263,7 @@ async function stopEngine(pm: EngineProcessManager): Promise<void> {
         clearTimeout(pausedRetryTimer);
         pausedRetryTimer = undefined;
     }
+    RequestEditor.closeAll();
     pm.stop();
     statusBarItem!.text = '$(circle-outline) APiX: Stopped';
     statusBarItem!.tooltip = 'APiX HTTP Proxy — click to start';
@@ -281,6 +286,8 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
             (err) => {
                 // Log to output channel so user can inspect stream errors
                 outputChannel?.appendLine(`[APiX] WatchPausedRequests stream error: ${err?.message || err}`);
+                RequestEditor.closeAll();
+                breakpointsProvider?.refresh();
                 if (processManager?.isRunning()) {
                     const delay = pausedRetryDelayMs;
                     pausedRetryDelayMs = Math.min(pausedRetryDelayMs * 2, 30000);
@@ -291,6 +298,8 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
             },
             () => {
                 console.log('[APiX] WatchPausedRequests stream ended.');
+                RequestEditor.closeAll();
+                breakpointsProvider?.refresh();
                 if (processManager?.isRunning()) {
                     const delay = pausedRetryDelayMs;
                     pausedRetryDelayMs = Math.min(pausedRetryDelayMs * 2, 30000);

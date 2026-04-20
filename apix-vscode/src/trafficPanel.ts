@@ -14,6 +14,9 @@ export class TrafficPanel {
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
     private _disposables: vscode.Disposable[] = [];
+    private _captureStream: { cancel: () => void } | undefined;
+    private _captureRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    private _captureRetryDelayMs = 1000;
 
     public static createOrShow(extensionUri: vscode.Uri, client: EngineClient): void {
         const column = vscode.window.activeTextEditor
@@ -66,19 +69,52 @@ export class TrafficPanel {
 
     /** Start the CaptureTraffic gRPC stream and push each transaction to the webview. */
     private _startCapture(): void {
+        if (this._captureRetryTimer) {
+            clearTimeout(this._captureRetryTimer);
+            this._captureRetryTimer = undefined;
+        }
+        this._captureStream?.cancel();
+        this._captureStream = undefined;
         try {
             const stream = this.client.captureTraffic(
                 (tx) => {
+                    this._captureRetryDelayMs = 1000;
                     if (this._panel.visible) {
                         this._panel.webview.postMessage({ type: 'transaction', data: tx });
+                        this._panel.webview.postMessage({ type: 'streamRecovered' });
                     }
                 },
-                (err) => console.error('[APiX] CaptureTraffic error:', err)
+                (err) => {
+                    const message = err?.message || String(err);
+                    this._panel.webview.postMessage({ type: 'streamError', data: message });
+                    this._scheduleCaptureRetry();
+                },
+                () => {
+                    this._panel.webview.postMessage({ type: 'streamError', data: 'Capture stream ended.' });
+                    this._scheduleCaptureRetry();
+                }
             );
-            this._disposables.push({ dispose: () => stream.cancel() });
+            this._captureStream = { cancel: () => stream.cancel() };
         } catch (err) {
-            console.error('[APiX] Failed to start capture stream:', err);
+            this._panel.webview.postMessage({ type: 'streamError', data: `Failed to start capture stream: ${err}` });
+            this._scheduleCaptureRetry();
         }
+    }
+
+    private _scheduleCaptureRetry(): void {
+        if (this._captureRetryTimer) {
+            return;
+        }
+        const delay = this._captureRetryDelayMs;
+        this._captureRetryDelayMs = Math.min(this._captureRetryDelayMs * 2, 30000);
+        this._captureRetryTimer = setTimeout(() => {
+            this._captureRetryTimer = undefined;
+            if (!this._panel.visible) {
+                this._scheduleCaptureRetry();
+                return;
+            }
+            this._startCapture();
+        }, delay);
     }
 
     private _handleWebviewMessage(message: { type: string; data: any }): void {
@@ -166,6 +202,7 @@ export class TrafficPanel {
     .badge { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-right: 6px; }
     .badge-ws { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
     .empty { text-align: center; padding: 40px; color: var(--vscode-descriptionForeground); }
+    #stream-error { display: none; margin-bottom: 8px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100); background: var(--vscode-inputValidation-errorBackground, #5a1d1d); color: var(--vscode-inputValidation-errorForeground, #fff); font-size: 12px; }
     #detail { display: none; position: fixed; top: 0; right: 0; width: 50%; height: 100%; background: var(--vscode-editor-background); border-left: 1px solid var(--vscode-panel-border); padding: 16px; overflow-y: auto; z-index: 10; box-sizing: border-box; }
     #detail.open { display: block; }
     #detail h3 { margin-top: 0; font-size: 14px; word-break: break-all; }
@@ -182,6 +219,7 @@ export class TrafficPanel {
   </style>
 </head>
 <body>
+  <div id="stream-error"></div>
   <div class="filter-bar">
     <div class="filter-row">
       <input type="text" id="filter" class="filter-url" placeholder="Filter by URL..." title="Filter by URL substring" />
@@ -246,6 +284,14 @@ export class TrafficPanel {
         if (msg.data && msg.data.requestId === currentFramesRequestId) {
           renderWebSocketFrames(msg.data.frames || []);
         }
+      } else if (msg.type === 'streamError') {
+        const el = document.getElementById('stream-error');
+        el.textContent = 'Connection lost — retrying… ' + (msg.data || '');
+        el.style.display = 'block';
+      } else if (msg.type === 'streamRecovered') {
+        const el = document.getElementById('stream-error');
+        el.style.display = 'none';
+        el.textContent = '';
       }
     });
 
@@ -600,6 +646,12 @@ export class TrafficPanel {
 
     public dispose(): void {
         TrafficPanel.currentPanel = undefined;
+        this._captureStream?.cancel();
+        this._captureStream = undefined;
+        if (this._captureRetryTimer) {
+            clearTimeout(this._captureRetryTimer);
+            this._captureRetryTimer = undefined;
+        }
         this._panel.dispose();
         while (this._disposables.length) {
             const d = this._disposables.pop();
