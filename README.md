@@ -167,6 +167,7 @@ See [`docs/INDEX.md`](docs/INDEX.md) for the complete documentation index.
 - **CLI & MCP:** [`docs/REFERENCE/cli_mcp.md`](docs/REFERENCE/cli_mcp.md)
 - **Testing:** [`docs/TESTING.md`](docs/TESTING.md)
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Security policy:** [`SECURITY.md`](SECURITY.md)
 
 ## License
 
