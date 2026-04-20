@@ -44,7 +44,7 @@ func TestInitWithFormatText(t *testing.T) {
 
 func TestDebugf(t *testing.T) {
 	var buf bytes.Buffer
-	InitWithFormat(&buf, "json")
+	InitWithFormatAndLevel(&buf, "json", "debug")
 
 	ctx := WithRequestID(context.Background(), "rid-debug")
 	Debugf(ctx, "debug value=%d", 7)
@@ -62,6 +62,15 @@ func TestDebugf(t *testing.T) {
 	}
 	if entry["request_id"] != "rid-debug" {
 		t.Errorf("unexpected request_id: %v", entry["request_id"])
+	}
+}
+
+func TestDebugfSuppressedAtInfoLevel(t *testing.T) {
+	var buf bytes.Buffer
+	InitWithFormatAndLevel(&buf, "json", "info")
+	Debugf(context.Background(), "hidden debug")
+	if strings.TrimSpace(buf.String()) != "" {
+		t.Fatalf("expected no debug output at info level, got: %s", buf.String())
 	}
 }
 
