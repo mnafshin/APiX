@@ -86,9 +86,9 @@ func startAutoResume(t *testing.T, bpMgr *breakpoints.Manager) {
 // testPlugin is a minimal plugins.Plugin whose OnRequest / OnResponse
 // behaviour is provided via optional hook functions.
 type testPlugin struct {
-	name   string
-	onReq  func(*plugins.ProxyRequest) *plugins.ProxyRequest
-	onResp func(*plugins.ProxyResponse) *plugins.ProxyResponse
+	name      string
+	onReq     func(*plugins.ProxyRequest) *plugins.ProxyRequest
+	onResp    func(*plugins.ProxyResponse) *plugins.ProxyResponse
 	onRespErr error
 }
 
@@ -541,7 +541,11 @@ func TestHTTPProxy_PostBodyStoredAndReplayed(t *testing.T) {
 
 	// Replay the stored request and verify the upstream receives the same body.
 	upstreamReceivedBody = ""
-	replayEng := replayengine.NewEngine(eng.DB(), nil)
+	db, ok := eng.DB().(*storage.DB)
+	if !ok {
+		t.Fatal("engine repository is not *storage.DB")
+	}
+	replayEng := replayengine.NewEngine(db, nil)
 	replayResp, err := replayEng.ReplayRequest(context.Background(), &replayengine.ReplayRequest{
 		RequestID:       reqs[0].ID,
 		FollowRedirects: true,

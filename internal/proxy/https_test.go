@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	replayengine "github.com/mnafshin/apix/internal/replay"
+	"github.com/mnafshin/apix/internal/storage"
 )
 
 // TestHTTPSProxy_CONNECTTunnel starts a TLS mock upstream and verifies that an
@@ -209,7 +210,11 @@ func TestHTTPSProxy_PostBodyStoredAndReplayed(t *testing.T) {
 
 	// Replay the stored request and verify the upstream receives the same body.
 	upstreamReceivedBody = ""
-	replayEng := replayengine.NewEngine(eng.DB(), &replayengine.ClientConfig{
+	db, ok := eng.DB().(*storage.DB)
+	if !ok {
+		t.Fatalf("engine repository type: %T", eng.DB())
+	}
+	replayEng := replayengine.NewEngine(db, &replayengine.ClientConfig{
 		Client: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: upstream.Client().Transport.(*http.Transport).TLSClientConfig,
