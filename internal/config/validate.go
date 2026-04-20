@@ -156,6 +156,14 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	}
 
 	// ── TLS / auth ─────────────────────────────────────────────────────────
+	if strings.TrimSpace(c.AuthTokenFile) != "" {
+		if _, err := os.Stat(c.AuthTokenFile); os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("auth_token_file %q does not exist", c.AuthTokenFile))
+		}
+	}
+	if c.AuthTokenRequireStrictPerms && c.authTokenSetInConfigFile && c.configPermsTooOpen {
+		errs = append(errs, fmt.Errorf("auth_token is set in %s but file mode is %04o (must be 0600 or stricter)", c.configPath, c.configFileMode))
+	}
 	if c.TLSEnabled && c.AuthToken == "" {
 		errs = append(errs, fmt.Errorf("tls_enabled is true but auth_token is empty — set APIX_AUTH_TOKEN or auth_token in config for secure operation"))
 	}

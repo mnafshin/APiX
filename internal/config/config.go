@@ -5,6 +5,7 @@ import (
 	logging "github.com/mnafshin/apix/internal/logging"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,8 @@ type Config struct {
 	GRPCCertPath                     string `yaml:"grpc_cert_path"`
 	GRPCKeyPath                      string `yaml:"grpc_key_path"`
 	AuthToken                        string `yaml:"auth_token"`
+	AuthTokenFile                    string `yaml:"auth_token_file"`
+	AuthTokenRequireStrictPerms      bool   `yaml:"auth_token_require_strict_perms"`
 	MaxIdleConnsPerHost              int    `yaml:"max_idle_conns_per_host"`
 	IdleConnTimeoutSec               int    `yaml:"idle_conn_timeout_sec"`
 	DialTimeoutSec                   int    `yaml:"dial_timeout_sec"`
@@ -100,6 +103,12 @@ type Config struct {
 	URLPatterns []string `yaml:"url_patterns"`
 	// MapLocalRules serves local files for matching request URLs.
 	MapLocalRules []MapLocalRule `yaml:"map_local_rules"`
+
+	// Internal metadata populated during LoadConfig for security validation.
+	configPath               string
+	configPermsTooOpen       bool
+	configFileMode           os.FileMode
+	authTokenSetInConfigFile bool
 }
 
 // MapLocalRule maps a URL regex pattern to a local file response.
@@ -163,6 +172,7 @@ func LoadConfig(path string) *Config {
 		CACertPath:                       filepath.Join(home, ".apix", "ca.pem"),
 		CAKeyPath:                        filepath.Join(home, ".apix", "ca-key.pem"),
 		TLSEnabled:                       false,
+		AuthTokenRequireStrictPerms:      true,
 		MaxIdleConnsPerHost:              10,
 		IdleConnTimeoutSec:               90,
 		DialTimeoutSec:                   10,
@@ -223,6 +233,25 @@ func LoadConfig(path string) *Config {
 	}
 
 	tokenFromFile := cfg.AuthToken != ""
+	cfg.authTokenSetInConfigFile = tokenFromFile
+	cfg.configPath = path
+	if info, statErr := os.Stat(path); statErr == nil {
+		cfg.configFileMode = info.Mode().Perm()
+		if cfg.configFileMode&0o077 != 0 {
+			cfg.configPermsTooOpen = true
+			logging.Warnf(context.Background(), "config file %s has overly permissive mode %04o; expected 0600 or stricter", path, cfg.configFileMode)
+		}
+	}
+
+	if strings.TrimSpace(cfg.AuthTokenFile) != "" {
+		// #nosec G304 -- auth_token_file is an explicit operator-configured path.
+		b, readErr := os.ReadFile(cfg.AuthTokenFile)
+		if readErr != nil {
+			logging.Errorf(context.Background(), "Failed to read auth_token_file %s: %v", cfg.AuthTokenFile, readErr)
+		} else {
+			cfg.AuthToken = strings.TrimSpace(string(b))
+		}
+	}
 
 	// APIX_AUTH_TOKEN env var takes precedence over the config file value.
 	if envToken := os.Getenv("APIX_AUTH_TOKEN"); envToken != "" {

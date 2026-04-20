@@ -104,7 +104,7 @@ Validate config:
 | `grpc_bind_address` | `127.0.0.1` | gRPC bind address |
 | `tls_enabled` | `false` | Enable TLS for gRPC |
 | `grpc_cert_path` / `grpc_key_path` | empty | Required when TLS is enabled |
-| `auth_token` | empty | Bearer token for gRPC/MCP auth |
+| `auth_token` / `auth_token_file` / `auth_token_require_strict_perms` | empty / empty / `true` | Bearer token auth, secret-file support, and strict config permission enforcement |
 | `proxy_rate_limit_per_sec` / `proxy_max_concurrent_connections` | `1000` / `200` | Per-client proxy throttling and concurrent tunnel/request cap |
 | `max_body_size_mb` | `32` | Request/response body limit per body |
 | `history_max_age_days` / `history_max_rows` | `0` / `0` | Retention pruning controls |
@@ -123,6 +123,7 @@ Validate config:
 - Local defaults bind gRPC/MCP to loopback.
 - Remote gRPC and remote MCP are validated to require **TLS + auth token**.
 - Prefer `APIX_AUTH_TOKEN` environment variable over storing `auth_token` in plaintext.
+- If `auth_token` is stored in `config.yaml`, APiX enforces strict file permissions (0600 or stricter) by default.
 
 ## Development commands
 
