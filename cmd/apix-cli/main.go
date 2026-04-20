@@ -226,7 +226,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		writeLine(errw, "  templates save|list|delete")
 		writeLine(errw, "  replay")
 		writeLine(errw, "  cert status")
-		writeLine(errw, "  config show")
+		writeLine(errw, "  config show|reload")
 		writeLine(errw, "  setup [profile]")
 		writeLine(errw, "  completion <bash|zsh|fish>")
 		writeLine(errw, "  doctor")
@@ -1653,40 +1653,75 @@ func (a *app) runConfigCheck(cfgPath string) int {
 }
 
 func (a *app) cmdConfig(args []string) error {
-	if len(args) == 0 || args[0] != "show" {
-		return fmt.Errorf("usage: config show")
+	if len(args) == 0 {
+		return fmt.Errorf("usage: config show|reload")
 	}
-	path := a.opts.configPath
-	if path == "" {
-		path = config.DefaultPath()
+	switch args[0] {
+	case "show":
+		path := a.opts.configPath
+		if path == "" {
+			path = config.DefaultPath()
+		}
+		validation := "ok"
+		if err := a.cfg.ValidateRuntime(); err != nil {
+			validation = err.Error()
+		}
+		payload := map[string]any{
+			"path":       path,
+			"validation": validation,
+			"config": map[string]any{
+				"http_port":              a.cfg.HTTPPort,
+				"grpc_port":              a.cfg.GRPCPort,
+				"grpc_bind_address":      a.cfg.GRPCBindAddress,
+				"db_path":                a.cfg.DBPath,
+				"ca_cert_path":           a.cfg.CACertPath,
+				"ca_key_path":            a.cfg.CAKeyPath,
+				"tls_enabled":            a.cfg.TLSEnabled,
+				"auth_token_set":         a.cfg.AuthToken != "",
+				"max_body_size_mb":       a.cfg.MaxBodySizeMB,
+				"replay_skip_tls_verify": a.cfg.ReplaySkipTLSVerify,
+			},
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, payload)
+		}
+		writef(a.out, "Path: %s\nValidation: %s\n", path, validation)
+		writef(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
+		writef(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
+		return nil
+	case "reload":
+		fs := flag.NewFlagSet("config reload", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		path := ""
+		fs.StringVar(&path, "path", "", "config file path (defaults to engine startup config path)")
+		if err := fs.Parse(args[1:]); err != nil {
+			return fmt.Errorf("usage: config reload [--path <file>]")
+		}
+		client, err := a.clientConn()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := a.unaryContext()
+		defer cancel()
+		resp, err := client.ReloadConfig(ctx, &apix.ConfigReloadRequest{Path: path})
+		if err != nil {
+			return err
+		}
+		payload := map[string]any{
+			"config_path":    resp.GetConfigPath(),
+			"applied_fields": resp.GetAppliedFields(),
+			"skipped_fields": resp.GetSkippedFields(),
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, payload)
+		}
+		writef(a.out, "Config reloaded: %s\n", resp.GetConfigPath())
+		writef(a.out, "Applied: %s\n", strings.Join(resp.GetAppliedFields(), ", "))
+		writef(a.out, "Skipped (restart required): %s\n", strings.Join(resp.GetSkippedFields(), ", "))
+		return nil
+	default:
+		return fmt.Errorf("usage: config show|reload")
 	}
-	validation := "ok"
-	if err := a.cfg.ValidateRuntime(); err != nil {
-		validation = err.Error()
-	}
-	payload := map[string]any{
-		"path":       path,
-		"validation": validation,
-		"config": map[string]any{
-			"http_port":              a.cfg.HTTPPort,
-			"grpc_port":              a.cfg.GRPCPort,
-			"grpc_bind_address":      a.cfg.GRPCBindAddress,
-			"db_path":                a.cfg.DBPath,
-			"ca_cert_path":           a.cfg.CACertPath,
-			"ca_key_path":            a.cfg.CAKeyPath,
-			"tls_enabled":            a.cfg.TLSEnabled,
-			"auth_token_set":         a.cfg.AuthToken != "",
-			"max_body_size_mb":       a.cfg.MaxBodySizeMB,
-			"replay_skip_tls_verify": a.cfg.ReplaySkipTLSVerify,
-		},
-	}
-	if a.opts.output == "json" {
-		return emitJSON(a.out, payload)
-	}
-	writef(a.out, "Path: %s\nValidation: %s\n", path, validation)
-	writef(a.out, "gRPC: %s:%s (tls=%t)\n", a.cfg.GRPCBindAddress, a.cfg.GRPCPort, a.cfg.TLSEnabled)
-	writef(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
-	return nil
 }
 
 func (a *app) cmdCompletion(args []string) error {
@@ -1707,7 +1742,7 @@ _apix() {
   local cur prev words cword
   _init_completion || return
   local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond save show status"
+  local subcommands="list get clear add delete enable disable watch forward drop respond save show reload status"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
 complete -F _apix apix

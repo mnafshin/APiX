@@ -23,6 +23,7 @@ import (
 	"github.com/mnafshin/apix/internal/server"
 	"github.com/mnafshin/apix/internal/storage"
 	usermsg "github.com/mnafshin/apix/internal/usermsg"
+	apix "github.com/mnafshin/apix/pkg/api/generated"
 )
 
 func main() {
@@ -32,13 +33,16 @@ func main() {
 	flag.Parse()
 
 	stop := make(chan os.Signal, 1)
+	reloadSignal := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(reloadSignal, syscall.SIGHUP)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 
 	// 1. Load config from well-known search paths.
-	cfg := config.LoadConfig(config.DefaultPath())
+	cfgPath := config.DefaultPath()
+	cfg := config.LoadConfig(cfgPath)
 	format := firstNonEmpty(*logFormat, os.Getenv("LOG_FORMAT"), cfg.LogFormat, "text")
 	level := firstNonEmpty(*logLevel, os.Getenv("LOG_LEVEL"), cfg.LogLevel, "info")
 	logging.InitWithFormatAndLevel(os.Stdout, format, level)
@@ -111,6 +115,14 @@ func main() {
 
 	// 8. Create TLS + HTTP proxies.
 	httpProxy, tlsProxy := initProxies(cfg, ca, eng, pluginRT)
+	reloader := &runtimeConfigReloader{
+		cfgPath:   cfgPath,
+		cfg:       cfg,
+		engine:    eng,
+		httpProxy: httpProxy,
+		db:        db,
+	}
+	server.SetConfigReloader(reloader.Reload)
 
 	// 9. Start gRPC server.
 	wg.Add(1)
@@ -138,7 +150,17 @@ func main() {
 	}
 
 	// 12. Wait for shutdown signal.
-	<-stop
+running:
+	for {
+		select {
+		case <-stop:
+			break running
+		case <-reloadSignal:
+			if _, err := reloader.Reload(ctx, ""); err != nil {
+				logging.Errorf(ctx, "config reload failed: %v", err)
+			}
+		}
+	}
 	logging.Infof(ctx, "Shutting down…")
 	cancel()
 	if otelTracingPlugin != nil {
@@ -256,4 +278,78 @@ func initProxies(cfg *config.Config, ca *proxy.CertAuthority, eng *engine.Engine
 	httpProxy := proxy.NewHTTPProxy(":"+cfg.HTTPPort, tlsProxy, eng, transportOpts, cfg)
 	httpProxy.SetPlugins(pluginRT)
 	return httpProxy, tlsProxy
+}
+
+type runtimeConfigReloader struct {
+	mu        sync.Mutex
+	cfgPath   string
+	cfg       *config.Config
+	engine    *engine.Engine
+	httpProxy *proxy.HTTPProxy
+	db        *storage.DB
+}
+
+func (r *runtimeConfigReloader) Reload(ctx context.Context, explicitPath string) (*apix.ConfigReloadResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	path := r.cfgPath
+	if explicitPath != "" {
+		path = explicitPath
+	}
+	next := config.LoadConfig(path)
+	if err := next.ValidateRuntime(); err != nil {
+		return nil, err
+	}
+
+	applied := make([]string, 0, 8)
+	skipped := make([]string, 0, 8)
+	applyInt := func(name string, dst *int, newVal int) bool {
+		if *dst == newVal {
+			return false
+		}
+		logging.Infof(ctx, "config reloaded: %s %d->%d", name, *dst, newVal)
+		*dst = newVal
+		applied = append(applied, name)
+		return true
+	}
+	skipIfChanged := func(name string, current, incoming any) {
+		if current != incoming {
+			skipped = append(skipped, name)
+		}
+	}
+
+	applyInt("breakpoint_pause_timeout_sec", &r.cfg.BreakpointPauseTimeoutSec, next.BreakpointPauseTimeoutSec)
+	r.engine.SetBreakpointPauseTimeoutSec(r.cfg.BreakpointPauseTimeoutSec)
+	applyInt("max_body_size_mb", &r.cfg.MaxBodySizeMB, next.MaxBodySizeMB)
+	applyInt("slowlog_threshold_ms", &r.cfg.SlowlogThresholdMs, next.SlowlogThresholdMs)
+
+	changedRate := applyInt("proxy_rate_limit_per_sec", &r.cfg.ProxyRateLimitPerSec, next.ProxyRateLimitPerSec)
+	changedConcurrent := applyInt("proxy_max_concurrent_connections", &r.cfg.ProxyMaxConcurrentConnections, next.ProxyMaxConcurrentConnections)
+	if changedRate || changedConcurrent {
+		r.httpProxy.SetRateLimits(r.cfg.ProxyRateLimitPerSec, r.cfg.ProxyMaxConcurrentConnections)
+	}
+
+	changedAge := applyInt("history_max_age_days", &r.cfg.HistoryMaxAgeDays, next.HistoryMaxAgeDays)
+	changedRows := applyInt("history_max_rows", &r.cfg.HistoryMaxRows, next.HistoryMaxRows)
+	if changedAge || changedRows {
+		if err := r.db.PruneOldTransactions(r.cfg.HistoryMaxAgeDays, r.cfg.HistoryMaxRows); err != nil {
+			logging.Warnf(ctx, "config reload prune: %v", err)
+		}
+	}
+
+	skipIfChanged("http_port", r.cfg.HTTPPort, next.HTTPPort)
+	skipIfChanged("grpc_port", r.cfg.GRPCPort, next.GRPCPort)
+	skipIfChanged("grpc_bind_address", r.cfg.GRPCBindAddress, next.GRPCBindAddress)
+	skipIfChanged("tls_enabled", r.cfg.TLSEnabled, next.TLSEnabled)
+	skipIfChanged("grpc_cert_path", r.cfg.GRPCCertPath, next.GRPCCertPath)
+	skipIfChanged("grpc_key_path", r.cfg.GRPCKeyPath, next.GRPCKeyPath)
+	skipIfChanged("db_path", r.cfg.DBPath, next.DBPath)
+
+	logging.Infof(ctx, "config reload complete: applied=%d skipped=%d", len(applied), len(skipped))
+	return &apix.ConfigReloadResponse{
+		ConfigPath:    path,
+		AppliedFields: applied,
+		SkippedFields: skipped,
+	}, nil
 }

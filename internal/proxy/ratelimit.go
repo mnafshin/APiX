@@ -111,6 +111,19 @@ func (l *proxyRateLimiter) release(clientIP string) {
 	}
 }
 
+func (l *proxyRateLimiter) update(ratePerSec, maxConcurrent int) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.ratePerSec = ratePerSec
+	l.maxConcurrent = maxConcurrent
+	// Reset counters so new settings apply immediately and consistently.
+	l.buckets = make(map[string]*tokenBucket)
+	l.active = make(map[string]int)
+}
+
 func normalizeClientIP(addr string) string {
 	addr = strings.TrimSpace(addr)
 	if addr == "" {

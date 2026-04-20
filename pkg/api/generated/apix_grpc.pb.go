@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Engine_GetStatus_FullMethodName             = "/apix.Engine/GetStatus"
+	Engine_ReloadConfig_FullMethodName          = "/apix.Engine/ReloadConfig"
 	Engine_GetVersion_FullMethodName            = "/apix.Engine/GetVersion"
 	Engine_CaptureTraffic_FullMethodName        = "/apix.Engine/CaptureTraffic"
 	Engine_ListPlugins_FullMethodName           = "/apix.Engine/ListPlugins"
@@ -51,6 +52,8 @@ const (
 type EngineClient interface {
 	// ----- Health -----
 	GetStatus(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	// ReloadConfig hot-reloads runtime-safe config fields without restarting.
+	ReloadConfig(ctx context.Context, in *ConfigReloadRequest, opts ...grpc.CallOption) (*ConfigReloadResponse, error)
 	// GetVersion returns the engine's API version and compatibility contract.
 	// Clients should call this on connect and compare api_version against their
 	// own expectation. The min_client_version field indicates the oldest client
@@ -114,6 +117,16 @@ func (c *engineClient) GetStatus(ctx context.Context, in *StatusRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StatusResponse)
 	err := c.cc.Invoke(ctx, Engine_GetStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *engineClient) ReloadConfig(ctx context.Context, in *ConfigReloadRequest, opts ...grpc.CallOption) (*ConfigReloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigReloadResponse)
+	err := c.cc.Invoke(ctx, Engine_ReloadConfig_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -392,6 +405,8 @@ func (c *engineClient) ToggleRewriteRule(ctx context.Context, in *RewriteRuleReq
 type EngineServer interface {
 	// ----- Health -----
 	GetStatus(context.Context, *StatusRequest) (*StatusResponse, error)
+	// ReloadConfig hot-reloads runtime-safe config fields without restarting.
+	ReloadConfig(context.Context, *ConfigReloadRequest) (*ConfigReloadResponse, error)
 	// GetVersion returns the engine's API version and compatibility contract.
 	// Clients should call this on connect and compare api_version against their
 	// own expectation. The min_client_version field indicates the oldest client
@@ -453,6 +468,9 @@ type UnimplementedEngineServer struct{}
 
 func (UnimplementedEngineServer) GetStatus(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetStatus not implemented")
+}
+func (UnimplementedEngineServer) ReloadConfig(context.Context, *ConfigReloadRequest) (*ConfigReloadResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadConfig not implemented")
 }
 func (UnimplementedEngineServer) GetVersion(context.Context, *VersionRequest) (*VersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
@@ -558,6 +576,24 @@ func _Engine_GetStatus_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(EngineServer).GetStatus(ctx, req.(*StatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Engine_ReloadConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigReloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EngineServer).ReloadConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Engine_ReloadConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EngineServer).ReloadConfig(ctx, req.(*ConfigReloadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -958,6 +994,10 @@ var Engine_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _Engine_GetStatus_Handler,
+		},
+		{
+			MethodName: "ReloadConfig",
+			Handler:    _Engine_ReloadConfig_Handler,
 		},
 		{
 			MethodName: "GetVersion",

@@ -13,7 +13,7 @@ Commands:
   templates save|list|delete
   replay
   cert status
-  config show
+  config show|reload
   setup [profile]
   completion <bash|zsh|fish>
   doctor

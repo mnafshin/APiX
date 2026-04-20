@@ -1,5 +1,6 @@
 service Engine {
   rpc GetStatus(StatusRequest) returns (StatusResponse);
+  rpc ReloadConfig(ConfigReloadRequest) returns (ConfigReloadResponse);
   rpc GetVersion(VersionRequest) returns (VersionResponse);
   rpc CaptureTraffic(CaptureRequest) returns (stream HttpRequest);
   rpc ListPlugins(PluginListRequest) returns (PluginListResponse);
