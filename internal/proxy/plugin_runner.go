@@ -74,16 +74,16 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 }
 
 // drainPluginResponseBody reads the response body from a plugin-modified response.
-// Returns updated body bytes (or original body on read error).
-func drainPluginResponseBody(ctx context.Context, resp *plugins.ProxyResponse, maxBytes int64, logTag string) []byte {
+// Returns updated body bytes and an explicit read error when body extraction fails.
+func drainPluginResponseBody(ctx context.Context, resp *plugins.ProxyResponse, maxBytes int64, logTag string) ([]byte, error) {
 	if resp.Body == nil {
-		return nil
+		return nil, nil
 	}
 	limited := io.LimitReader(resp.Body, maxBytes)
 	b, err := io.ReadAll(limited)
 	if err != nil {
 		logging.Errorf(ctx, "%s: read plugin response body: %v", logTag, err)
-		return nil
+		return nil, err
 	}
-	return b
+	return b, nil
 }

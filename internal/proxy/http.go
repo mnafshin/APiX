@@ -507,7 +507,10 @@ func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyReq
 		return nil, nil, err
 	}
 	if modResp.Body != nil {
-		newBody := drainPluginResponseBody(ctx, modResp, maxBodyBytes, "http proxy")
+		newBody, readErr := drainPluginResponseBody(ctx, modResp, maxBodyBytes, "http proxy")
+		if readErr != nil {
+			return nil, nil, readErr
+		}
 		return modResp, newBody, nil
 	}
 	return modResp, body, nil
