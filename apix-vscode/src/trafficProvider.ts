@@ -12,17 +12,34 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     private readonly maxItems: number;
+    private readonly refreshDebounceMs = 200;
+    private pendingRefresh = false;
+    private refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    private captureStream: { cancel: () => void } | undefined;
+    private captureRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    private captureRetryDelayMs = 1000;
 
     constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {
         const config = vscode.workspace.getConfiguration('apix');
         this.maxItems = config.get<number>('traffic.maxItems', 500);
+        this.startCapture();
     }
 
     refresh(): void {
-        this._onDidChangeTreeData.fire();
+        this.scheduleRefresh();
     }
 
     dispose(): void {
+        if (this.refreshTimer) {
+            clearTimeout(this.refreshTimer);
+            this.refreshTimer = undefined;
+        }
+        if (this.captureRetryTimer) {
+            clearTimeout(this.captureRetryTimer);
+            this.captureRetryTimer = undefined;
+        }
+        this.captureStream?.cancel();
+        this.captureStream = undefined;
         this._onDidChangeTreeData.dispose();
     }
 
@@ -47,6 +64,56 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
             this.output?.appendLine(`[APiX] Traffic view error: ${msg}`);
             return [new ErrorItem(`Connection lost: ${msg}`, 'apix.refreshTraffic')];
         }
+    }
+
+    private startCapture(): void {
+        if (this.captureRetryTimer) {
+            clearTimeout(this.captureRetryTimer);
+            this.captureRetryTimer = undefined;
+        }
+        this.captureStream?.cancel();
+        this.captureStream = undefined;
+        try {
+            const stream = this.client.captureTraffic(
+                () => {
+                    this.captureRetryDelayMs = 1000;
+                    this.scheduleRefresh();
+                },
+                (err) => {
+                    this.output?.appendLine(`[APiX] Traffic stream error: ${err?.message || err}`);
+                    this.scheduleCaptureRetry();
+                },
+                () => this.scheduleCaptureRetry()
+            );
+            this.captureStream = { cancel: () => stream.cancel() };
+        } catch (err) {
+            this.output?.appendLine(`[APiX] Could not start traffic stream: ${err}`);
+            this.scheduleCaptureRetry();
+        }
+    }
+
+    private scheduleCaptureRetry(): void {
+        if (this.captureRetryTimer) {
+            return;
+        }
+        const delay = this.captureRetryDelayMs;
+        this.captureRetryDelayMs = Math.min(this.captureRetryDelayMs * 2, 30000);
+        this.captureRetryTimer = setTimeout(() => {
+            this.captureRetryTimer = undefined;
+            this.startCapture();
+        }, delay);
+    }
+
+    private scheduleRefresh(): void {
+        if (this.pendingRefresh) {
+            return;
+        }
+        this.pendingRefresh = true;
+        this.refreshTimer = setTimeout(() => {
+            this.pendingRefresh = false;
+            this.refreshTimer = undefined;
+            this._onDidChangeTreeData.fire(undefined);
+        }, this.refreshDebounceMs);
     }
 }
 
