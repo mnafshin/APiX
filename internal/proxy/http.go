@@ -532,9 +532,10 @@ func (p *HTTPProxy) applyMapLocalRules(ctx context.Context, req *plugins.ProxyRe
 			continue
 		}
 
-		body, err := os.ReadFile(rule.FilePath)
+		filePath := rule.EffectiveFilePath()
+		body, err := os.ReadFile(filePath)
 		if err != nil {
-			msg := fmt.Sprintf("map-local read file %q: %v", rule.FilePath, err)
+			msg := fmt.Sprintf("map-local read file %q: %v", filePath, err)
 			logging.Errorf(ctx, "%s", msg)
 			return &plugins.ProxyResponse{
 				StatusCode: http.StatusInternalServerError,
@@ -549,7 +550,7 @@ func (p *HTTPProxy) applyMapLocalRules(ctx context.Context, req *plugins.ProxyRe
 		}
 		contentType := rule.ContentType
 		if contentType == "" {
-			contentType = detectContentType(rule.FilePath, body)
+			contentType = detectContentType(filePath, body)
 		}
 		return &plugins.ProxyResponse{
 			StatusCode: statusCode,

@@ -111,7 +111,7 @@ Validate config:
 | `health_port` | `9092` | `/healthz` endpoint |
 | `mcp_enabled` / `mcp_port` | `false` / `9093` | MCP server |
 | `mcp_allow_replay` / `mcp_allow_compose` | `false` / `false` | Side-effect MCP tools |
-| `map_local_rules` | empty | URL regex -> local file response mapping |
+| `map_local_rules` | empty | URL regex -> local file response mapping (`file_path`, with `local_path` alias) |
 
 ## Security model
 

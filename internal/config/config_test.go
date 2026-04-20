@@ -201,6 +201,29 @@ map_local_rules:
 	}
 }
 
+func TestLoadConfig_MapLocalRulesLocalPathAlias(t *testing.T) {
+	t.Parallel()
+	path := writeTemp(t, `
+map_local_rules:
+  - url_pattern: "^https://example\\.com/mock$"
+    local_path: "./mocks/mock.json"
+`)
+	cfg := LoadConfig(path)
+	if len(cfg.MapLocalRules) != 1 {
+		t.Fatalf("MapLocalRules: got %d want 1", len(cfg.MapLocalRules))
+	}
+	rule := cfg.MapLocalRules[0]
+	if rule.FilePath != "" {
+		t.Errorf("FilePath: got %q want empty when local_path used", rule.FilePath)
+	}
+	if rule.LocalPath != "./mocks/mock.json" {
+		t.Errorf("LocalPath: got %q", rule.LocalPath)
+	}
+	if got := rule.EffectiveFilePath(); got != "./mocks/mock.json" {
+		t.Errorf("EffectiveFilePath: got %q want ./mocks/mock.json", got)
+	}
+}
+
 func TestDefaultPath_EnvVar(t *testing.T) {
 	t.Setenv("APIX_CONFIG", "/custom/path/config.yaml")
 

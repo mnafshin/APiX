@@ -190,8 +190,8 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		} else if _, err := regexp.Compile(rule.URLPattern); err != nil {
 			errs = append(errs, fmt.Errorf("map_local_rules[%d].url_pattern %q is not a valid Go regexp: %w", i, rule.URLPattern, err))
 		}
-		if rule.FilePath == "" {
-			errs = append(errs, fmt.Errorf("map_local_rules[%d].file_path is empty — provide a readable local file path", i))
+		if rule.EffectiveFilePath() == "" {
+			errs = append(errs, fmt.Errorf("map_local_rules[%d].file_path is empty — provide file_path (or local_path) with a readable local file path", i))
 		}
 		if rule.StatusCode != 0 && (rule.StatusCode < 100 || rule.StatusCode > 599) {
 			errs = append(errs, fmt.Errorf("map_local_rules[%d].status_code must be 100-599 when set (got %d)", i, rule.StatusCode))

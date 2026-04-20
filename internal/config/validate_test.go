@@ -408,6 +408,27 @@ func TestValidate_MapLocalRules(t *testing.T) {
 	}
 }
 
+func TestValidate_MapLocalRulesLocalPathAlias(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		MapLocalRules: []MapLocalRule{
+			{
+				URLPattern: "^https://example\\.com/mock$",
+				LocalPath:  "mock.json",
+				StatusCode: 200,
+			},
+		},
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid map-local config with local_path alias, got: %v", err)
+	}
+}
+
 func TestValidate_MapLocalRulesInvalid(t *testing.T) {
 	t.Parallel()
 	httpPort, grpcPort := mustFreePorts(t)
