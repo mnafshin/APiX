@@ -115,6 +115,9 @@ db_path: "~/.apix/apix.db"
 # Optional: Auth token for remote deployments
 # IMPORTANT: Use env var APIX_AUTH_TOKEN instead to avoid plaintext secrets!
 # auth_token: "your-secret-token-here"
+# Optional: read token from a mounted secret file
+# auth_token_file: "/run/secrets/apix-token"
+auth_token_require_strict_perms: true  # rejects plaintext auth_token if config file is wider than 0600
 
 # Optional: TLS for remote engines (for vscode.dev support)
 tls_enabled: false
@@ -341,8 +344,11 @@ APiX engine supports remote gRPC access over TLS for vscode.dev/browser clients.
    tls_enabled: true
    grpc_cert_path: "/etc/apix/grpc-server.pem"
    grpc_key_path: "/etc/apix/grpc-server-key.pem"
-   # Prefer APIX_AUTH_TOKEN env var in production:
-   auth_token: "your-secret-token"
+   # Prefer APIX_AUTH_TOKEN env var in production.
+   # If using auth_token in config, keep file mode at 0600 or stricter.
+   # auth_token: "your-secret-token"
+   # or:
+   # auth_token_file: "/run/secrets/apix-token"
    ```
 
 2. Set token via environment variable (recommended):

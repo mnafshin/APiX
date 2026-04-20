@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -63,6 +64,9 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.AuthToken != "" {
 		t.Errorf("AuthToken: expected empty by default, got %q", cfg.AuthToken)
 	}
+	if !cfg.AuthTokenRequireStrictPerms {
+		t.Error("AuthTokenRequireStrictPerms: expected true by default")
+	}
 	if cfg.MCPEnabled {
 		t.Error("MCPEnabled: expected false by default")
 	}
@@ -111,6 +115,7 @@ http_port: "9999"
 grpc_port: "8888"
 max_body_size_mb: 64
 dial_timeout_sec: 5
+auth_token_require_strict_perms: false
 proxy_rate_limit_per_sec: 300
 proxy_max_concurrent_connections: 50
 max_headers_per_request: 150
@@ -145,6 +150,9 @@ audit_log_path: "/tmp/apix-audit.log"
 	}
 	if cfg.DialTimeoutSec != 5 {
 		t.Errorf("DialTimeoutSec: got %d want 5", cfg.DialTimeoutSec)
+	}
+	if cfg.AuthTokenRequireStrictPerms {
+		t.Error("AuthTokenRequireStrictPerms should be false from YAML override")
 	}
 	if cfg.ProxyRateLimitPerSec != 300 {
 		t.Errorf("ProxyRateLimitPerSec: got %d want 300", cfg.ProxyRateLimitPerSec)
@@ -279,6 +287,36 @@ func TestLoadConfig_GRPCBindAddress_ExplicitValueKept(t *testing.T) {
 
 	if cfg.GRPCBindAddress != "192.168.1.10" {
 		t.Errorf("GRPCBindAddress: explicit value not preserved, got %q", cfg.GRPCBindAddress)
+	}
+}
+
+func TestLoadConfig_AuthTokenFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	tokenPath := filepath.Join(dir, "token.txt")
+	if err := os.WriteFile(tokenPath, []byte("file-token\n"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	path := writeTemp(t, "auth_token_file: "+tokenPath+"\n")
+	cfg := LoadConfig(path)
+	if cfg.AuthToken != "file-token" {
+		t.Fatalf("expected auth token from file, got %q", cfg.AuthToken)
+	}
+}
+
+func TestLoadConfig_AuthTokenStrictPermsValidation(t *testing.T) {
+	t.Parallel()
+	path := writeTemp(t, "auth_token: insecure\n")
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("chmod config: %v", err)
+	}
+	cfg := LoadConfig(path)
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for permissive config file mode")
+	}
+	if !strings.Contains(err.Error(), "file mode") {
+		t.Fatalf("expected file mode validation error, got: %v", err)
 	}
 }
 
