@@ -349,7 +349,8 @@ export class EngineClient {
     /** Start the real-time traffic capture stream (CaptureTraffic RPC). */
     captureTraffic(
         onData: (tx: HttpTransaction) => void,
-        onError: (err: Error) => void
+        onError: (err: Error) => void,
+        onEnd?: () => void
     ): grpc.ClientReadableStream<HttpTransaction> {
         this.ensureStub();
         const stream: grpc.ClientReadableStream<HttpRequest> = this.stub!.captureTraffic({}, this.metadata);
@@ -377,6 +378,7 @@ export class EngineClient {
             onData(tx);
         });
         stream.on('error', (err: Error) => onError(err));
+        stream.on('end', () => onEnd?.());
         return stream as unknown as grpc.ClientReadableStream<HttpTransaction>;
     }
 

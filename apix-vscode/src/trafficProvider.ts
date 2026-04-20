@@ -45,8 +45,7 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
         } catch (err: any) {
             const msg = err?.message || String(err);
             this.output?.appendLine(`[APiX] Traffic view error: ${msg}`);
-            vscode.window.showErrorMessage(`APiX: Traffic view error — ${msg}`);
-            return [new ErrorItem(`Engine unreachable: ${msg}`)];
+            return [new ErrorItem(`Connection lost: ${msg}`, 'apix.refreshTraffic')];
         }
     }
 }
@@ -84,9 +83,15 @@ export class TrafficItem extends vscode.TreeItem {
 
 /** Error item displayed when the engine is unreachable. */
 export class ErrorItem extends vscode.TreeItem {
-    constructor(message: string) {
+    constructor(message: string, refreshCommand?: string) {
         super(message, vscode.TreeItemCollapsibleState.None);
         this.iconPath = new vscode.ThemeIcon('error');
-        this.description = '';
+        this.description = refreshCommand ? 'Click to retry' : '';
+        if (refreshCommand) {
+            this.command = {
+                command: refreshCommand,
+                title: 'Retry',
+            };
+        }
     }
 }

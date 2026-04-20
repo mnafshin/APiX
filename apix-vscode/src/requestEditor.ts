@@ -14,6 +14,7 @@ import { PausedRequest, ResumeAction, ResumeActionKind, HttpRequest, HttpRespons
  */
 export class RequestEditor {
     private static readonly viewType = 'apixRequestEditor';
+    private static readonly panels = new Set<vscode.WebviewPanel>();
 
     public static async showEditor(
         extensionUri: vscode.Uri,
@@ -26,6 +27,10 @@ export class RequestEditor {
             vscode.ViewColumn.Active,
             { enableScripts: true }
         );
+        RequestEditor.panels.add(panel);
+        panel.onDidDispose(() => {
+            RequestEditor.panels.delete(panel);
+        });
 
         panel.webview.html = RequestEditor._getHtml(panel.webview, paused);
 
@@ -77,6 +82,13 @@ export class RequestEditor {
                 vscode.window.showErrorMessage(`APiX: Failed to resume request — ${err?.message || err}`);
             }
         });
+    }
+
+    public static closeAll(): void {
+        for (const panel of RequestEditor.panels) {
+            panel.dispose();
+        }
+        RequestEditor.panels.clear();
     }
 
     private static _buildResumeAction(
