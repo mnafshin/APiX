@@ -3,6 +3,7 @@ package proxy_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -88,6 +89,7 @@ type testPlugin struct {
 	name   string
 	onReq  func(*plugins.ProxyRequest) *plugins.ProxyRequest
 	onResp func(*plugins.ProxyResponse) *plugins.ProxyResponse
+	onRespErr error
 }
 
 func (p *testPlugin) Name() string        { return p.name }
@@ -102,6 +104,9 @@ func (p *testPlugin) OnRequest(_ context.Context, req *plugins.ProxyRequest) (*p
 }
 
 func (p *testPlugin) OnResponse(_ context.Context, _ *plugins.ProxyRequest, resp *plugins.ProxyResponse) (*plugins.ProxyResponse, error) {
+	if p.onRespErr != nil {
+		return nil, p.onRespErr
+	}
 	if p.onResp != nil {
 		return p.onResp(resp), nil
 	}
@@ -967,6 +972,40 @@ func TestHTTPProxy_PluginModifiesBody(t *testing.T) {
 
 	if upstreamBody != modified {
 		t.Errorf("upstream body: got %q, want %q", upstreamBody, modified)
+	}
+}
+
+func TestHTTPProxy_ResponsePluginErrorReturnsBadGateway(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, _, bpMgr, rt := newTestStack(t)
+	startAutoResume(t, bpMgr)
+
+	if err := rt.Register(&testPlugin{
+		name:      "response-error",
+		onRespErr: errors.New("simulated OnResponse failure"),
+	}); err != nil {
+		t.Fatalf("register plugin: %v", err)
+	}
+
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(upstream.URL)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusBadGateway)
 	}
 }
 

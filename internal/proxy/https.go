@@ -256,7 +256,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	}
 
 	// Run plugin OnResponse chain with panic recovery.
-	proxyResp = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy")
+	proxyResp, err = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy")
+	if err != nil {
+		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin OnResponse error: %v", err))
+		return
+	}
 
 	// Buffer the final response body (plugins may have modified it) so we can
 	// both persist it and still write it to the client.
@@ -444,7 +448,11 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 		Raw:        upResp,
 	}
 
-	proxyResp = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy h2")
+	proxyResp, err = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy h2")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
+		return
+	}
 	finalRespBody := respBody
 	if proxyResp.Body != nil {
 		finalRespBody, readErr = io.ReadAll(proxyResp.Body)
