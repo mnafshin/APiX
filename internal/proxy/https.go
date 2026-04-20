@@ -148,10 +148,9 @@ func (c *bufferedConn) Read(p []byte) (int, error) {
 
 func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.Reader, r *http.Request, host string, protocol string) {
 	defer func() {
-		if rec := recover(); rec != nil {
-			logging.Errorf(ctx, "TLS proxy panic (recovered): %v", rec)
+		recoverProxyPanic(ctx, "TLS proxy panic", func() {
 			writeHTTPError(ctx, conn, http.StatusBadGateway, "proxy error")
-		}
+		})
 	}()
 
 	reqID := uuid.NewString()
@@ -352,10 +351,9 @@ func (p *TLSProxy) handleHTTP2Conn(ctx context.Context, conn net.Conn, br *bufio
 
 func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter, r *http.Request, host string) {
 	defer func() {
-		if rec := recover(); rec != nil {
-			logging.Errorf(ctx, "TLS proxy HTTP/2 panic (recovered): %v", rec)
+		recoverProxyPanic(ctx, "TLS proxy HTTP/2 panic", func() {
 			http.Error(w, "proxy error", http.StatusBadGateway)
-		}
+		})
 	}()
 
 	reqID := uuid.NewString()

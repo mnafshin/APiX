@@ -21,10 +21,9 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 	var runErr error
 	func() {
 		defer func() {
-			if rec := recover(); rec != nil {
-				logging.Errorf(ctx, "%s: panic in plugin OnRequest (recovered): %v", logTag, rec)
+			recoverProxyPanic(ctx, fmt.Sprintf("%s: panic in plugin OnRequest", logTag), func() {
 				runErr = fmt.Errorf("plugin panic")
-			}
+			})
 		}()
 		modified, err := rp.RunRequest(ctx, req)
 		if err != nil {
@@ -52,10 +51,9 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 	var runErr error
 	func() {
 		defer func() {
-			if rec := recover(); rec != nil {
-				logging.Errorf(ctx, "%s: panic in plugin OnResponse (recovered): %v", logTag, rec)
+			recoverProxyPanic(ctx, fmt.Sprintf("%s: panic in plugin OnResponse", logTag), func() {
 				runErr = fmt.Errorf("plugin panic")
-			}
+			})
 		}()
 		modResp, err := rp.RunResponse(ctx, req, resp)
 		if err != nil {

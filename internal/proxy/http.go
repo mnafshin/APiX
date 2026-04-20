@@ -95,10 +95,9 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer p.limiter.release(clientIP)
 	defer func() {
-		if rec := recover(); rec != nil {
-			logging.Errorf(ctx, "HTTP proxy panic in ServeHTTP (recovered): %v", rec)
+		recoverProxyPanic(ctx, "HTTP proxy panic in ServeHTTP", func() {
 			http.Error(w, "proxy error", http.StatusBadGateway)
-		}
+		})
 	}()
 
 	if r.Method == http.MethodConnect {
@@ -112,10 +111,9 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	defer func() {
-		if rec := recover(); rec != nil {
-			logging.Errorf(ctx, "HTTP proxy panic in handleConnect (recovered): %v", rec)
+		recoverProxyPanic(ctx, "HTTP proxy panic in handleConnect", func() {
 			http.Error(w, "proxy error", http.StatusInternalServerError)
-		}
+		})
 	}()
 
 	hj, ok := w.(http.Hijacker)
@@ -176,10 +174,9 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	defer metrics.DecActive()
 
 	defer func() {
-		if rec := recover(); rec != nil {
-			logging.Errorf(ctx, "HTTP proxy panic (recovered): %v", rec)
+		recoverProxyPanic(ctx, "HTTP proxy panic", func() {
 			http.Error(w, "proxy error", http.StatusBadGateway)
-		}
+		})
 	}()
 
 	start := time.Now()
