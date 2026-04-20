@@ -36,7 +36,7 @@ func (s *EngineServer) SetBreakpoint(ctx context.Context, req *apix.BreakpointRu
 		return nil, status.Errorf(codes.InvalidArgument, "invalid breakpoint: %v", err)
 	}
 	// Persist to storage.
-	if err := s.db.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label, added.HeaderName, added.HeaderValue, added.BodyPattern, added.StatusCodes); err != nil {
+	if err := s.engine.SaveBreakpoint(added.ID, added.URLPattern, added.Methods, added.Enabled, added.Label, added.HeaderName, added.HeaderValue, added.BodyPattern, added.StatusCodes); err != nil {
 		logging.Errorf(ctx, "grpc: save breakpoint: %v", err)
 	}
 	s.auditLog(ctx, "set_breakpoint", added.ID, map[string]any{
@@ -63,7 +63,7 @@ func (s *EngineServer) DeleteBreakpoint(ctx context.Context, req *apix.Breakpoin
 	if err := s.breakpointMgr.RemoveRule(req.Id); err != nil {
 		return nil, status.Errorf(codes.NotFound, "breakpoint not found: %v", err)
 	}
-	if err := s.db.DeleteBreakpoint(req.Id); err != nil {
+	if err := s.engine.DeleteBreakpoint(req.Id); err != nil {
 		logging.Errorf(ctx, "grpc: delete breakpoint from storage: %v", err)
 	}
 	s.auditLog(ctx, "delete_breakpoint", req.Id, nil)

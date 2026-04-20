@@ -98,7 +98,7 @@ func (s *EngineServer) SaveRequestTemplate(ctx context.Context, req *apix.Reques
 		Body:      req.GetRequest().Body,
 		UpdatedAt: time.Now(),
 	}
-	if err := s.db.SaveRequestTemplate(record); err != nil {
+	if err := s.engine.SaveRequestTemplate(record); err != nil {
 		return nil, status.Errorf(codes.Internal, "save request template: %v", err)
 	}
 	s.auditLog(ctx, "save_request_template", id, map[string]any{
@@ -110,7 +110,7 @@ func (s *EngineServer) SaveRequestTemplate(ctx context.Context, req *apix.Reques
 }
 
 func (s *EngineServer) ListRequestTemplates(_ context.Context, _ *apix.Empty) (*apix.RequestTemplateList, error) {
-	records, err := s.db.ListRequestTemplates()
+	records, err := s.engine.ListRequestTemplates()
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list request templates: %v", err)
 	}
@@ -125,7 +125,7 @@ func (s *EngineServer) DeleteRequestTemplate(ctx context.Context, req *apix.Requ
 	if req.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "id is required")
 	}
-	if err := s.db.DeleteRequestTemplate(req.GetId()); err != nil {
+	if err := s.engine.DeleteRequestTemplate(req.GetId()); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete request template: %v", err)
 	}
 	s.auditLog(ctx, "delete_request_template", req.GetId(), nil)
