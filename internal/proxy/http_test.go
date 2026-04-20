@@ -92,6 +92,11 @@ type testPlugin struct {
 	onRespErr error
 }
 
+type failingReadCloser struct{}
+
+func (failingReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("simulated read failure") }
+func (failingReadCloser) Close() error               { return nil }
+
 func (p *testPlugin) Name() string        { return p.name }
 func (p *testPlugin) Version() string     { return "1.0.0" }
 func (p *testPlugin) Description() string { return "test plugin" }
@@ -990,6 +995,43 @@ func TestHTTPProxy_ResponsePluginErrorReturnsBadGateway(t *testing.T) {
 	if err := rt.Register(&testPlugin{
 		name:      "response-error",
 		onRespErr: errors.New("simulated OnResponse failure"),
+	}); err != nil {
+		t.Fatalf("register plugin: %v", err)
+	}
+
+	proxySrv := httptest.NewServer(httpP)
+	t.Cleanup(proxySrv.Close)
+
+	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(mustParseURL(t, proxySrv.URL))}}
+	resp, err := client.Get(upstream.URL)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status: got %d want %d", resp.StatusCode, http.StatusBadGateway)
+	}
+}
+
+func TestHTTPProxy_ResponsePluginBodyReadErrorReturnsBadGateway(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	t.Cleanup(upstream.Close)
+
+	httpP, _, _, bpMgr, rt := newTestStack(t)
+	startAutoResume(t, bpMgr)
+
+	if err := rt.Register(&testPlugin{
+		name: "response-body-read-error",
+		onResp: func(resp *plugins.ProxyResponse) *plugins.ProxyResponse {
+			clone := resp.Clone(failingReadCloser{})
+			return clone
+		},
 	}); err != nil {
 		t.Fatalf("register plugin: %v", err)
 	}
