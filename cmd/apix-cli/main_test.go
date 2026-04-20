@@ -170,6 +170,44 @@ func TestCLIStatusJSON_RealServer(t *testing.T) {
 	}
 }
 
+func TestCLIVerbose_EmitsDiagnostics(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, out, errOut := runCLI(t, stack.args("--verbose", "--output", "json", "status")...)
+	if exit != 0 {
+		t.Fatalf("exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(errOut, "[debug] running command: status") {
+		t.Fatalf("missing command start diagnostic: %s", errOut)
+	}
+	if !strings.Contains(errOut, "[debug] command status finished in") {
+		t.Fatalf("missing command end diagnostic: %s", errOut)
+	}
+	if !strings.Contains(errOut, "[debug] dialing engine:") {
+		t.Fatalf("missing dial diagnostic: %s", errOut)
+	}
+	if !strings.Contains(errOut, "[debug] unary timeout=") {
+		t.Fatalf("missing timeout diagnostic: %s", errOut)
+	}
+	if !strings.Contains(out, `"status":"OK"`) {
+		t.Fatalf("unexpected status output: %s", out)
+	}
+}
+
+func TestCLIDebugShortFlag_EmitsDiagnostics(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, _, errOut := runCLI(t, stack.args("--debug", "status")...)
+	if exit != 0 {
+		t.Fatalf("exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(errOut, "[debug] running command: status") {
+		t.Fatalf("missing debug diagnostics: %s", errOut)
+	}
+}
+
 func TestCLIReadWorkflows_EngineBacked(t *testing.T) {
 	t.Parallel()
 	stack := newCLITestStack(t, "")
