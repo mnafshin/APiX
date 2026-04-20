@@ -15,11 +15,11 @@ func (p *MyPlugin) Version() string     { return "1.0.0" }
 func (p *MyPlugin) Description() string { return "Example plugin" }
 
 func (p *MyPlugin) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
-	return nil, nil
+    return nil, nil
 }
 
 func (p *MyPlugin) OnResponse(ctx context.Context, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (*plugins.ProxyResponse, error) {
-	return nil, nil
+    return nil, nil
 }
 ```
 
@@ -29,7 +29,7 @@ Register it in `cmd/apix-engine/main.go` with the other built-ins.
 
 ```go
 if err := pluginRT.Register(&builtins.MyPlugin{}); err != nil {
-	logging.Warnf(ctx, "register my-plugin: %v", err)
+    logging.Warnf(ctx, "register my-plugin: %v", err)
 }
 ```
 

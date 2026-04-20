@@ -26,18 +26,18 @@ Example:
 ```go
 // config.go
 type Config struct {
-	MyPluginEnabled bool `yaml:"my_plugin_enabled"`
-	MyPluginLimit   int  `yaml:"my_plugin_limit"`
+    MyPluginEnabled bool `yaml:"my_plugin_enabled"`
+    MyPluginLimit   int  `yaml:"my_plugin_limit"`
 }
 ```
 
 ```go
 // main.go
 if cfg.MyPluginEnabled {
-	p := builtins.NewMyPlugin(builtins.MyPluginConfig{
-		Limit: cfg.MyPluginLimit,
-	})
-	_ = pluginRT.Register(p)
+    p := builtins.NewMyPlugin(builtins.MyPluginConfig{
+        Limit: cfg.MyPluginLimit,
+    })
+    _ = pluginRT.Register(p)
 }
 ```
 
