@@ -108,6 +108,7 @@ Validate config:
 | `max_body_size_mb` | `32` | Request/response body limit per body |
 | `history_max_age_days` / `history_max_rows` | `0` / `0` | Retention pruning controls |
 | `metrics_enabled` / `metrics_port` | `false` / `9091` | Prometheus metrics endpoint |
+| `otel_enabled` / `otel_endpoint` / `otel_service_name` / `otel_insecure` / `otel_sample_rate` | `false` / `localhost:4317` / `apix-proxy` / `true` / `1.0` | Built-in OTLP tracing exporter plugin |
 | `health_port` | `9092` | `/healthz` endpoint |
 | `log_format` / `log_level` | `text` / `info` | Engine log output shape and verbosity |
 | `mcp_enabled` / `mcp_port` | `false` / `9093` | MCP server |

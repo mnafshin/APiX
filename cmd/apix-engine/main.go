@@ -137,6 +137,7 @@ func main() {
 
 	// 5. Create plugin runtime and register built-ins.
 	pluginRT := pluginrt.NewRuntime()
+	var otelTracingPlugin *builtins.OTelTracing
 	if err := pluginRT.Register(&builtins.HeaderEditor{}); err != nil {
 		logging.Warnf(ctx, "register header-editor: %v", err)
 	}
@@ -145,6 +146,22 @@ func main() {
 	}
 	if err := pluginRT.Register(&builtins.EnvSubst{}); err != nil {
 		logging.Warnf(ctx, "register env-subst: %v", err)
+	}
+	if cfg.OTelEnabled {
+		otelTracingPlugin, err = builtins.NewOTelTracing(ctx, builtins.OTelTracingConfig{
+			Endpoint:    cfg.OTelEndpoint,
+			ServiceName: cfg.OTelServiceName,
+			Insecure:    cfg.OTelInsecure,
+			SampleRate:  cfg.OTelSampleRate,
+		})
+		if err != nil {
+			logging.Fatalf(ctx, "initialize otel-tracing plugin: %v", err)
+		}
+		if err := pluginRT.Register(otelTracingPlugin); err != nil {
+			logging.Fatalf(ctx, "register otel-tracing plugin: %v", err)
+		}
+		logging.Infof(ctx, "otel tracing enabled (endpoint=%s service=%s sample_rate=%.2f)",
+			cfg.OTelEndpoint, cfg.OTelServiceName, cfg.OTelSampleRate)
 	}
 
 	// 6. Create Engine.
@@ -204,6 +221,13 @@ func main() {
 	<-stop
 	logging.Infof(ctx, "Shutting down…")
 	cancel()
+	if otelTracingPlugin != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := otelTracingPlugin.Shutdown(shutdownCtx); err != nil {
+			logging.Warnf(ctx, "otel-tracing shutdown: %v", err)
+		}
+		shutdownCancel()
+	}
 
 	// 13. Close proxies to release file descriptors.
 	httpProxy.Close()

@@ -55,6 +55,53 @@ func TestValidate_InvalidLogSettings(t *testing.T) {
 	}
 }
 
+func TestValidate_InvalidOTelSettings(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		OTelEnabled:         true,
+		OTelEndpoint:        "",
+		OTelServiceName:     "",
+		OTelSampleRate:      1.5,
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected invalid otel settings to fail validation")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "otel_endpoint") {
+		t.Fatalf("expected otel_endpoint validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "otel_service_name") {
+		t.Fatalf("expected otel_service_name validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "otel_sample_rate") {
+		t.Fatalf("expected otel_sample_rate validation error, got: %v", err)
+	}
+}
+
+func TestValidate_ValidOTelSettings(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		OTelEnabled:         true,
+		OTelEndpoint:        "localhost:4317",
+		OTelServiceName:     "apix-proxy",
+		OTelSampleRate:      1.0,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected valid otel settings, got: %v", err)
+	}
+}
+
 func TestValidate_MCPRemoteRequiresTLSAndToken(t *testing.T) {
 	t.Parallel()
 	httpPort, grpcPort := mustFreePorts(t)

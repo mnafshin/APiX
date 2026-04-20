@@ -16,6 +16,13 @@ mcp_allow_compose: false
 log_format: "text"  # text | json
 log_level: "info"   # debug | info | warn | error
 
+# OpenTelemetry tracing plugin
+otel_enabled: false
+otel_endpoint: "localhost:4317"
+otel_service_name: "apix-proxy"
+otel_insecure: true
+otel_sample_rate: 1.0
+
 # HTTP server timeouts (prevents Slowloris attacks)
 http_read_header_timeout_sec: 10
 http_read_timeout_sec: 30
