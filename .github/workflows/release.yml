@@ -100,6 +100,8 @@ jobs:
         with:
           path: artifacts/
           merge-multiple: true
+      - name: Verify release gate contract
+        run: scripts/release/verify_release_gate.sh
       - name: Generate curated release notes
         run: scripts/release/generate_release_notes.sh "${{ github.ref_name }}" release-notes.md
       - uses: softprops/action-gh-release@v2

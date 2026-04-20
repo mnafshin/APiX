@@ -11,6 +11,7 @@ Welcome to APiX documentation. Start here to find what you're looking for.
 - [`FEATURES.md`](FEATURES.md) — complete feature reference (v2.0.0)
 - [`../CHANGELOG.md`](../CHANGELOG.md) — release-by-release change history
 - [`../UPGRADE.md`](../UPGRADE.md) — upgrade and rollback guidance
+- [`RELEASE_GATE.md`](RELEASE_GATE.md) — required validation matrix and release checklist
 
 **For developers & contributors:**
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — how to contribute code and issues
