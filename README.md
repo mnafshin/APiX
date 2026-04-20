@@ -166,6 +166,7 @@ See [`docs/INDEX.md`](docs/INDEX.md) for the complete documentation index.
 - **Architecture:** [`docs/ARCHITECTURE/`](docs/ARCHITECTURE/)
 - **CLI & MCP:** [`docs/REFERENCE/cli_mcp.md`](docs/REFERENCE/cli_mcp.md)
 - **Versioning policy:** [`docs/REFERENCE/versioning-policy.md`](docs/REFERENCE/versioning-policy.md)
+- **Release gate:** [`docs/RELEASE_GATE.md`](docs/RELEASE_GATE.md)
 - **Testing:** [`docs/TESTING.md`](docs/TESTING.md)
 - **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security policy:** [`SECURITY.md`](SECURITY.md)
