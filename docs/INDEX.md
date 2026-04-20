@@ -9,6 +9,8 @@ Welcome to APiX documentation. Start here to find what you're looking for.
 - [`CONFIG_VALIDATION.md`](CONFIG_VALIDATION.md) — configuration schema and validation
 - [`getting-started.md`](getting-started.md) — first steps with APiX
 - [`FEATURES.md`](FEATURES.md) — complete feature reference (v2.0.0)
+- [`../CHANGELOG.md`](../CHANGELOG.md) — release-by-release change history
+- [`../UPGRADE.md`](../UPGRADE.md) — upgrade and rollback guidance
 
 **For developers & contributors:**
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — how to contribute code and issues
@@ -60,9 +62,11 @@ Stable contracts and schemas:
 
 - [`REFERENCE/cli-contract-v1.md`](REFERENCE/cli-contract-v1.md) — CLI flags, output formats, exit codes
 - [`REFERENCE/cli_mcp.md`](REFERENCE/cli_mcp.md) — MCP server integration and tools
+- [`REFERENCE/compatibility-matrix.md`](REFERENCE/compatibility-matrix.md) — engine/CLI/extension/API compatibility
 - [`REFERENCE/glossary.md`](REFERENCE/glossary.md) — terminology and concepts
 - [`REFERENCE/OTEL.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
 - [`REFERENCE/plugin-sdk.md`](REFERENCE/plugin-sdk.md) — plugin interfaces and lifecycle
+- [`REFERENCE/stability-policy.md`](REFERENCE/stability-policy.md) — stable/experimental/deprecated policy
 
 ---
 
