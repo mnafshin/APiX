@@ -151,6 +151,10 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	reqID := uuid.NewString()
 	start := time.Now()
 	origHeaders := r.Header.Clone()
+	if err := validateInboundRequest(p.cfg, r); err != nil {
+		writeHTTPError(ctx, conn, http.StatusRequestHeaderFieldsTooLarge, err.Error())
+		return
+	}
 
 	// Instrument active connections
 	metrics.IncActive()
@@ -350,6 +354,10 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 	}
 	if r.URL.Scheme == "" {
 		r.URL.Scheme = "https"
+	}
+	if err := validateInboundRequest(p.cfg, r); err != nil {
+		http.Error(w, err.Error(), http.StatusRequestHeaderFieldsTooLarge)
+		return
 	}
 
 	origHeaders := r.Header.Clone()

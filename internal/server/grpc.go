@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math"
 	"net"
 	"time"
 
@@ -117,6 +118,13 @@ func NewGRPCServer(cfg *config.Config, extraOpts ...grpc.ServerOption) *grpc.Ser
 			rateLimitStreamInterceptor(cfg.GRPCRateLimitPerSec),
 			authStreamInterceptor(cfg.AuthToken),
 		),
+	}
+	if cfg.MaxTotalHeaderBytes > 0 {
+		maxHeaderListSize := cfg.MaxTotalHeaderBytes
+		if maxHeaderListSize > math.MaxUint32 {
+			maxHeaderListSize = math.MaxUint32
+		}
+		opts = append(opts, grpc.MaxHeaderListSize(uint32(maxHeaderListSize)))
 	}
 	opts = append(opts, extraOpts...)
 	return grpc.NewServer(opts...)

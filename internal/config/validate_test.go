@@ -315,6 +315,32 @@ func TestValidate_NegativeBodySize(t *testing.T) {
 	}
 }
 
+func TestValidate_InvalidInputBounds(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:             httpPort,
+		GRPCPort:             grpcPort,
+		DBPath:               "apix.db",
+		MaxIdleConnsPerHost:  10,
+		MaxHeadersPerRequest: -1,
+		MaxHeaderValueBytes:  -1,
+		MaxTotalHeaderBytes:  -1,
+		MaxURLLength:         -1,
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation failure for invalid input bounds")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "max_headers_per_request") ||
+		!strings.Contains(msg, "max_header_value_bytes") ||
+		!strings.Contains(msg, "max_total_header_bytes") ||
+		!strings.Contains(msg, "max_url_length") {
+		t.Fatalf("expected all input-bound errors, got: %v", err)
+	}
+}
+
 // TestValidate_AggregatesAllErrors ensures that multiple config problems are
 // reported at once rather than stopping at the first error.
 func TestValidate_AggregatesAllErrors(t *testing.T) {

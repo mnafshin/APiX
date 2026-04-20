@@ -46,6 +46,21 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	var errs []error
 	var httpPort, grpcPort int
 
+	// Keep zero values on direct Config literals safe by restoring secure
+	// defaults; explicit negative values remain invalid and are rejected below.
+	if c.MaxHeadersPerRequest == 0 {
+		c.MaxHeadersPerRequest = 200
+	}
+	if c.MaxHeaderValueBytes == 0 {
+		c.MaxHeaderValueBytes = 8 * 1024
+	}
+	if c.MaxTotalHeaderBytes == 0 {
+		c.MaxTotalHeaderBytes = 1 * 1024 * 1024
+	}
+	if c.MaxURLLength == 0 {
+		c.MaxURLLength = 8 * 1024
+	}
+
 	// ── Port validation ────────────────────────────────────────────────────
 	if c.HTTPPort == "" {
 		errs = append(errs, fmt.Errorf("http_port must be set"))
@@ -111,6 +126,18 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	// ── Connection pool ────────────────────────────────────────────────────
 	if c.MaxIdleConnsPerHost <= 0 {
 		errs = append(errs, fmt.Errorf("max_idle_conns_per_host must be > 0 (got %d) — recommended value: 10", c.MaxIdleConnsPerHost))
+	}
+	if c.MaxHeadersPerRequest <= 0 {
+		errs = append(errs, fmt.Errorf("max_headers_per_request must be > 0 (got %d)", c.MaxHeadersPerRequest))
+	}
+	if c.MaxHeaderValueBytes <= 0 {
+		errs = append(errs, fmt.Errorf("max_header_value_bytes must be > 0 (got %d)", c.MaxHeaderValueBytes))
+	}
+	if c.MaxTotalHeaderBytes <= 0 {
+		errs = append(errs, fmt.Errorf("max_total_header_bytes must be > 0 (got %d)", c.MaxTotalHeaderBytes))
+	}
+	if c.MaxURLLength <= 0 {
+		errs = append(errs, fmt.Errorf("max_url_length must be > 0 (got %d)", c.MaxURLLength))
 	}
 	if c.MaxBodySizeMB < 0 {
 		errs = append(errs, fmt.Errorf("max_body_size_mb must be >= 0 (got %d) — use 0 to disable the limit", c.MaxBodySizeMB))

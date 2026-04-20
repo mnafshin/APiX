@@ -57,6 +57,7 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 		ReadTimeout:       time.Duration(p.cfg.HTTPReadTimeout) * time.Second,
 		WriteTimeout:      time.Duration(p.cfg.HTTPWriteTimeout) * time.Second,
 		IdleTimeout:       time.Duration(p.cfg.HTTPIdleTimeout) * time.Second,
+		MaxHeaderBytes:    p.cfg.MaxTotalHeaderBytes,
 	}
 	go func() {
 		<-ctx.Done()
@@ -149,6 +150,10 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	reqID := logging.EnsureRequestID(r.Header)
 	ctx = logging.WithRequestID(ctx, reqID)
+	if err := validateInboundRequest(p.cfg, r); err != nil {
+		http.Error(w, err.Error(), http.StatusRequestHeaderFieldsTooLarge)
+		return
+	}
 
 	// Instrument active connections
 	metrics.IncActive()
