@@ -533,6 +533,7 @@ func (p *HTTPProxy) applyMapLocalRules(ctx context.Context, req *plugins.ProxyRe
 		}
 
 		filePath := rule.EffectiveFilePath()
+		// #nosec G304 -- map-local intentionally serves operator-configured local files.
 		body, err := os.ReadFile(filePath)
 		if err != nil {
 			msg := fmt.Sprintf("map-local read file %q: %v", filePath, err)
