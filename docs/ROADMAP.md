@@ -25,6 +25,31 @@ APiX is evolving from a capable HTTP/HTTPS intercepting proxy into a **top-class
 | 📊 **Observability** | `observability` | Logging, tracing, metrics, monitoring |
 | 🚀 **Features** | `enhancement` | New capabilities and integrations |
 
+### Milestone ownership and cadence
+
+| Role | Expectation |
+|---|---|
+| Milestone owner | Maintains scope, triages blockers, drives release readiness |
+| Stream owner(s) | Keep issue priorities current for their stream |
+| Review cadence | Weekly milestone review + release-readiness check |
+
+### Milestone exit criteria (all phases)
+
+A milestone is considered complete only when all are true:
+
+1. Planned scope issues are resolved or explicitly deferred with rationale.
+2. Blocking checks in [`docs/RELEASE_GATE.md`](RELEASE_GATE.md) pass.
+3. `CHANGELOG.md` and `UPGRADE.md` are updated for user-facing changes.
+4. Known risks are tracked with owners and follow-up issue links.
+
+Milestone closure is based on release readiness, not issue-count burn-down alone.
+
+### Scope changes, deferrals, and roadmap updates
+
+1. Any scope change must be documented in this file with rationale.
+2. Deferred items must be moved to a target milestone with owner and reason.
+3. New blocker issues discovered during implementation are added to the active milestone and reviewed in the next cadence.
+
 ---
 
 ## Phase 1 — v2.1: Foundation & Stability
