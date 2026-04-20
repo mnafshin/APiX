@@ -26,9 +26,33 @@ type Engine struct {
 	mu              sync.RWMutex
 	db              storage.TransactionRepository
 	bpManager       BreakpointEvaluator
-	pluginRT        *pluginrt.Runtime
+	pluginRT        PluginRuntime
 	subscribers     map[chan *apix.HttpRequest]struct{}
 	pauseTimeoutSec int // 0 = no timeout
+}
+
+type PluginRuntime interface {
+	List() []pluginrt.PluginMeta
+}
+
+type StorageAccess interface {
+	SaveRequest(r *storage.RequestRecord) error
+	SaveResponse(r *storage.ResponseRecord) error
+	SaveRequestTemplate(tpl *storage.RequestTemplateRecord) error
+	ListRequestTemplates() ([]*storage.RequestTemplateRecord, error)
+	DeleteRequestTemplate(id string) error
+	SaveBreakpoint(id, urlPattern string, methods []string, enabled bool, label, headerName, headerValue, bodyPattern string, statusCodes []int32) error
+	DeleteBreakpoint(id string) error
+	ListTransactions(limit, offset int, urlFilter, methodFilter string, statusFilter int, bodyFilter string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error)
+	ExportTransactions(transactionIDs []string) ([]*storage.RequestRecord, []*storage.ResponseRecord, error)
+	DeleteAllTransactions() error
+	AddRewriteRule(rule *apix.RewriteRule) error
+	UpdateRewriteRule(rule *apix.RewriteRule) error
+	DeleteRewriteRule(id string) error
+	GetRewriteRule(id string) (*apix.RewriteRule, error)
+	ListRewriteRules() ([]*apix.RewriteRule, error)
+	GetTransaction(requestID string) (*storage.RequestRecord, *storage.ResponseRecord, error)
+	ListWebSocketFrames(transactionID string) ([]*storage.WebSocketFrameRecord, error)
 }
 
 type pairTransactionSaver interface {
@@ -36,7 +60,7 @@ type pairTransactionSaver interface {
 }
 
 // New creates a new Engine wiring together all sub-systems.
-func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pluginrt.Runtime) *Engine {
+func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt PluginRuntime) *Engine {
 	return &Engine{
 		db:          db,
 		bpManager:   bpManager,
@@ -47,7 +71,7 @@ func New(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pl
 
 // NewWithConfig creates a new Engine using per-configuration settings such as
 // the breakpoint pause timeout.
-func NewWithConfig(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt *pluginrt.Runtime, cfg *config.Config) *Engine {
+func NewWithConfig(db storage.TransactionRepository, bpManager BreakpointEvaluator, rt PluginRuntime, cfg *config.Config) *Engine {
 	e := New(db, bpManager, rt)
 	if cfg != nil {
 		e.pauseTimeoutSec = cfg.BreakpointPauseTimeoutSec
@@ -319,21 +343,17 @@ func (e *Engine) Unsubscribe(ch chan *apix.HttpRequest) {
 	}
 }
 
-// DB returns the underlying storage.DB for direct access by gRPC handlers.
-// It panics if the repository was not constructed with a *storage.DB.
-func (e *Engine) DB() *storage.DB {
-	db, ok := e.db.(*storage.DB)
-	if !ok {
-		panic("engine: DB() called but underlying repository is not *storage.DB")
-	}
+// DB returns storage access through an interface instead of a concrete adapter.
+func (e *Engine) DB() StorageAccess {
+	db, _ := e.db.(StorageAccess)
 	return db
 }
 
 // BreakpointManager returns the breakpoints manager (as BreakpointEvaluator).
 func (e *Engine) BreakpointManager() BreakpointEvaluator { return e.bpManager }
 
-// PluginRuntime returns the plugin runtime.
-func (e *Engine) PluginRuntime() *pluginrt.Runtime { return e.pluginRT }
+// PluginRuntime returns the plugin runtime as an interface.
+func (e *Engine) PluginRuntime() PluginRuntime { return e.pluginRT }
 
 // RewriteRules loads the current list of rewrite rules from storage.
 func (e *Engine) RewriteRules() ([]*proxy.RewriteRuleProto, error) {
