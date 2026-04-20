@@ -38,8 +38,6 @@ type Plugin interface {
 	Version() string
 	// Description returns a short human-readable description.
 	Description() string
-	RequestPlugin
-	ResponsePlugin
 }
 
 // ProxyRequest is the richer internal request type passed through the plugin chain.
