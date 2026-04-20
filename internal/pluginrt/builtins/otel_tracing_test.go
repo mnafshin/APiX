@@ -2,9 +2,12 @@ package builtins
 
 import (
 	"context"
+	"strings"
 	"testing"
 
-	"go.opentelemetry.io/otel/trace/noop"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/mnafshin/apix/pkg/plugins"
 )
@@ -12,9 +15,13 @@ import (
 // newNoopOTelTracing builds an OTelTracing that uses a no-op tracer so no
 // real OTLP connection is required during unit tests.
 func newNoopOTelTracing() *OTelTracing {
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	otel.SetTextMapPropagator(propagation.TraceContext{})
 	return &OTelTracing{
 		cfg:    OTelTracingConfig{},
-		tracer: noop.NewTracerProvider().Tracer("apix-test"),
+		tracer: provider.Tracer("apix-test"),
 	}
 }
 
@@ -52,6 +59,30 @@ func TestOTelTracing_OnRequest_StoresSpan(t *testing.T) {
 	}
 	if _, ok := p.spans.Load("req-store-test"); !ok {
 		t.Error("expected span to be stored in sync.Map after OnRequest")
+	}
+	if req.Headers.Get("traceparent") == "" {
+		t.Fatal("expected traceparent header to be injected on request")
+	}
+}
+
+func TestOTelTracing_OnRequest_ExtractsParentTraceContext(t *testing.T) {
+	t.Parallel()
+	p := newNoopOTelTracing()
+	req := makeReq("GET", "https://example.com/trace", "")
+	req.ID = "req-parent-trace"
+	req.Headers.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+
+	if _, err := p.OnRequest(context.Background(), req); err != nil {
+		t.Fatalf("OnRequest: %v", err)
+	}
+	val, ok := p.spans.Load("req-parent-trace")
+	if !ok {
+		t.Fatal("expected span to be stored")
+	}
+	_ = val
+	traceparent := req.Headers.Get("traceparent")
+	if !strings.Contains(traceparent, "4bf92f3577b34da6a3ce929d0e0e4736") {
+		t.Fatalf("expected injected traceparent to keep parent trace ID, got: %s", traceparent)
 	}
 }
 

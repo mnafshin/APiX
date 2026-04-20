@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
@@ -91,6 +92,9 @@ func NewOTelTracing(ctx context.Context, cfg OTelTracingConfig) (*OTelTracing, e
 		sdktrace.WithSampler(sdktrace.TraceIDRatioBased(cfg.sampleRate())),
 	)
 	otel.SetTracerProvider(provider)
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
+	)
 
 	return &OTelTracing{
 		cfg:      cfg,
@@ -106,10 +110,18 @@ func (p *OTelTracing) Shutdown(ctx context.Context) error {
 
 // OnRequest starts a span for the incoming request and stores it keyed by ID.
 func (p *OTelTracing) OnRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
+	if req.Headers == nil {
+		req.Headers = make(http.Header)
+	}
+	carrier := propagation.HeaderCarrier(req.Headers)
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+
 	spanName := req.Method + " " + req.URL.Path
-	_, span := p.tracer.Start(ctx, spanName,
+	spanCtx, span := p.tracer.Start(ctx, spanName,
 		trace.WithSpanKind(trace.SpanKindClient),
 	)
+	otel.GetTextMapPropagator().Inject(spanCtx, carrier)
+
 	span.SetAttributes(
 		semconv.HTTPRequestMethodKey.String(req.Method),
 		semconv.URLFullKey.String(req.URL.String()),
