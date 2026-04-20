@@ -5,10 +5,22 @@ on:
     paths:
       - 'docs/**'
       - 'README.md'
+      - 'cmd/apix-cli/**'
+      - 'cmd/apix-engine/**'
+      - 'internal/config/**'
+      - 'pkg/api/proto/**'
+      - 'Makefile'
+      - 'scripts/docs/**'
   pull_request:
     paths:
       - 'docs/**'
       - 'README.md'
+      - 'cmd/apix-cli/**'
+      - 'cmd/apix-engine/**'
+      - 'internal/config/**'
+      - 'pkg/api/proto/**'
+      - 'Makefile'
+      - 'scripts/docs/**'
 
 jobs:
   docs-check:
@@ -17,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run Go tests
         run: make test
+      - name: Verify docs contract snapshots
+        run: scripts/docs/verify_contract_snapshots.sh
       - name: Run markdown link checker (lychee)
         uses: lycheeverse/lychee-action@v2
         with:
