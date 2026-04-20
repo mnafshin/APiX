@@ -59,6 +59,10 @@ type Config struct {
 	HistoryMaxAgeDays int `yaml:"history_max_age_days"` // 0 = keep forever
 	HistoryMaxRows    int `yaml:"history_max_rows"`     // 0 = unlimited
 
+	// Logging
+	LogFormat string `yaml:"log_format"` // text|json
+	LogLevel  string `yaml:"log_level"`  // debug|info|warn|error
+
 	// GRPCRateLimitPerSec is the maximum number of gRPC unary calls allowed
 	// per peer address per second. Stream RPCs count as 1 call on open.
 	// 0 disables rate limiting (local desktop mode default).
@@ -162,6 +166,8 @@ func LoadConfig(path string) *Config {
 		VacuumIntervalHours: 24,
 		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
+		LogFormat:           "text",
+		LogLevel:            "info",
 		MCPEnabled:          false,
 		MCPPort:             "9093",
 		MCPBindAddress:      "127.0.0.1",

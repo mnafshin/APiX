@@ -23,9 +23,35 @@ func TestValidate_ValidConfig(t *testing.T) {
 		DBPath:              "apix.db",
 		MaxIdleConnsPerHost: 10,
 		MaxBodySizeMB:       32,
+		LogFormat:           "text",
+		LogLevel:            "info",
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config, got error: %v", err)
+	}
+}
+
+func TestValidate_InvalidLogSettings(t *testing.T) {
+	t.Parallel()
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		LogFormat:           "xml",
+		LogLevel:            "trace",
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected invalid log settings to fail validation")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "log_format") {
+		t.Fatalf("expected log_format validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "log_level") {
+		t.Fatalf("expected log_level validation error, got: %v", err)
 	}
 }
 

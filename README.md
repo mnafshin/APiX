@@ -109,6 +109,7 @@ Validate config:
 | `history_max_age_days` / `history_max_rows` | `0` / `0` | Retention pruning controls |
 | `metrics_enabled` / `metrics_port` | `false` / `9091` | Prometheus metrics endpoint |
 | `health_port` | `9092` | `/healthz` endpoint |
+| `log_format` / `log_level` | `text` / `info` | Engine log output shape and verbosity |
 | `mcp_enabled` / `mcp_port` | `false` / `9093` | MCP server |
 | `mcp_allow_replay` / `mcp_allow_compose` | `false` / `false` | Side-effect MCP tools |
 | `map_local_rules` | empty | URL regex -> local file response mapping (`file_path`, with `local_path` alias) |
