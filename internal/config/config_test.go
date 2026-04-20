@@ -39,6 +39,12 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.MaxIdleConnsPerHost != 10 {
 		t.Errorf("MaxIdleConnsPerHost: got %d want 10", cfg.MaxIdleConnsPerHost)
 	}
+	if cfg.ProxyRateLimitPerSec != 1000 {
+		t.Errorf("ProxyRateLimitPerSec: got %d want 1000", cfg.ProxyRateLimitPerSec)
+	}
+	if cfg.ProxyMaxConcurrentConnections != 200 {
+		t.Errorf("ProxyMaxConcurrentConnections: got %d want 200", cfg.ProxyMaxConcurrentConnections)
+	}
 	if cfg.MaxHeadersPerRequest != 200 {
 		t.Errorf("MaxHeadersPerRequest: got %d want 200", cfg.MaxHeadersPerRequest)
 	}
@@ -105,6 +111,8 @@ http_port: "9999"
 grpc_port: "8888"
 max_body_size_mb: 64
 dial_timeout_sec: 5
+proxy_rate_limit_per_sec: 300
+proxy_max_concurrent_connections: 50
 max_headers_per_request: 150
 max_header_value_bytes: 4096
 max_total_header_bytes: 262144
@@ -137,6 +145,12 @@ audit_log_path: "/tmp/apix-audit.log"
 	}
 	if cfg.DialTimeoutSec != 5 {
 		t.Errorf("DialTimeoutSec: got %d want 5", cfg.DialTimeoutSec)
+	}
+	if cfg.ProxyRateLimitPerSec != 300 {
+		t.Errorf("ProxyRateLimitPerSec: got %d want 300", cfg.ProxyRateLimitPerSec)
+	}
+	if cfg.ProxyMaxConcurrentConnections != 50 {
+		t.Errorf("ProxyMaxConcurrentConnections: got %d want 50", cfg.ProxyMaxConcurrentConnections)
 	}
 	if cfg.MaxHeadersPerRequest != 150 {
 		t.Errorf("MaxHeadersPerRequest: got %d want 150", cfg.MaxHeadersPerRequest)

@@ -105,6 +105,7 @@ Validate config:
 | `tls_enabled` | `false` | Enable TLS for gRPC |
 | `grpc_cert_path` / `grpc_key_path` | empty | Required when TLS is enabled |
 | `auth_token` | empty | Bearer token for gRPC/MCP auth |
+| `proxy_rate_limit_per_sec` / `proxy_max_concurrent_connections` | `1000` / `200` | Per-client proxy throttling and concurrent tunnel/request cap |
 | `max_body_size_mb` | `32` | Request/response body limit per body |
 | `history_max_age_days` / `history_max_rows` | `0` / `0` | Retention pruning controls |
 | `metrics_enabled` / `metrics_port` | `false` / `9091` | Prometheus metrics endpoint |
