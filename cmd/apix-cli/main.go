@@ -779,6 +779,13 @@ func historyItemToJSON(tx *apix.HttpTransaction) map[string]any {
 	return item
 }
 
+func validateStreamingOutput(output string) error {
+	if output == "json" {
+		return status.Error(codes.InvalidArgument, "--output json is not supported for streaming commands; use --output ndjson")
+	}
+	return nil
+}
+
 func (a *app) cmdWatch(args []string) error {
 	if len(args) > 0 && args[0] == "traffic" {
 		args = args[1:]
@@ -790,6 +797,9 @@ func (a *app) cmdWatch(args []string) error {
 	fs.StringVar(&opts.method, "method", "", "filter by HTTP method (case-insensitive)")
 	fs.StringVar(&opts.urlPattern, "url-pattern", "", "filter by URL substring")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateStreamingOutput(a.opts.output); err != nil {
 		return err
 	}
 	client, err := a.clientConn()
@@ -1133,6 +1143,9 @@ func (a *app) cmdPausedWatch(client apix.EngineClient, args []string) error {
 	fs.SetOutput(a.errw)
 	count := fs.Int("count", 0, "stop after N events")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := validateStreamingOutput(a.opts.output); err != nil {
 		return err
 	}
 	ctx, cancel := a.streamContext()

@@ -665,3 +665,39 @@ func TestHeaderFlagsMap_InvalidHeader(t *testing.T) {
 		t.Fatal("expected parse error for malformed header")
 	}
 }
+
+func TestCLIWatchJSONOutputRejected(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, _, errOut := runCLI(t, stack.args("--output", "json", "watch", "traffic", "--count", "1")...)
+	if exit != 2 {
+		t.Fatalf("expected invalid-argument exit=2, got %d err=%s", exit, errOut)
+	}
+	payload := parseErrorEnvelope(t, errOut)
+	errPayload := payload["error"].(map[string]any)
+	if errPayload["code"] != "invalid_argument" {
+		t.Fatalf("unexpected code: %#v", errPayload["code"])
+	}
+	if !strings.Contains(errPayload["message"].(string), "--output ndjson") {
+		t.Fatalf("unexpected message: %#v", errPayload["message"])
+	}
+}
+
+func TestCLIPausedWatchJSONOutputRejected(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, _, errOut := runCLI(t, stack.args("--output", "json", "paused", "watch", "--count", "1")...)
+	if exit != 2 {
+		t.Fatalf("expected invalid-argument exit=2, got %d err=%s", exit, errOut)
+	}
+	payload := parseErrorEnvelope(t, errOut)
+	errPayload := payload["error"].(map[string]any)
+	if errPayload["code"] != "invalid_argument" {
+		t.Fatalf("unexpected code: %#v", errPayload["code"])
+	}
+	if !strings.Contains(errPayload["message"].(string), "--output ndjson") {
+		t.Fatalf("unexpected message: %#v", errPayload["message"])
+	}
+}
