@@ -183,7 +183,7 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	start := time.Now()
-	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
+	maxBodyBytes := maxBodyBytes(p.cfg)
 
 	// 1. Buffer request body.
 	bodyBytes, err := p.readRequestBody(r, maxBodyBytes)
