@@ -193,3 +193,12 @@ The full `Plugin` interface is documented in [`pkg/plugins/sdk.go`](pkg/plugins/
 - CI must pass: `go build ./...`, `go test ./internal/... -race`, `tsc --noEmit`
 - Add or update tests for new features
 - Keep PRs focused — one logical change per PR
+
+## Documentation Status Checklist
+
+When your PR touches docs (or behavior docs rely on), verify:
+
+- Runtime behavior claims match current code paths and defaults
+- Config examples use keys that exist in `internal/config/config.go`
+- CLI examples match current commands/flags from `./apix-cli help`
+- Performance numbers are marked as measured only when benchmark-backed

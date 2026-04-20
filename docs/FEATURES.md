@@ -140,7 +140,15 @@ See [`how-to/replay.md`](how-to/replay.md) for step-by-step guide.
 
 ### Plugin System
 
-APiX includes **12 built-in plugins** for common operations:
+APiX contains **14 built-in plugin implementations** in `internal/pluginrt/builtins/`.
+At runtime, the engine currently registers and executes:
+
+- `header_editor`
+- `mock_response`
+- `env_subst`
+
+The remaining built-in plugin implementations are present in source and tests, but are
+not yet wired into the runtime request pipeline.
 
 | Plugin | Purpose | Config |
 |--------|---------|--------|
@@ -205,7 +213,7 @@ Inspect via CLI:
 
 **Connect APiX to AI assistants** and code editors via the MCP protocol.
 
-- **MCP server** running on configurable port (default: `:8081` in future versions)
+- **MCP server** running on configurable port (default: `:9093`)
 - Exposes captured traffic and replay engine to AI clients
 - Enables Claude, VS Code extensions, and other MCP-compatible tools to:
   - Query traffic history
@@ -215,10 +223,10 @@ Inspect via CLI:
 
 **Usage:**
 ```bash
-# MCP server automatically starts with engine
+# MCP server starts with the engine when enabled in config
 ./apix-engine
 
-# Connect Claude or other MCP client to localhost:9090
+# Connect MCP client to localhost:9093
 ```
 
 See [`REFERENCE/cli_mcp.md`](REFERENCE/cli_mcp.md) for MCP API reference.
@@ -346,26 +354,29 @@ Key configuration options in `config.yaml`:
 # Proxy ports
 http_port: 8080
 grpc_port: 9090
+grpc_bind_address: 127.0.0.1
 
 # Storage
-storage:
-  type: sqlite
-  path: ~/.apix/transactions.db
-
-# Plugins
-plugins:
-  rate_limiter:
-    enabled: true
-    max_requests_per_second: 100
+db_path: ~/.apix/apix.db
 
 # TLS/HTTPS
-tls:
-  ca_cert_path: ~/.apix/ca.crt
-  ca_key_path: ~/.apix/ca.key
+tls_enabled: false
+grpc_cert_path: /etc/apix/grpc-server.pem
+grpc_key_path: /etc/apix/grpc-server-key.pem
+ca_cert_path: ~/.apix/ca.pem
+ca_key_path: ~/.apix/ca-key.pem
 
-# Breakpoints
-breakpoints:
-  max_paused_requests: 100
+# Runtime limits and controls
+max_body_size_mb: 32
+breakpoint_pause_timeout_sec: 120
+grpc_rate_limit_per_sec: 0
+
+# MCP
+mcp_enabled: false
+mcp_port: 9093
+mcp_bind_address: 127.0.0.1
+mcp_allow_replay: false
+mcp_allow_compose: false
 ```
 
 See [`CONFIG_VALIDATION.md`](CONFIG_VALIDATION.md) for complete schema.
@@ -376,10 +387,10 @@ See [`CONFIG_VALIDATION.md`](CONFIG_VALIDATION.md) for complete schema.
 
 | Feature | Capacity | Notes |
 |---------|----------|-------|
-| **Concurrent connections** | 1000+ | Limited by file descriptors |
-| **History size** | 100k+ transactions | SQLite indexed for fast queries |
-| **Plugin overhead** | <5ms per request | Configurable enable/disable |
-| **Breakpoint patterns** | Unlimited | Regex compiled once at startup |
+| **Concurrent connections** | Target: 1000+ | Depends on host resources; benchmark data pending (#300) |
+| **History size** | Target: 100k+ transactions | Depends on workload/storage; benchmark data pending (#300) |
+| **Plugin overhead** | Target: <5ms per request | Depends on plugin chain; benchmark data pending (#300) |
+| **Breakpoint patterns** | Not hard-capped in config | Practical limits depend on regex complexity and memory |
 | **Paused requests** | 100 (configurable) | FIFO when limit exceeded |
 
 ---
