@@ -144,7 +144,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	defer func() {
 		if rec := recover(); rec != nil {
 			logging.Errorf(ctx, "TLS proxy panic (recovered): %v", rec)
-			writeHTTPError(conn, http.StatusBadGateway, "proxy error")
+			writeHTTPError(ctx, conn, http.StatusBadGateway, "proxy error")
 		}
 	}()
 
@@ -164,7 +164,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		var err error
 		bodyBytes, err = httputil.ReadLimitedBody(r.Body, maxBodyBytes)
 		if err != nil {
-			writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body too large: %v", err))
+			writeHTTPError(ctx, conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body too large: %v", err))
 			return
 		}
 		_ = r.Body.Close()
@@ -186,13 +186,13 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	var err error
 	proxyReq, err = runPluginRequest(ctx, p.plugins, proxyReq, "tls proxy")
 	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", err))
+		writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("plugin error: %v", err))
 		return
 	}
 
 	// Mocked response short-circuit.
 	if proxyReq.MockedResponse != nil {
-		writeProxyResponseToConn(conn, proxyReq.MockedResponse)
+		writeProxyResponseToConn(ctx, conn, proxyReq.MockedResponse)
 		return
 	}
 
@@ -206,13 +206,13 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		tx = modified
 		switch action {
 		case ResumeDrop:
-			writeHTTPError(conn, http.StatusBadGateway, "request dropped by breakpoint")
+			writeHTTPError(ctx, conn, http.StatusBadGateway, "request dropped by breakpoint")
 			return
 		case ResumeRespond:
 			if tx.Response != nil {
-				writeProxyResponseToConn(conn, tx.Response)
+				writeProxyResponseToConn(ctx, conn, tx.Response)
 			} else {
-				writeHTTPError(conn, http.StatusBadGateway, "no synthetic response")
+				writeHTTPError(ctx, conn, http.StatusBadGateway, "no synthetic response")
 			}
 			return
 		}
@@ -226,14 +226,14 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	// Build and send upstream request using the shared pooled transport.
 	upReq, upErr := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
 	if upErr != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("build upstream request: %v", upErr))
+		writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("build upstream request: %v", upErr))
 		return
 	}
 	upReq.Header = proxyReq.Headers.Clone()
 
 	upResp, upErr := p.transport.RoundTrip(upReq)
 	if upErr != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", upErr))
+		writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("upstream error: %v", upErr))
 		return
 	}
 	defer func() { _ = upResp.Body.Close() }()
@@ -241,7 +241,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	// Apply the same body size limit to response bodies
 	respBody, readErr := httputil.ReadLimitedBody(upResp.Body, maxBodyBytes)
 	if readErr != nil {
-		writeHTTPError(conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", readErr))
+		writeHTTPError(ctx, conn, http.StatusRequestEntityTooLarge, fmt.Sprintf("response body too large: %v", readErr))
 		return
 	}
 	mergeTrailersIntoHeaders(upResp.Header, upResp.Trailer)
@@ -258,7 +258,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	// Run plugin OnResponse chain with panic recovery.
 	proxyResp, err = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, "tls proxy")
 	if err != nil {
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("plugin OnResponse error: %v", err))
+		writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("plugin OnResponse error: %v", err))
 		return
 	}
 
@@ -269,7 +269,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		var readErr error
 		finalRespBody, readErr = io.ReadAll(proxyResp.Body)
 		if readErr != nil {
-			writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("read response body: %v", readErr))
+			writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("read response body: %v", readErr))
 			return
 		}
 		proxyResp.Body = io.NopCloser(bytes.NewReader(finalRespBody))
@@ -286,13 +286,13 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 		tx = modified
 		switch action {
 		case ResumeDrop:
-			writeHTTPError(conn, http.StatusBadGateway, "response dropped by breakpoint")
+			writeHTTPError(ctx, conn, http.StatusBadGateway, "response dropped by breakpoint")
 			return
 		case ResumeRespond:
 			if tx.Response != nil {
-				writeProxyResponseToConn(conn, tx.Response)
+				writeProxyResponseToConn(ctx, conn, tx.Response)
 			} else {
-				writeHTTPError(conn, http.StatusBadGateway, "no synthetic response")
+				writeHTTPError(ctx, conn, http.StatusBadGateway, "no synthetic response")
 			}
 			return
 		}
@@ -311,7 +311,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	observeRequest(ctx, p.cfg, proxyReq.Method, proxyReq.URL.Host, tx.Response.StatusCode, dur)
 	_ = reqID
 
-	writeProxyResponseToConn(conn, tx.Response)
+	writeProxyResponseToConn(ctx, conn, tx.Response)
 }
 
 func (p *TLSProxy) handleHTTP2Conn(ctx context.Context, conn net.Conn, br *bufio.Reader, host string) {
@@ -503,11 +503,11 @@ func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio
 			defer func() { _ = resp.Body.Close() }()
 			msg, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
 			if readErr == nil && len(msg) > 0 {
-				writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v: %s", err, msg))
+				writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v: %s", err, msg))
 				return
 			}
 		}
-		writeHTTPError(conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v", err))
+		writeHTTPError(ctx, conn, http.StatusBadGateway, fmt.Sprintf("websocket upstream error: %v", err))
 		return
 	}
 
@@ -517,7 +517,7 @@ func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio
 	if protocol := upstreamConn.Subprotocol(); protocol != "" {
 		upgrader.Subprotocols = []string{protocol}
 	}
-	responseWriter := newHijackableResponseWriter(conn, br)
+	responseWriter := newHijackableResponseWriter(ctx, conn, br)
 	clientConn, err := upgrader.Upgrade(responseWriter, clientReq, copyHeadersExcluding(resp.Header, "Connection", "Upgrade", "Sec-WebSocket-Accept", "Sec-WebSocket-Extensions"))
 	if err != nil {
 		_ = upstreamConn.Close()
@@ -541,7 +541,7 @@ func (p *TLSProxy) handleWebSocket(ctx context.Context, conn net.Conn, br *bufio
 }
 
 // writeHTTPError writes a minimal HTTP error response to the connection.
-func writeHTTPError(conn net.Conn, code int, msg string) {
+func writeHTTPError(ctx context.Context, conn net.Conn, code int, msg string) {
 	resp := &http.Response{
 		StatusCode: code,
 		Status:     fmt.Sprintf("%d %s", code, http.StatusText(code)),
@@ -553,18 +553,18 @@ func writeHTTPError(conn net.Conn, code int, msg string) {
 	}
 	resp.ContentLength = int64(len(msg))
 	if err := resp.Write(conn); err != nil {
-		logging.Errorf(context.Background(), "tls proxy: write error response to client: %v", err)
+		logging.Errorf(ctx, "tls proxy: write error response to client: %v", err)
 	}
 }
 
 // writeProxyResponseToConn serialises a ProxyResponse to a net.Conn.
-func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
+func writeProxyResponseToConn(ctx context.Context, conn net.Conn, resp *plugins.ProxyResponse) {
 	var body []byte
 	if resp.Body != nil {
 		var err error
 		body, err = io.ReadAll(resp.Body)
 		if err != nil {
-			logging.Errorf(context.Background(), "tls proxy: read response body for write: %v", err)
+			logging.Errorf(ctx, "tls proxy: read response body for write: %v", err)
 			return
 		}
 	}
@@ -579,7 +579,7 @@ func writeProxyResponseToConn(conn net.Conn, resp *plugins.ProxyResponse) {
 		ContentLength: int64(len(body)),
 	}
 	if err := httpResp.Write(conn); err != nil {
-		logging.Errorf(context.Background(), "tls proxy: write response to client: %v", err)
+		logging.Errorf(ctx, "tls proxy: write response to client: %v", err)
 	}
 }
 
