@@ -131,17 +131,25 @@ func (h *headerFlags) Set(v string) error {
 	return nil
 }
 
+func parseHeader(raw string) (string, string, error) {
+	idx := strings.Index(raw, ":")
+	if idx < 0 {
+		return "", "", fmt.Errorf("invalid header %q (want key:value)", raw)
+	}
+	key := strings.TrimSpace(raw[:idx])
+	if key == "" {
+		return "", "", fmt.Errorf("invalid header %q (empty key)", raw)
+	}
+	val := strings.TrimSpace(raw[idx+1:])
+	return key, val, nil
+}
+
 func (h headerFlags) Map() (map[string]string, error) {
 	out := make(map[string]string, len(h))
 	for _, raw := range h {
-		parts := strings.SplitN(raw, ":", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid header %q (want key:value)", raw)
-		}
-		key := strings.TrimSpace(parts[0])
-		val := strings.TrimSpace(parts[1])
-		if key == "" {
-			return nil, fmt.Errorf("invalid header %q (empty key)", raw)
+		key, val, err := parseHeader(raw)
+		if err != nil {
+			return nil, err
 		}
 		out[key] = val
 	}
