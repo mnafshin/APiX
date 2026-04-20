@@ -161,15 +161,10 @@ func (p *HTTPProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 // handleHTTP proxies a plain HTTP request, runs plugin chain, stores traffic.
 func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	reqID := logging.EnsureRequestID(r.Header)
-	ctx = logging.WithRequestID(ctx, reqID)
-	if err := validateInboundRequest(p.cfg, r); err != nil {
-		http.Error(w, err.Error(), http.StatusRequestHeaderFieldsTooLarge)
+	ctx, reqID, ok := p.prepareRequestContext(w, r)
+	if !ok {
 		return
 	}
-
-	// Instrument active connections
 	metrics.IncActive()
 	defer metrics.DecActive()
 
@@ -180,13 +175,44 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	start := time.Now()
-	maxBodyBytes := maxBodyBytes(p.cfg)
+	tx, maxBodyBytes, ok := p.buildProxyRequest(w, r, reqID)
+	if !ok {
+		return
+	}
 
-	// 1. Buffer request body.
+	tx, done, err := p.runRequestPipeline(ctx, w, tx)
+	if err != nil || done {
+		return
+	}
+	if done = p.resolveSpecialCases(ctx, w, r, start, tx, maxBodyBytes); done {
+		return
+	}
+
+	proxyResp, respBody, ok := p.forwardAndTransformResponse(ctx, w, r, tx, maxBodyBytes)
+	if !ok {
+		return
+	}
+	tx.Response = proxyResp
+	tx.ResponseBody = respBody
+	p.finalizeTransactionPhase(ctx, w, start, tx)
+}
+
+func (p *HTTPProxy) prepareRequestContext(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
+	reqID := logging.EnsureRequestID(r.Header)
+	ctx := logging.WithRequestID(r.Context(), reqID)
+	if err := validateInboundRequest(p.cfg, r); err != nil {
+		http.Error(w, err.Error(), http.StatusRequestHeaderFieldsTooLarge)
+		return ctx, reqID, false
+	}
+	return ctx, reqID, true
+}
+
+func (p *HTTPProxy) buildProxyRequest(w http.ResponseWriter, r *http.Request, reqID string) (*Transaction, int64, bool) {
+	maxBodyBytes := maxBodyBytes(p.cfg)
 	bodyBytes, err := p.readRequestBody(r, maxBodyBytes)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("request body too large: %v", err), http.StatusRequestEntityTooLarge)
-		return
+		return nil, 0, false
 	}
 
 	origHeaders := r.Header.Clone()
@@ -195,7 +221,6 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	if protocol == "" {
 		protocol = "HTTP/1.1"
 	}
-
 	proxyReq := &plugins.ProxyRequest{
 		ID:       reqID,
 		Method:   r.Method,
@@ -205,71 +230,55 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Protocol: protocol,
 		Raw:      r,
 	}
-
-	// 2. Run plugin OnRequest chain.
-	proxyReq, err = p.runPluginRequest(ctx, proxyReq)
-	if err != nil {
-		http.Error(w, "plugin error", http.StatusBadGateway)
-		return
-	}
-
-	// 3. Short-circuit if plugin provided a mocked response.
-	if proxyReq.MockedResponse != nil {
-		p.writeMockedResponse(ctx, w, proxyReq.MockedResponse)
-		return
-	}
-
-	// 4. Evaluate breakpoints (pause/resume/drop).
 	tx := &Transaction{
 		ID:                     reqID,
 		Request:                proxyReq,
 		RequestBody:            bodyBytes,
 		OriginalRequestHeaders: origHeaders,
 	}
-	tx, done, err := p.evaluateBreakpoint(ctx, w, tx)
-	if err != nil || done {
-		return
-	}
+	return tx, maxBodyBytes, true
+}
 
-	// 5. Route WebSocket upgrades to dedicated handler.
+func (p *HTTPProxy) runRequestPipeline(ctx context.Context, w http.ResponseWriter, tx *Transaction) (*Transaction, bool, error) {
+	proxyReq, err := p.runPluginRequest(ctx, tx.Request)
+	if err != nil {
+		http.Error(w, "plugin error", http.StatusBadGateway)
+		return tx, true, err
+	}
+	tx.Request = proxyReq
+	if proxyReq.MockedResponse != nil {
+		p.writeMockedResponse(ctx, w, proxyReq.MockedResponse)
+		return tx, true, nil
+	}
+	return p.evaluateBreakpoint(ctx, w, tx)
+}
+
+func (p *HTTPProxy) resolveSpecialCases(ctx context.Context, w http.ResponseWriter, r *http.Request, start time.Time, tx *Transaction, maxBodyBytes int64) bool {
 	if isWebSocketRequest(r) {
 		p.handleWebSocket(ctx, w, r, tx, start)
-		return
+		return true
 	}
-
-	// 6. Apply request rewrite rules.
-	if sent := p.applyRequestRewriteRules(ctx, w, r, bodyBytes); sent {
-		return
+	if sent := p.applyRequestRewriteRules(ctx, w, r, tx.RequestBody); sent {
+		return true
 	}
-
-	// 7. Serve map-local response (if configured and matched).
-	if mapResp, mapBody, matched := p.applyMapLocalRules(ctx, proxyReq); matched {
-		mapResp, mapBody, err = p.runPluginResponse(ctx, proxyReq, mapResp, mapBody, maxBodyBytes)
+	if mapResp, mapBody, matched := p.applyMapLocalRules(ctx, tx.Request); matched {
+		var err error
+		mapResp, mapBody, err = p.runPluginResponse(ctx, tx.Request, mapResp, mapBody, maxBodyBytes)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
-			return
+			return true
 		}
-
 		tx.Response = mapResp
 		tx.ResponseBody = mapBody
-		tx, done, err = p.evaluateResponseBreakpoint(ctx, w, tx)
-		if err != nil || done {
-			return
-		}
-		p.storeAndWriteResponse(ctx, w, start, tx)
-		return
+		return p.finalizeTransactionPhase(ctx, w, start, tx)
 	}
+	return false
+}
 
-	// 8. Forward request upstream and read response.
-	// Attach an httptrace so that any 1xx informational responses (e.g. 103 Early
-	// Hints) received from the upstream are forwarded to the client immediately
-	// without being stored as transactions.
+func (p *HTTPProxy) forwardAndTransformResponse(ctx context.Context, w http.ResponseWriter, r *http.Request, tx *Transaction, maxBodyBytes int64) (*plugins.ProxyResponse, []byte, bool) {
 	rc := http.NewResponseController(w)
 	traceCtx := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
 		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
-			// Copy 1xx headers then send the informational status to the client.
-			// Go 1.20+ server ResponseWriter supports 1xx via WriteHeader; errors
-			// here are non-fatal (e.g. client already gone).
 			h := w.Header()
 			for k, vv := range header {
 				for _, v := range vv {
@@ -284,22 +293,16 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	upResp, respBody, err := p.forwardUpstream(traceCtx, proxyReq, maxBodyBytes)
+	upResp, respBody, err := p.forwardUpstream(traceCtx, tx.Request, maxBodyBytes)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return nil, nil, false
 	}
 	defer func() { _ = upResp.Body.Close() }()
-
-	// Defensive: Go's transport always returns the final (>= 200) response via
-	// RoundTrip, but guard against any edge case where a 1xx leaks through.
-	// Informational responses are already forwarded to the client via the
-	// httptrace.Got1xxResponse callback above; do not store them.
 	if upResp.StatusCode < 200 {
 		http.Error(w, "unexpected 1xx response from upstream", http.StatusBadGateway)
-		return
+		return nil, nil, false
 	}
-
 	proxyResp := &plugins.ProxyResponse{
 		StatusCode: upResp.StatusCode,
 		Status:     upResp.Status,
@@ -307,24 +310,26 @@ func (p *HTTPProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		Body:       nil,
 		Raw:        upResp,
 	}
-
-	// 9. Apply response rewrite rules.
 	respBody = p.applyResponseRewriteRules(ctx, r, upResp, proxyResp, respBody)
-
-	// 10. Run plugin OnResponse chain.
-	proxyResp, respBody, err = p.runPluginResponse(ctx, proxyReq, proxyResp, respBody, maxBodyBytes)
+	proxyResp, respBody, err = p.runPluginResponse(ctx, tx.Request, proxyResp, respBody, maxBodyBytes)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("plugin OnResponse error: %v", err), http.StatusBadGateway)
-		return
+		return nil, nil, false
 	}
+	return proxyResp, respBody, true
+}
 
-	tx.Response = proxyResp
-	tx.ResponseBody = respBody
+func (p *HTTPProxy) finalizeTransactionPhase(ctx context.Context, w http.ResponseWriter, start time.Time, tx *Transaction) bool {
+	var (
+		done bool
+		err  error
+	)
 	tx, done, err = p.evaluateResponseBreakpoint(ctx, w, tx)
 	if err != nil || done {
-		return
+		return true
 	}
 	p.storeAndWriteResponse(ctx, w, start, tx)
+	return true
 }
 
 // readRequestBody buffers r.Body up to maxBytes.
@@ -455,7 +460,7 @@ func (p *HTTPProxy) applyRequestRewriteRules(ctx context.Context, w http.Respons
 
 // forwardUpstream sends the request upstream and returns the raw response plus buffered body.
 func (p *HTTPProxy) forwardUpstream(ctx context.Context, proxyReq *plugins.ProxyRequest, maxBodyBytes int64) (*http.Response, []byte, error) {
-	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body)
+	upReq, err := http.NewRequestWithContext(ctx, proxyReq.Method, proxyReq.URL.String(), proxyReq.Body) //nolint:gosec // G704: proxy intentionally forwards client-selected upstream URLs
 	if err != nil {
 		return nil, nil, fmt.Errorf("build upstream request: %w", err)
 	}
