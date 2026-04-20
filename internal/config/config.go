@@ -33,6 +33,8 @@ type Config struct {
 	HTTPReadTimeout                  int    `yaml:"http_read_timeout_sec"`
 	HTTPWriteTimeout                 int    `yaml:"http_write_timeout_sec"`
 	HTTPIdleTimeout                  int    `yaml:"http_idle_timeout_sec"`
+	ProxyRateLimitPerSec             int    `yaml:"proxy_rate_limit_per_sec"`
+	ProxyMaxConcurrentConnections    int    `yaml:"proxy_max_concurrent_connections"`
 	MaxHeadersPerRequest             int    `yaml:"max_headers_per_request"`
 	MaxHeaderValueBytes              int    `yaml:"max_header_value_bytes"`
 	MaxTotalHeaderBytes              int    `yaml:"max_total_header_bytes"`
@@ -171,6 +173,8 @@ func LoadConfig(path string) *Config {
 		HTTPReadTimeout:                  30,
 		HTTPWriteTimeout:                 120,
 		HTTPIdleTimeout:                  120,
+		ProxyRateLimitPerSec:             1000,
+		ProxyMaxConcurrentConnections:    200,
 		MaxHeadersPerRequest:             200,
 		MaxHeaderValueBytes:              8 * 1024,
 		MaxTotalHeaderBytes:              1 * 1024 * 1024,

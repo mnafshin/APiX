@@ -29,6 +29,7 @@ type TLSProxy struct {
 	transport     *http.Transport
 	transportOpts TransportOptions // retained so SetUpstreamTLSConfig can rebuild
 	cfg           *config.Config
+	limiter       *proxyRateLimiter
 }
 
 // NewTLSProxy creates a MITM TLS proxy using the provided CA.
@@ -39,6 +40,7 @@ func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions,
 		transportOpts: opts,
 		transport:     newTransport(nil, opts),
 		cfg:           cfg,
+		limiter:       newProxyRateLimiter(cfg),
 	}
 }
 
@@ -47,6 +49,10 @@ func NewTLSProxy(ca *CertAuthority, engine TrafficEngine, opts TransportOptions,
 // plugin execution.
 func (p *TLSProxy) SetPlugins(chain any) {
 	p.plugins = chain
+}
+
+func (p *TLSProxy) SetRateLimiter(limiter *proxyRateLimiter) {
+	p.limiter = limiter
 }
 
 // SetUpstreamTLSConfig sets a custom TLS configuration used when dialling the
@@ -151,6 +157,11 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 	reqID := uuid.NewString()
 	start := time.Now()
 	origHeaders := r.Header.Clone()
+	clientIP := normalizeClientIP(conn.RemoteAddr().String())
+	if !p.limiter.allow(clientIP) {
+		writeHTTPError(ctx, conn, http.StatusTooManyRequests, "rate limit exceeded")
+		return
+	}
 	if err := validateInboundRequest(p.cfg, r); err != nil {
 		writeHTTPError(ctx, conn, http.StatusRequestHeaderFieldsTooLarge, err.Error())
 		return
@@ -349,6 +360,11 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 
 	reqID := uuid.NewString()
 	start := time.Now()
+	clientIP := normalizeClientIP(r.RemoteAddr)
+	if !p.limiter.allow(clientIP) {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
 	if r.URL.Host == "" {
 		r.URL.Host = host
 	}

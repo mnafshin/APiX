@@ -33,6 +33,8 @@ http_read_header_timeout_sec: 10
 http_read_timeout_sec: 30
 http_write_timeout_sec: 120
 http_idle_timeout_sec: 120
+proxy_rate_limit_per_sec: 1000
+proxy_max_concurrent_connections: 200
 
 # Connection pool settings
 max_idle_conns_per_host: 10  # max idle connections kept per upstream host

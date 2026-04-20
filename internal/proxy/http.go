@@ -35,17 +35,23 @@ type HTTPProxy struct {
 	engine    TrafficEngine
 	transport *http.Transport
 	cfg       *config.Config
+	limiter   *proxyRateLimiter
 }
 
 // NewHTTPProxy creates a new HTTP proxy listening on addr.
 func NewHTTPProxy(addr string, tlsProxy *TLSProxy, engine TrafficEngine, opts TransportOptions, cfg *config.Config) *HTTPProxy {
-	return &HTTPProxy{
+	p := &HTTPProxy{
 		addr:      addr,
 		tlsProxy:  tlsProxy,
 		engine:    engine,
 		transport: newTransport(nil, opts),
 		cfg:       cfg,
+		limiter:   newProxyRateLimiter(cfg),
 	}
+	if tlsProxy != nil {
+		tlsProxy.SetRateLimiter(p.limiter)
+	}
+	return p
 }
 
 // Start begins accepting connections. Blocks until ctx is cancelled.
@@ -78,6 +84,16 @@ func (p *HTTPProxy) Start(ctx context.Context) error {
 // ServeHTTP handles both plain HTTP and CONNECT (tunnel) requests.
 func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	clientIP := normalizeClientIP(r.RemoteAddr)
+	if !p.limiter.allow(clientIP) {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	if !p.limiter.acquire(clientIP) {
+		http.Error(w, "too many concurrent connections", http.StatusTooManyRequests)
+		return
+	}
+	defer p.limiter.release(clientIP)
 	defer func() {
 		if rec := recover(); rec != nil {
 			logging.Errorf(ctx, "HTTP proxy panic in ServeHTTP (recovered): %v", rec)

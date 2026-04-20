@@ -323,21 +323,25 @@ func TestValidate_InvalidInputBounds(t *testing.T) {
 	t.Parallel()
 	httpPort, grpcPort := mustFreePorts(t)
 	cfg := &Config{
-		HTTPPort:             httpPort,
-		GRPCPort:             grpcPort,
-		DBPath:               "apix.db",
-		MaxIdleConnsPerHost:  10,
-		MaxHeadersPerRequest: -1,
-		MaxHeaderValueBytes:  -1,
-		MaxTotalHeaderBytes:  -1,
-		MaxURLLength:         -1,
+		HTTPPort:                      httpPort,
+		GRPCPort:                      grpcPort,
+		DBPath:                        "apix.db",
+		MaxIdleConnsPerHost:           10,
+		ProxyRateLimitPerSec:          -1,
+		ProxyMaxConcurrentConnections: -1,
+		MaxHeadersPerRequest:          -1,
+		MaxHeaderValueBytes:           -1,
+		MaxTotalHeaderBytes:           -1,
+		MaxURLLength:                  -1,
 	}
 	err := cfg.Validate()
 	if err == nil {
 		t.Fatal("expected validation failure for invalid input bounds")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "max_headers_per_request") ||
+	if !strings.Contains(msg, "proxy_rate_limit_per_sec") ||
+		!strings.Contains(msg, "proxy_max_concurrent_connections") ||
+		!strings.Contains(msg, "max_headers_per_request") ||
 		!strings.Contains(msg, "max_header_value_bytes") ||
 		!strings.Contains(msg, "max_total_header_bytes") ||
 		!strings.Contains(msg, "max_url_length") {

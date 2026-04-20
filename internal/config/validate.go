@@ -51,6 +51,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	if c.MaxHeadersPerRequest == 0 {
 		c.MaxHeadersPerRequest = 200
 	}
+	if c.ProxyRateLimitPerSec == 0 {
+		c.ProxyRateLimitPerSec = 1000
+	}
+	if c.ProxyMaxConcurrentConnections == 0 {
+		c.ProxyMaxConcurrentConnections = 200
+	}
 	if c.MaxHeaderValueBytes == 0 {
 		c.MaxHeaderValueBytes = 8 * 1024
 	}
@@ -126,6 +132,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	// ── Connection pool ────────────────────────────────────────────────────
 	if c.MaxIdleConnsPerHost <= 0 {
 		errs = append(errs, fmt.Errorf("max_idle_conns_per_host must be > 0 (got %d) — recommended value: 10", c.MaxIdleConnsPerHost))
+	}
+	if c.ProxyRateLimitPerSec <= 0 {
+		errs = append(errs, fmt.Errorf("proxy_rate_limit_per_sec must be > 0 (got %d)", c.ProxyRateLimitPerSec))
+	}
+	if c.ProxyMaxConcurrentConnections <= 0 {
+		errs = append(errs, fmt.Errorf("proxy_max_concurrent_connections must be > 0 (got %d)", c.ProxyMaxConcurrentConnections))
 	}
 	if c.MaxHeadersPerRequest <= 0 {
 		errs = append(errs, fmt.Errorf("max_headers_per_request must be > 0 (got %d)", c.MaxHeadersPerRequest))
