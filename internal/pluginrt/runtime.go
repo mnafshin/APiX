@@ -11,16 +11,25 @@ import (
 
 // Runtime manages the lifecycle of all registered plugins.
 type Runtime struct {
-	mu      sync.RWMutex
-	plugins map[string]plugins.Plugin // name → plugin
-	order   []string                  // insertion order for deterministic chain
+	mu      sync.Mutex
+	cond    *sync.Cond
+	plugins map[string]*pluginEntry // name → plugin entry
+	order   []string                // insertion order for deterministic chain
+}
+
+type pluginEntry struct {
+	plugin   plugins.Plugin
+	inFlight int
+	draining bool
 }
 
 // NewRuntime creates an empty plugin runtime.
 func NewRuntime() *Runtime {
-	return &Runtime{
-		plugins: make(map[string]plugins.Plugin),
+	r := &Runtime{
+		plugins: make(map[string]*pluginEntry),
 	}
+	r.cond = sync.NewCond(&r.mu)
+	return r
 }
 
 // Register adds a plugin to the runtime. Returns an error if a plugin with
@@ -31,7 +40,7 @@ func (r *Runtime) Register(p plugins.Plugin) error {
 	if _, exists := r.plugins[p.Name()]; exists {
 		return fmt.Errorf("plugin %q already registered", p.Name())
 	}
-	r.plugins[p.Name()] = p
+	r.plugins[p.Name()] = &pluginEntry{plugin: p}
 	r.order = append(r.order, p.Name())
 	return nil
 }
@@ -40,26 +49,33 @@ func (r *Runtime) Register(p plugins.Plugin) error {
 func (r *Runtime) Unregister(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, exists := r.plugins[name]; !exists {
+	entry, exists := r.plugins[name]
+	if !exists {
 		return fmt.Errorf("plugin %q not found", name)
 	}
-	delete(r.plugins, name)
+	// Drain: stop routing new requests to this plugin, then wait for in-flight
+	// executions to finish before removing it.
+	entry.draining = true
 	for i, n := range r.order {
 		if n == name {
 			r.order = append(r.order[:i], r.order[i+1:]...)
 			break
 		}
 	}
+	for entry.inFlight > 0 {
+		r.cond.Wait()
+	}
+	delete(r.plugins, name)
 	return nil
 }
 
 // List returns metadata for all registered plugins.
 func (r *Runtime) List() []PluginMeta {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	metas := make([]PluginMeta, 0, len(r.order))
 	for _, name := range r.order {
-		p := r.plugins[name]
+		p := r.plugins[name].plugin
 		metas = append(metas, PluginMeta{
 			Name:        p.Name(),
 			Version:     p.Version(),
@@ -75,22 +91,23 @@ func (r *Runtime) List() []PluginMeta {
 // Short-circuits on the first error. Panics inside plugin code are recovered
 // and returned as errors so a misbehaving plugin cannot crash the engine.
 func (r *Runtime) RunRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
-	r.mu.RLock()
+	r.mu.Lock()
 	order := make([]string, len(r.order))
 	copy(order, r.order)
-	pluginMap := make(map[string]plugins.Plugin, len(r.plugins))
-	for k, v := range r.plugins {
-		pluginMap[k] = v
-	}
-	r.mu.RUnlock()
+	r.mu.Unlock()
 
 	for _, name := range order {
-		p := pluginMap[name]
+		p, done := r.beginPluginUse(name)
+		if p == nil {
+			continue
+		}
 		rp, ok := p.(plugins.RequestPlugin)
 		if !ok {
+			done()
 			continue
 		}
 		modified, err := safeOnRequest(ctx, rp, req)
+		done()
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q OnRequest: %w", name, err)
 		}
@@ -105,22 +122,23 @@ func (r *Runtime) RunRequest(ctx context.Context, req *plugins.ProxyRequest) (*p
 // Plugins that do not implement ResponsePlugin are silently skipped.
 // Panics inside plugin code are recovered and returned as errors.
 func (r *Runtime) RunResponse(ctx context.Context, req *plugins.ProxyRequest, resp *plugins.ProxyResponse) (*plugins.ProxyResponse, error) {
-	r.mu.RLock()
+	r.mu.Lock()
 	order := make([]string, len(r.order))
 	copy(order, r.order)
-	pluginMap := make(map[string]plugins.Plugin, len(r.plugins))
-	for k, v := range r.plugins {
-		pluginMap[k] = v
-	}
-	r.mu.RUnlock()
+	r.mu.Unlock()
 
 	for _, name := range order {
-		p := pluginMap[name]
+		p, done := r.beginPluginUse(name)
+		if p == nil {
+			continue
+		}
 		rp, ok := p.(plugins.ResponsePlugin)
 		if !ok {
+			done()
 			continue
 		}
 		modified, err := safeOnResponse(ctx, rp, req, resp)
+		done()
 		if err != nil {
 			return nil, fmt.Errorf("plugin %q OnResponse: %w", name, err)
 		}
@@ -129,6 +147,31 @@ func (r *Runtime) RunResponse(ctx context.Context, req *plugins.ProxyRequest, re
 		}
 	}
 	return resp, nil
+}
+
+func (r *Runtime) beginPluginUse(name string) (plugins.Plugin, func()) {
+	r.mu.Lock()
+	entry, ok := r.plugins[name]
+	if !ok || entry.draining {
+		r.mu.Unlock()
+		return nil, nil
+	}
+	entry.inFlight++
+	p := entry.plugin
+	r.mu.Unlock()
+
+	return p, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		e, exists := r.plugins[name]
+		if !exists {
+			return
+		}
+		e.inFlight--
+		if e.draining && e.inFlight == 0 {
+			r.cond.Broadcast()
+		}
+	}
 }
 
 // safeOnRequest calls p.OnRequest and converts any panic into an error.
