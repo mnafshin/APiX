@@ -73,6 +73,13 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	)
 
 	req := tx.Request
+	logCtx := context.Background()
+	if req != nil && req.Raw != nil {
+		logCtx = req.Raw.Context()
+	}
+	if tx.ID != "" {
+		logCtx = logging.WithRequestID(logCtx, tx.ID)
+	}
 	if req != nil {
 		// Prefer storing the original headers captured before plugins modified them.
 		var rawHeader http.Header
@@ -117,7 +124,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 			}
 		}
 		if dropped > 0 {
-			logging.Warnf(context.Background(),
+			logging.Warnf(logCtx,
 				"dropped traffic event for %d/%d subscriber(s) — channel full",
 				dropped, len(subscribers))
 		}
@@ -140,7 +147,7 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 	if reqRec != nil && respRec != nil {
 		if saver, ok := e.db.(pairTransactionSaver); ok {
 			if err := saver.SaveTransaction(reqRec, respRec); err != nil {
-				logging.Errorf(context.Background(), "engine: save transaction: %v", err)
+				logging.Errorf(logCtx, "engine: save transaction: %v", err)
 				retErr = err
 			}
 			return retErr
@@ -149,13 +156,13 @@ func (e *Engine) StoreTransaction(tx *proxy.Transaction) error {
 
 	if reqRec != nil {
 		if err := e.db.SaveRequest(reqRec); err != nil {
-			logging.Errorf(context.Background(), "engine: save request: %v", err)
+			logging.Errorf(logCtx, "engine: save request: %v", err)
 			retErr = err
 		}
 	}
 	if respRec != nil {
 		if err := e.db.SaveResponse(respRec); err != nil {
-			logging.Errorf(context.Background(), "engine: save response: %v", err)
+			logging.Errorf(logCtx, "engine: save response: %v", err)
 			if retErr == nil {
 				retErr = err
 			}

@@ -296,11 +296,11 @@ func (d *DB) ListBreakpoints() ([]*BreakpointRecord, error) {
 			CreatedAt:   time.UnixMilli(createdAtMs),
 		}
 		if err := json.Unmarshal([]byte(methodsJSON), &bp.Methods); err != nil {
-			logging.Warnf(context.Background(), "failed to unmarshal methods for breakpoint %s: %v", id, err)
+			logging.Warnf(logging.WithRequestID(context.Background(), id), "failed to unmarshal methods for breakpoint %s: %v", id, err)
 			bp.Methods = nil
 		}
 		if err := json.Unmarshal([]byte(statusCodesJSON), &bp.StatusCodes); err != nil {
-			logging.Warnf(context.Background(), "failed to unmarshal status codes for breakpoint %s: %v", id, err)
+			logging.Warnf(logging.WithRequestID(context.Background(), id), "failed to unmarshal status codes for breakpoint %s: %v", id, err)
 			bp.StatusCodes = nil
 		}
 		bps = append(bps, bp)
@@ -353,7 +353,7 @@ func (d *DB) ListRequestTemplates() ([]*RequestTemplateRecord, error) {
 			UpdatedAt: time.UnixMilli(updatedAtMs),
 		}
 		if err := json.Unmarshal([]byte(hdrs), &tpl.Headers); err != nil {
-			logging.Warnf(context.Background(), "failed to unmarshal template headers for id %s: %v", id, err)
+			logging.Warnf(logging.WithRequestID(context.Background(), id), "failed to unmarshal template headers for id %s: %v", id, err)
 			tpl.Headers = map[string]string{}
 		}
 		templates = append(templates, tpl)

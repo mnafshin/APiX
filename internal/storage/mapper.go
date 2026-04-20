@@ -32,7 +32,7 @@ func scanRequest(row *sql.Row) (*RequestRecord, error) {
 		Protocol:   protocol,
 	}
 	if err := json.Unmarshal([]byte(hdrs), &req.Headers); err != nil {
-		logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", id, err)
+		logging.Warnf(logging.WithRequestID(context.Background(), id), "failed to unmarshal request headers for request %s: %v", id, err)
 		req.Headers = make(map[string]string)
 	}
 	return req, nil
@@ -60,7 +60,7 @@ func scanResponse(row *sql.Row) (*ResponseRecord, error) {
 		Body:       body,
 	}
 	if err := json.Unmarshal([]byte(hdrs), &resp.Headers); err != nil {
-		logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", reqID, err)
+		logging.Warnf(logging.WithRequestID(context.Background(), reqID), "failed to unmarshal response headers for request %s: %v", reqID, err)
 		resp.Headers = make(map[string]string)
 	}
 	return resp, nil
@@ -100,7 +100,7 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 			Protocol:   protocol,
 		}
 		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
-			logging.Warnf(context.Background(), "failed to unmarshal request headers for request %s: %v", reqID, err)
+			logging.Warnf(logging.WithRequestID(context.Background(), reqID), "failed to unmarshal request headers for request %s: %v", reqID, err)
 			req.Headers = make(map[string]string)
 		}
 		reqs = append(reqs, req)
@@ -119,7 +119,7 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 			}
 			if respHeaders.Valid {
 				if err := json.Unmarshal([]byte(respHeaders.String), &resp.Headers); err != nil {
-					logging.Warnf(context.Background(), "failed to unmarshal response headers for request %s: %v", respReqID.String, err)
+					logging.Warnf(logging.WithRequestID(context.Background(), respReqID.String), "failed to unmarshal response headers for request %s: %v", respReqID.String, err)
 					resp.Headers = make(map[string]string)
 				}
 			}

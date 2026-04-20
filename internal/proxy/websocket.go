@@ -213,13 +213,18 @@ type hijackableResponseWriter struct {
 	conn   net.Conn
 	reader *bufio.Reader
 	header http.Header
+	ctx    context.Context
 }
 
-func newHijackableResponseWriter(conn net.Conn, reader *bufio.Reader) *hijackableResponseWriter {
+func newHijackableResponseWriter(ctx context.Context, conn net.Conn, reader *bufio.Reader) *hijackableResponseWriter {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &hijackableResponseWriter{
 		conn:   conn,
 		reader: reader,
 		header: make(http.Header),
+		ctx:    ctx,
 	}
 }
 
@@ -244,7 +249,7 @@ func (w *hijackableResponseWriter) WriteHeader(statusCode int) {
 		ContentLength: int64(len(body)),
 	}
 	if err := response.Write(w.conn); err != nil {
-		logging.Errorf(context.Background(), "websocket response writer: %v", err)
+		logging.Errorf(w.ctx, "websocket response writer: %v", err)
 	}
 }
 

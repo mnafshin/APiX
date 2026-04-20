@@ -651,7 +651,7 @@ func (p *HTTPProxy) handleTunnelConn(ctx context.Context, conn net.Conn, br *buf
 			req.URL.Scheme = "http"
 		}
 		req = req.WithContext(ctx)
-		w := newHijackableResponseWriter(conn, br)
+		w := newHijackableResponseWriter(ctx, conn, br)
 		p.handleHTTP(w, req)
 		if isWebSocketRequest(req) {
 			return
