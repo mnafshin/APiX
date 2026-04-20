@@ -29,6 +29,8 @@ type rootOptions struct {
 	port        int
 	tls         bool
 	token       string
+	verbose     bool
+	debug       bool
 	output      string
 	noColor     bool
 	timeout     time.Duration
@@ -199,6 +201,9 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 	fs.IntVar(&opts.port, "port", 9090, "engine gRPC port")
 	fs.BoolVar(&opts.tls, "tls", false, "use TLS for gRPC connection")
 	fs.StringVar(&opts.token, "token", "", "auth token")
+	fs.BoolVar(&opts.verbose, "verbose", false, "enable diagnostic logs")
+	fs.BoolVar(&opts.verbose, "v", false, "shorthand for --verbose")
+	fs.BoolVar(&opts.debug, "debug", false, "enable detailed diagnostic logs")
 	fs.StringVar(&opts.output, "output", "text", "output format: text|json|ndjson")
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable color output")
 	fs.DurationVar(&opts.timeout, "timeout", 0, "per-command timeout (0 = sensible default)")
@@ -260,39 +265,39 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 
 	switch fs.Arg(0) {
 	case "status":
-		return app.wrapErr(app.cmdStatus())
+		return app.exec("status", app.cmdStatus)
 	case "version":
-		return app.wrapErr(app.cmdVersion())
+		return app.exec("version", app.cmdVersion)
 	case "plugins":
-		return app.wrapErr(app.cmdPlugins(fs.Args()[1:]))
+		return app.exec("plugins", func() error { return app.cmdPlugins(fs.Args()[1:]) })
 	case "history":
-		return app.wrapErr(app.cmdHistory(fs.Args()[1:]))
+		return app.exec("history", func() error { return app.cmdHistory(fs.Args()[1:]) })
 	case "watch":
-		return app.wrapErr(app.cmdWatch(fs.Args()[1:]))
+		return app.exec("watch", func() error { return app.cmdWatch(fs.Args()[1:]) })
 	case "filter":
-		return app.wrapErr(app.cmdFilter(fs.Args()[1:]))
+		return app.exec("filter", func() error { return app.cmdFilter(fs.Args()[1:]) })
 	case "export":
-		return app.wrapErr(app.cmdExport(fs.Args()[1:]))
+		return app.exec("export", func() error { return app.cmdExport(fs.Args()[1:]) })
 	case "breakpoints":
-		return app.wrapErr(app.cmdBreakpoints(fs.Args()[1:]))
+		return app.exec("breakpoints", func() error { return app.cmdBreakpoints(fs.Args()[1:]) })
 	case "paused":
-		return app.wrapErr(app.cmdPaused(fs.Args()[1:]))
+		return app.exec("paused", func() error { return app.cmdPaused(fs.Args()[1:]) })
 	case "send":
-		return app.wrapErr(app.cmdSend(fs.Args()[1:]))
+		return app.exec("send", func() error { return app.cmdSend(fs.Args()[1:]) })
 	case "templates":
-		return app.wrapErr(app.cmdTemplates(fs.Args()[1:]))
+		return app.exec("templates", func() error { return app.cmdTemplates(fs.Args()[1:]) })
 	case "replay":
-		return app.wrapErr(app.cmdReplay(fs.Args()[1:]))
+		return app.exec("replay", func() error { return app.cmdReplay(fs.Args()[1:]) })
 	case "cert":
-		return app.wrapErr(app.cmdCert(fs.Args()[1:]))
+		return app.exec("cert", func() error { return app.cmdCert(fs.Args()[1:]) })
 	case "config":
-		return app.wrapErr(app.cmdConfig(fs.Args()[1:]))
+		return app.exec("config", func() error { return app.cmdConfig(fs.Args()[1:]) })
 	case "completion":
-		return app.wrapErr(app.cmdCompletion(fs.Args()[1:]))
+		return app.exec("completion", func() error { return app.cmdCompletion(fs.Args()[1:]) })
 	case "setup":
-		return app.wrapErr(app.cmdSetup(fs.Args()[1:]))
+		return app.exec("setup", func() error { return app.cmdSetup(fs.Args()[1:]) })
 	case "doctor":
-		return app.wrapErr(app.cmdDoctor())
+		return app.exec("doctor", app.cmdDoctor)
 	case "help":
 		fs.Usage()
 		return 0
@@ -322,10 +327,29 @@ func (a *app) wrapErr(err error) int {
 	return exitCode
 }
 
+func (a *app) exec(name string, fn func() error) int {
+	start := time.Now()
+	a.diagf("running command: %s", name)
+	err := fn()
+	a.diagf("command %s finished in %v", name, time.Since(start).Round(time.Millisecond))
+	return a.wrapErr(err)
+}
+
 func (a *app) close() {
 	if a.conn != nil {
 		_ = a.conn.Close()
 	}
+}
+
+func (a *app) diagnosticsEnabled() bool {
+	return a.opts.verbose || a.opts.debug
+}
+
+func (a *app) diagf(format string, args ...any) {
+	if !a.diagnosticsEnabled() {
+		return
+	}
+	writef(a.errw, "[debug] "+format+"\n", args...)
 }
 
 func (a *app) clientConn() (apix.EngineClient, error) {
@@ -334,6 +358,7 @@ func (a *app) clientConn() (apix.EngineClient, error) {
 	}
 
 	target := fmt.Sprintf("%s:%d", a.opts.host, a.opts.port)
+	a.diagf("dialing engine: target=%s tls=%t", target, a.opts.tls)
 	var creds credentials.TransportCredentials
 	if a.opts.tls {
 		serverName := a.opts.host
@@ -348,10 +373,12 @@ func (a *app) clientConn() (apix.EngineClient, error) {
 		creds = insecure.NewCredentials()
 	}
 
+	dialStart := time.Now()
 	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", target, err)
 	}
+	a.diagf("dial established in %v", time.Since(dialStart).Round(time.Millisecond))
 	a.conn = conn
 	a.client = apix.NewEngineClient(conn)
 	return a.client, nil
@@ -362,8 +389,10 @@ func (a *app) unaryContext() (context.Context, context.CancelFunc) {
 	if timeout <= 0 {
 		timeout = 10 * time.Second
 	}
+	a.diagf("unary timeout=%v", timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	if a.opts.token != "" {
+		a.diagf("using bearer token for unary request")
 		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
 	}
 	return ctx, cancel
@@ -371,14 +400,18 @@ func (a *app) unaryContext() (context.Context, context.CancelFunc) {
 
 func (a *app) streamContext() (context.Context, context.CancelFunc) {
 	if a.opts.timeout > 0 {
+		a.diagf("stream timeout=%v", a.opts.timeout)
 		ctx, cancel := context.WithTimeout(context.Background(), a.opts.timeout)
 		if a.opts.token != "" {
+			a.diagf("using bearer token for stream request")
 			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
 		}
 		return ctx, cancel
 	}
+	a.diagf("stream timeout=none")
 	ctx := context.Background()
 	if a.opts.token != "" {
+		a.diagf("using bearer token for stream request")
 		ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+a.opts.token)
 	}
 	return ctx, func() {}
