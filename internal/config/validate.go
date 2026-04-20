@@ -231,6 +231,9 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	if c.AccessLogEnabled && strings.TrimSpace(c.AccessLogPath) == "" {
 		errs = append(errs, fmt.Errorf("access_log_path must be set when access_log_enabled is true"))
 	}
+	if c.AuditLogEnabled && strings.TrimSpace(c.AuditLogPath) == "" {
+		errs = append(errs, fmt.Errorf("audit_log_path must be set when audit_log_enabled is true"))
+	}
 	if c.OTelEnabled {
 		if strings.TrimSpace(c.OTelEndpoint) == "" {
 			errs = append(errs, fmt.Errorf("otel_endpoint must be set when otel_enabled is true"))

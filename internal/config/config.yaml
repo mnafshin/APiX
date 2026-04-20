@@ -18,6 +18,8 @@ log_level: "info"   # debug | info | warn | error
 access_log_enabled: false
 access_log_format: "json"  # json | common | combined
 access_log_path: "stdout"  # stdout | stderr | /path/to/file.log
+audit_log_enabled: false
+audit_log_path: "stdout"   # stdout | stderr | /path/to/file.log
 
 # OpenTelemetry tracing plugin
 otel_enabled: false

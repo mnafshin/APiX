@@ -40,6 +40,18 @@ func (s *EngineServer) ReplayRequest(ctx context.Context, req *apix.ReplaySpec) 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "replay: %v", err)
 	}
+	details := map[string]any{
+		"follow_redirects": rr.FollowRedirects,
+	}
+	if rr.RequestID != "" {
+		details["source"] = "request_id"
+		details["request_id"] = rr.RequestID
+	} else if rr.RawRequest != nil {
+		details["source"] = "raw_request"
+		details["method"] = rr.RawRequest.Method
+		details["url"] = rr.RawRequest.URL.String()
+	}
+	s.auditLog(ctx, "replay_request", rr.RequestID, details)
 	return httpResponseToProto(resp)
 }
 
@@ -55,10 +67,15 @@ func (s *EngineServer) ComposeRequest(ctx context.Context, req *apix.ComposeSpec
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "compose request: %v", err)
 	}
+	s.auditLog(ctx, "compose_request", "", map[string]any{
+		"method":           httpReq.Method,
+		"url":              httpReq.URL.String(),
+		"follow_redirects": req.FollowRedirects,
+	})
 	return httpResponseToProto(resp)
 }
 
-func (s *EngineServer) SaveRequestTemplate(_ context.Context, req *apix.RequestTemplate) (*apix.RequestTemplate, error) {
+func (s *EngineServer) SaveRequestTemplate(ctx context.Context, req *apix.RequestTemplate) (*apix.RequestTemplate, error) {
 	if req.GetRequest() == nil {
 		return nil, status.Error(codes.InvalidArgument, "request is required")
 	}
@@ -84,6 +101,11 @@ func (s *EngineServer) SaveRequestTemplate(_ context.Context, req *apix.RequestT
 	if err := s.db.SaveRequestTemplate(record); err != nil {
 		return nil, status.Errorf(codes.Internal, "save request template: %v", err)
 	}
+	s.auditLog(ctx, "save_request_template", id, map[string]any{
+		"name":   record.Name,
+		"method": record.Method,
+		"url":    record.URL,
+	})
 	return requestTemplateRecordToProto(record), nil
 }
 
@@ -99,13 +121,14 @@ func (s *EngineServer) ListRequestTemplates(_ context.Context, _ *apix.Empty) (*
 	return &apix.RequestTemplateList{Templates: templates}, nil
 }
 
-func (s *EngineServer) DeleteRequestTemplate(_ context.Context, req *apix.RequestTemplateID) (*apix.Empty, error) {
+func (s *EngineServer) DeleteRequestTemplate(ctx context.Context, req *apix.RequestTemplateID) (*apix.Empty, error) {
 	if req.GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "id is required")
 	}
 	if err := s.db.DeleteRequestTemplate(req.GetId()); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete request template: %v", err)
 	}
+	s.auditLog(ctx, "delete_request_template", req.GetId(), nil)
 	return &apix.Empty{}, nil
 }
 

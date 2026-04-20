@@ -61,6 +61,8 @@ type Config struct {
 	AccessLogEnabled    bool    `yaml:"access_log_enabled"`
 	AccessLogFormat     string  `yaml:"access_log_format"`
 	AccessLogPath       string  `yaml:"access_log_path"`
+	AuditLogEnabled     bool    `yaml:"audit_log_enabled"`
+	AuditLogPath        string  `yaml:"audit_log_path"`
 	OTelEnabled         bool    `yaml:"otel_enabled"`
 	OTelEndpoint        string  `yaml:"otel_endpoint"`
 	OTelServiceName     string  `yaml:"otel_service_name"`
@@ -185,6 +187,8 @@ func LoadConfig(path string) *Config {
 		AccessLogEnabled:    false,
 		AccessLogFormat:     "json",
 		AccessLogPath:       "stdout",
+		AuditLogEnabled:     false,
+		AuditLogPath:        "stdout",
 		OTelEnabled:         false,
 		OTelEndpoint:        "localhost:4317",
 		OTelServiceName:     "apix-proxy",

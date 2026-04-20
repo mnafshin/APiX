@@ -42,6 +42,7 @@ func TestValidate_InvalidLogSettings(t *testing.T) {
 		LogFormat:           "xml",
 		LogLevel:            "trace",
 		AccessLogFormat:     "plain",
+		AuditLogEnabled:     true,
 	}
 	err := cfg.Validate()
 	if err == nil {
@@ -56,6 +57,9 @@ func TestValidate_InvalidLogSettings(t *testing.T) {
 	}
 	if !strings.Contains(msg, "access_log_format") {
 		t.Fatalf("expected access_log_format validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "audit_log_path") {
+		t.Fatalf("expected audit_log_path validation error, got: %v", err)
 	}
 }
 

@@ -165,6 +165,7 @@ func (s *EngineServer) ClearHistory(ctx context.Context, _ *apix.Empty) (*apix.E
 	if err := s.db.DeleteAllTransactions(); err != nil {
 		return nil, status.Errorf(codes.Internal, "clear history: %v", err)
 	}
+	s.auditLog(ctx, "clear_history", "", nil)
 	return &apix.Empty{}, nil
 }
 
