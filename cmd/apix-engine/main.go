@@ -27,6 +27,7 @@ import (
 func main() {
 	configCheck := flag.Bool("config-check", false, "Validate config and exit")
 	logFormat := flag.String("log-format", "", "Log output format: 'text' or 'json' (overrides LOG_FORMAT env var; default 'text')")
+	logLevel := flag.String("log-level", "", "Log level: 'debug', 'info', 'warn', or 'error' (overrides LOG_LEVEL env var; default 'info')")
 	flag.Parse()
 
 	stop := make(chan os.Signal, 1)
@@ -43,7 +44,14 @@ func main() {
 	if format == "" {
 		format = "text"
 	}
-	logging.InitWithFormat(os.Stdout, format)
+	level := *logLevel
+	if level == "" {
+		level = os.Getenv("LOG_LEVEL")
+	}
+	if level == "" {
+		level = "info"
+	}
+	logging.InitWithFormatAndLevel(os.Stdout, format, level)
 
 	// 1. Load config from well-known search paths.
 	cfg := config.LoadConfig(config.DefaultPath())

@@ -24,6 +24,7 @@ const RequestIDHeader = "X-Request-ID"
 
 // global holds the active *slog.Logger with lock-free loads/stores.
 var global atomic.Pointer[slog.Logger]
+var levelVar slog.LevelVar
 
 func getLogger() *slog.Logger {
 	if l := global.Load(); l != nil {
@@ -39,17 +40,25 @@ func setLogger(l *slog.Logger) {
 // Init initializes the logger with the text handler writing to w.
 // If w is nil, os.Stdout is used. Equivalent to InitWithFormat(w, "text").
 func Init(w io.Writer) {
-	InitWithFormat(w, "text")
+	InitWithFormatAndLevel(w, "text", "info")
 }
 
 // InitWithFormat initialises the global logger.
 // format must be "json" or "text" (case-insensitive); anything else defaults to text.
 // If w is nil, os.Stdout is used.
 func InitWithFormat(w io.Writer, format string) {
+	InitWithFormatAndLevel(w, format, "info")
+}
+
+// InitWithFormatAndLevel initialises the global logger with format and level.
+// format: "json" or "text" (unknown values default to text)
+// level: "debug", "info", "warn", "error" (unknown values default to info)
+func InitWithFormatAndLevel(w io.Writer, format string, level string) {
 	if w == nil {
 		w = os.Stdout
 	}
-	opts := &slog.HandlerOptions{Level: slog.LevelDebug}
+	levelVar.Set(parseLevel(level))
+	opts := &slog.HandlerOptions{Level: &levelVar}
 	var h slog.Handler
 	if format == "json" {
 		h = slog.NewJSONHandler(w, opts)
@@ -57,6 +66,19 @@ func InitWithFormat(w io.Writer, format string) {
 		h = slog.NewTextHandler(w, opts)
 	}
 	setLogger(slog.New(h))
+}
+
+func parseLevel(level string) slog.Level {
+	switch level {
+	case "debug", "DEBUG":
+		return slog.LevelDebug
+	case "warn", "WARN", "warning", "WARNING":
+		return slog.LevelWarn
+	case "error", "ERROR":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
 // WithRequestID returns a new context with the provided request ID attached.
