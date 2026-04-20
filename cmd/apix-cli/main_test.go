@@ -638,3 +638,30 @@ func TestCLIUnknownCommandJSONError(t *testing.T) {
 		t.Fatalf("unexpected message: %#v", errPayload["message"])
 	}
 }
+
+func TestHeaderFlagsMap_SplitsOnFirstColon(t *testing.T) {
+	t.Parallel()
+
+	headers, err := headerFlags{
+		"Authorization: Bearer token:abc:def",
+		"X-Time: 12:34:56",
+	}.Map()
+	if err != nil {
+		t.Fatalf("Map() error = %v", err)
+	}
+	if got := headers["Authorization"]; got != "Bearer token:abc:def" {
+		t.Fatalf("Authorization header = %q", got)
+	}
+	if got := headers["X-Time"]; got != "12:34:56" {
+		t.Fatalf("X-Time header = %q", got)
+	}
+}
+
+func TestHeaderFlagsMap_InvalidHeader(t *testing.T) {
+	t.Parallel()
+
+	_, err := headerFlags{"not-a-header"}.Map()
+	if err == nil {
+		t.Fatal("expected parse error for malformed header")
+	}
+}
