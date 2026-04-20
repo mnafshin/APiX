@@ -37,6 +37,8 @@ Browse [`how-to/`](how-to/) for step-by-step recipes:
 - [First Breakpoint](how-to/first-breakpoint.md)
 - [First Capture](how-to/first-capture.md)
 - [Replay Requests](how-to/replay.md)
+- [Plugin Development](how-to/plugin-development.md)
+- [Plugin Configuration](how-to/plugin-configuration.md)
 
 ---
 
@@ -60,6 +62,7 @@ Stable contracts and schemas:
 - [`REFERENCE/cli_mcp.md`](REFERENCE/cli_mcp.md) — MCP server integration and tools
 - [`REFERENCE/glossary.md`](REFERENCE/glossary.md) — terminology and concepts
 - [`REFERENCE/otel.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
+- [`REFERENCE/plugin-sdk.md`](REFERENCE/plugin-sdk.md) — plugin interfaces and lifecycle
 
 ---
 
