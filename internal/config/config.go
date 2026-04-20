@@ -54,6 +54,9 @@ type Config struct {
 	// VACUUM. Default: 24 (once per day).
 	VacuumIntervalHours int     `yaml:"vacuum_interval_hours"`
 	SlowlogThresholdMs  int     `yaml:"slowlog_threshold_ms"`
+	AccessLogEnabled    bool    `yaml:"access_log_enabled"`
+	AccessLogFormat     string  `yaml:"access_log_format"`
+	AccessLogPath       string  `yaml:"access_log_path"`
 	OTelEnabled         bool    `yaml:"otel_enabled"`
 	OTelEndpoint        string  `yaml:"otel_endpoint"`
 	OTelServiceName     string  `yaml:"otel_service_name"`
@@ -171,6 +174,9 @@ func LoadConfig(path string) *Config {
 		VacuumIntervalHours: 24,
 		GRPCRateLimitPerSec: 0, // 0 = disabled (local desktop); set to e.g. 100 for remote deployments
 		SlowlogThresholdMs:  1000,
+		AccessLogEnabled:    false,
+		AccessLogFormat:     "json",
+		AccessLogPath:       "stdout",
 		OTelEnabled:         false,
 		OTelEndpoint:        "localhost:4317",
 		OTelServiceName:     "apix-proxy",

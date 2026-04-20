@@ -69,6 +69,15 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.OTelSampleRate != 1.0 {
 		t.Errorf("OTelSampleRate: got %v want 1.0", cfg.OTelSampleRate)
 	}
+	if cfg.AccessLogEnabled {
+		t.Error("AccessLogEnabled: expected false by default")
+	}
+	if cfg.AccessLogFormat != "json" {
+		t.Errorf("AccessLogFormat: got %q want json", cfg.AccessLogFormat)
+	}
+	if cfg.AccessLogPath != "stdout" {
+		t.Errorf("AccessLogPath: got %q want stdout", cfg.AccessLogPath)
+	}
 }
 
 func TestLoadConfig_YAMLOverride(t *testing.T) {
@@ -87,6 +96,9 @@ otel_endpoint: "otel-collector:4317"
 otel_service_name: "apix-dev"
 otel_insecure: false
 otel_sample_rate: 0.25
+access_log_enabled: true
+access_log_format: "combined"
+access_log_path: "/tmp/apix-access.log"
 `)
 	cfg := LoadConfig(path)
 
@@ -128,6 +140,15 @@ otel_sample_rate: 0.25
 	}
 	if cfg.OTelSampleRate != 0.25 {
 		t.Errorf("OTelSampleRate: got %v want 0.25", cfg.OTelSampleRate)
+	}
+	if !cfg.AccessLogEnabled {
+		t.Error("AccessLogEnabled should be true from YAML override")
+	}
+	if cfg.AccessLogFormat != "combined" {
+		t.Errorf("AccessLogFormat: got %q want combined", cfg.AccessLogFormat)
+	}
+	if cfg.AccessLogPath != "/tmp/apix-access.log" {
+		t.Errorf("AccessLogPath: got %q want /tmp/apix-access.log", cfg.AccessLogPath)
 	}
 	// Unspecified fields stay at defaults.
 	if cfg.HTTPIdleTimeout != 120 {

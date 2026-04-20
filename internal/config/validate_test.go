@@ -41,6 +41,7 @@ func TestValidate_InvalidLogSettings(t *testing.T) {
 		MaxIdleConnsPerHost: 10,
 		LogFormat:           "xml",
 		LogLevel:            "trace",
+		AccessLogFormat:     "plain",
 	}
 	err := cfg.Validate()
 	if err == nil {
@@ -52,6 +53,9 @@ func TestValidate_InvalidLogSettings(t *testing.T) {
 	}
 	if !strings.Contains(msg, "log_level") {
 		t.Fatalf("expected log_level validation error, got: %v", err)
+	}
+	if !strings.Contains(msg, "access_log_format") {
+		t.Fatalf("expected access_log_format validation error, got: %v", err)
 	}
 }
 
