@@ -20,8 +20,14 @@ export class EngineProcessManager {
     private startPromise: Promise<void> | null = null;
     private restartAttempts = 0;
     private restartTimer: ReturnType<typeof setTimeout> | null = null;
+    private stopping = false;
+    private outputChannel: vscode.OutputChannel | null = null;
     /** Callback invoked after a successful auto-restart so streams can be re-established. */
     onRestart: (() => void) | null = null;
+    /** Callback invoked when an unexpected exit is detected. */
+    onUnexpectedExit: ((message: string) => void) | null = null;
+    /** Callback invoked when auto-restart has been scheduled. */
+    onRestarting: ((attempt: number, delayMs: number) => void) | null = null;
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -29,6 +35,7 @@ export class EngineProcessManager {
     async start(): Promise<void> {
         // Idempotent: if already running, return immediately
         if (this.isRunning()) { return; }
+        this.stopping = false;
         
         // If already starting, return the existing promise to prevent race condition
         if (this.isStarting && this.startPromise) { 
@@ -38,7 +45,10 @@ export class EngineProcessManager {
         this.isStarting = true;
         try {
             const binaryPath = this._binaryPath();
-            const outputChannel = vscode.window.createOutputChannel('APiX Engine');
+            if (!this.outputChannel) {
+                this.outputChannel = vscode.window.createOutputChannel('APiX Engine');
+            }
+            const outputChannel = this.outputChannel;
             outputChannel.show(true);
 
             this.startPromise = new Promise((resolve, reject) => {
@@ -92,15 +102,11 @@ export class EngineProcessManager {
                         if (this.process === proc) {
                             this.process = null;
                         }
-                        if (code !== 0 && code !== null) {
+                        if (!this.stopping && code !== 0 && code !== null) {
                             const msg = `APiX Engine exited unexpectedly (code ${code}, signal ${signal})`;
                             outputChannel.appendLine(`[APiX] ${msg}`);
-                            vscode.window.showErrorMessage(msg, 'Restart').then(choice => {
-                                if (choice === 'Restart') { 
-                                    // Don't await — let user see error message first
-                                    void this.start();
-                                }
-                            });
+                            this.onUnexpectedExit?.(msg);
+                            this.scheduleAutoRestart();
                         }
                     });
                 } catch (err) {
@@ -111,6 +117,7 @@ export class EngineProcessManager {
             });
             
             await this.startPromise;
+            this.restartAttempts = 0;
         } finally {
             // Ensure cleanup (though resolveOnce should have already done this)
             if (this.startPromise === null) {
@@ -121,6 +128,11 @@ export class EngineProcessManager {
 
     /** Stop the engine subprocess gracefully (SIGTERM → wait 3s → SIGKILL). */
     stop(): void {
+        this.stopping = true;
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
         if (!this.process) { return; }
         const proc = this.process;
         this.process = null;
@@ -134,6 +146,42 @@ export class EngineProcessManager {
     /** Returns true if the engine process is currently running. */
     isRunning(): boolean {
         return this.process !== null && !this.process.killed;
+    }
+
+    private scheduleAutoRestart(): void {
+        if (this.stopping || this.isStarting || this.isRunning()) {
+            return;
+        }
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
+        if (this.restartAttempts >= MAX_RESTART_ATTEMPTS) {
+            const msg = `APiX Engine failed to restart after ${MAX_RESTART_ATTEMPTS} attempts.`;
+            this.outputChannel?.appendLine(`[APiX] ${msg}`);
+            void vscode.window.showErrorMessage(msg);
+            return;
+        }
+
+        this.restartAttempts += 1;
+        const delayMs = Math.min(BACKOFF_INITIAL_MS * Math.pow(2, this.restartAttempts - 1), BACKOFF_MAX_MS);
+        this.outputChannel?.appendLine(`[APiX] Auto-restart attempt ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS} in ${delayMs}ms`);
+        this.onRestarting?.(this.restartAttempts, delayMs);
+
+        this.restartTimer = setTimeout(async () => {
+            this.restartTimer = null;
+            if (this.stopping) {
+                return;
+            }
+            try {
+                await this.start();
+                this.onRestart?.();
+            } catch (err: any) {
+                const msg = err?.message || String(err);
+                this.outputChannel?.appendLine(`[APiX] Auto-restart attempt ${this.restartAttempts} failed: ${msg}`);
+                this.scheduleAutoRestart();
+            }
+        }, delayMs);
     }
 
     /** Resolve the path to the bundled engine binary. */
