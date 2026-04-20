@@ -71,9 +71,9 @@ Representative stable fields:
 |---|---|
 | `status --output json` | `status`, `version`, `proxy_port`, `grpc_port`, `tls_enabled` |
 | `plugins list --output json` | array of objects with `name`, `version`, `description`, `enabled` |
-| `history list --output json` | array of objects including `id`, `timestamp`, `duration_ms`, `request`, optional `response` |
-| `history get --output json` | single object with the same field family as `history list` items |
-| `watch traffic --output ndjson` | one event object per line with `event`, `id`, `method`, `url`, `headers`, `body`, `timestamp` |
+| `history list --output json` | array of objects including `id`, `request_id`, `timestamp`, `duration_ms`, `request`, optional `response` |
+| `history get --output json` | single object with the same field family as `history list` items; supports lookup by `id` or `--request-id` |
+| `watch traffic --output ndjson` | one event object per line with `event`, `id`, `request_id`, `method`, `url`, `headers`, `body`, `timestamp` |
 
 ### Write commands
 

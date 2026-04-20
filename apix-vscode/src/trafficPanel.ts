@@ -141,6 +141,11 @@ export class TrafficPanel {
                     vscode.commands.executeCommand('apix.copyAsCurl', message.data.transaction);
                 }
                 break;
+            case 'copyRequestId':
+                if (message.data?.requestId) {
+                    vscode.commands.executeCommand('apix.copyRequestId', message.data.requestId);
+                }
+                break;
             case 'addBreakpoint':
                 vscode.commands.executeCommand('apix.addBreakpoint');
                 break;
@@ -253,6 +258,7 @@ export class TrafficPanel {
     <button class="close-btn" onclick="closeDetail()">✕</button>
     <h3 id="detail-title"></h3>
     <h4>Request Headers</h4><pre id="detail-req-headers"></pre>
+    <h4>Request ID</h4><pre id="detail-request-id"></pre>
     <h4>Request Body</h4><pre id="detail-req-body"></pre>
     <h4>Response Headers</h4><pre id="detail-resp-headers"></pre>
     <h4>Response Body</h4><pre id="detail-resp-body"></pre>
@@ -264,6 +270,7 @@ export class TrafficPanel {
     <div class="detail-actions">
       <button onclick="replayRequest()">↺ Replay</button>
       <button onclick="copyAsCurl()">⎘ Copy as curl</button>
+      <button onclick="copyRequestId()">⎘ Copy Request ID</button>
       <button onclick="addBreakpoint()">⊕ Add Breakpoint</button>
     </div>
   </div>
@@ -333,6 +340,8 @@ export class TrafficPanel {
       document.getElementById('detail-title').textContent = (isWebSocket ? '[WS] ' : '') + method + ' ' + url;
       document.getElementById('detail-req-headers').textContent =
         JSON.stringify((tx.request && tx.request.headers) || {}, null, 2);
+      document.getElementById('detail-request-id').textContent =
+        tx.requestId || tx.id || '(none)';
       document.getElementById('detail-req-body').textContent =
         (tx.request && tx.request.body) ? String(tx.request.body) : '(empty)';
       document.getElementById('detail-resp-headers').textContent =
@@ -577,6 +586,15 @@ export class TrafficPanel {
     function copyAsCurl() {
       if (window._currentTx) {
         vscode.postMessage({ type: 'copyAsCurl', data: { transaction: window._currentTx } });
+      }
+    }
+
+    function copyRequestId() {
+      if (window._currentTx) {
+        vscode.postMessage({
+          type: 'copyRequestId',
+          data: { requestId: window._currentTx.requestId || window._currentTx.id || '' }
+        });
       }
     }
 

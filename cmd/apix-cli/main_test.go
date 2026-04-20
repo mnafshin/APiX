@@ -106,12 +106,15 @@ func (s *cliTestStack) storeTransaction(t *testing.T, id, method, rawURL, reqBod
 	tx := &proxy.Transaction{
 		ID: id,
 		Request: &plugins.ProxyRequest{
-			ID:      id,
-			Method:  method,
-			URL:     parsed,
-			Headers: http.Header{"X-Test": []string{"1"}},
-			Body:    io.NopCloser(strings.NewReader(reqBody)),
-			Raw:     rawReq,
+			ID:     id,
+			Method: method,
+			URL:    parsed,
+			Headers: http.Header{
+				"X-Test":       []string{"1"},
+				"X-Request-ID": []string{"rid-" + id},
+			},
+			Body: io.NopCloser(strings.NewReader(reqBody)),
+			Raw:  rawReq,
 		},
 		RequestBody: reqBodyBytes(reqBody),
 		DurationMs:  12,
@@ -233,6 +236,9 @@ func TestCLIReadWorkflows_EngineBacked(t *testing.T) {
 	if len(historyList) != 1 || historyList[0]["id"] != "req-1" {
 		t.Fatalf("unexpected history list: %#v", historyList)
 	}
+	if historyList[0]["request_id"] != "rid-req-1" {
+		t.Fatalf("history list request_id=%v", historyList[0]["request_id"])
+	}
 
 	exit, out, errOut = runCLI(t, stack.args("--output", "json", "history", "get", "req-1")...)
 	if exit != 0 {
@@ -244,6 +250,21 @@ func TestCLIReadWorkflows_EngineBacked(t *testing.T) {
 	}
 	if historyItem["id"] != "req-1" {
 		t.Fatalf("history id=%v", historyItem["id"])
+	}
+	if historyItem["request_id"] != "rid-req-1" {
+		t.Fatalf("history request_id=%v", historyItem["request_id"])
+	}
+
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "history", "get", "--request-id", "rid-req-1")...)
+	if exit != 0 {
+		t.Fatalf("history get --request-id exit=%d err=%s", exit, errOut)
+	}
+	var historyByRequestID map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &historyByRequestID); err != nil {
+		t.Fatalf("history get --request-id json: %v", err)
+	}
+	if historyByRequestID["id"] != "req-1" {
+		t.Fatalf("history get --request-id id=%v", historyByRequestID["id"])
 	}
 }
 

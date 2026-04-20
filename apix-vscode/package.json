@@ -33,6 +33,7 @@
     "onCommand:apix.replayRequest",
     "onCommand:apix.composeRequest",
     "onCommand:apix.copyAsCurl",
+    "onCommand:apix.copyRequestId",
     "onCommand:apix.exportHAR",
     "onCommand:apix.importHAR",
     "onCommand:apix.openTrafficPanel",
@@ -90,6 +91,11 @@
       {
         "command": "apix.copyAsCurl",
         "title": "APiX: Copy Request as curl",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "apix.copyRequestId",
+        "title": "APiX: Copy Request ID",
         "icon": "$(clippy)"
       },
       {
@@ -220,6 +226,11 @@
           "command": "apix.copyAsCurl",
           "when": "view == apix.trafficView && viewItem == httpTransaction",
           "group": "inline"
+        },
+        {
+          "command": "apix.copyRequestId",
+          "when": "view == apix.trafficView && viewItem == httpTransaction",
+          "group": "navigation"
         },
         {
           "command": "apix.exportHAR",

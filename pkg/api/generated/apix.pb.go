@@ -601,6 +601,7 @@ type HttpTransaction struct {
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix ms
 	DurationMs    int64                  `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
 	Graphql       *GraphQLMetadata       `protobuf:"bytes,6,opt,name=graphql,proto3" json:"graphql,omitempty"`
+	RequestId     string                 `protobuf:"bytes,7,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // logical request id (X-Request-ID), used for log correlation
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -675,6 +676,13 @@ func (x *HttpTransaction) GetGraphql() *GraphQLMetadata {
 		return x.Graphql
 	}
 	return nil
+}
+
+func (x *HttpTransaction) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
 }
 
 type PluginInfo struct {
@@ -2522,7 +2530,7 @@ const file_apix_proto_rawDesc = "" +
 	"\x06errors\x18\x01 \x03(\v2\x12.apix.GraphQLErrorR\x06errors\"\x84\x01\n" +
 	"\x0fGraphQLMetadata\x126\n" +
 	"\arequest\x18\x01 \x01(\v2\x1c.apix.GraphQLRequestMetadataR\arequest\x129\n" +
-	"\bresponse\x18\x02 \x01(\v2\x1d.apix.GraphQLResponseMetadataR\bresponse\"\xee\x01\n" +
+	"\bresponse\x18\x02 \x01(\v2\x1d.apix.GraphQLResponseMetadataR\bresponse\"\x8d\x02\n" +
 	"\x0fHttpTransaction\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
 	"\arequest\x18\x02 \x01(\v2\x11.apix.HttpRequestR\arequest\x12.\n" +
@@ -2530,7 +2538,9 @@ const file_apix_proto_rawDesc = "" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1f\n" +
 	"\vduration_ms\x18\x05 \x01(\x03R\n" +
 	"durationMs\x12/\n" +
-	"\agraphql\x18\x06 \x01(\v2\x15.apix.GraphQLMetadataR\agraphql\"v\n" +
+	"\agraphql\x18\x06 \x01(\v2\x15.apix.GraphQLMetadataR\agraphql\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\a \x01(\tR\trequestId\"v\n" +
 	"\n" +
 	"PluginInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +

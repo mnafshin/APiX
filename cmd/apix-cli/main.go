@@ -57,7 +57,8 @@ type historyListOptions struct {
 }
 
 type historyGetOptions struct {
-	pageSize int
+	pageSize  int
+	requestID string
 }
 
 type watchOptions struct {
@@ -609,10 +610,7 @@ func (a *app) cmdHistory(args []string) error {
 	case "list":
 		return a.cmdHistoryList(args[1:])
 	case "get":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: history get <id> [--page-size N]")
-		}
-		return a.cmdHistoryGet(args[1], args[2:])
+		return a.cmdHistoryGet(args[1:])
 	case "clear":
 		return a.cmdHistoryClear(args[1:])
 	default:
@@ -674,28 +672,49 @@ func (a *app) cmdHistoryList(args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	writeLine(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
+	writeLine(tw, "ID\tREQUEST_ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
 	for _, tx := range items {
 		statusCode := int32(0)
 		if tx.Response != nil {
 			statusCode = tx.Response.StatusCode
 		}
-		writef(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
+		writef(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
+			tx.Id,
+			historyRequestID(tx),
+			tx.Request.Method,
+			tx.Request.Url,
+			statusCode,
+			tx.DurationMs,
+		)
 	}
 	return tw.Flush()
 }
 
-func (a *app) cmdHistoryGet(id string, args []string) error {
+func (a *app) cmdHistoryGet(args []string) error {
 	fs := flag.NewFlagSet("history get", flag.ContinueOnError)
 	fs.SetOutput(a.errw)
 	opts := historyGetOptions{pageSize: 100}
 	fs.IntVar(&opts.pageSize, "page-size", 100, "page size while searching for an id")
+	fs.StringVar(&opts.requestID, "request-id", "", "lookup by logical request_id (X-Request-ID)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	id := fs.Arg(0)
+	if id == "" && opts.requestID == "" {
+		return fmt.Errorf("usage: history get <id> [--page-size N] or history get --request-id <uuid> [--page-size N]")
+	}
+	if id != "" && opts.requestID != "" {
+		return fmt.Errorf("provide either <id> or --request-id, not both")
 	}
 	client, err := a.clientConn()
 	if err != nil {
 		return err
+	}
+	targetID := id
+	lookupByRequestID := false
+	if opts.requestID != "" {
+		targetID = opts.requestID
+		lookupByRequestID = true
 	}
 	offset := 0
 	for {
@@ -724,7 +743,7 @@ func (a *app) cmdHistoryGet(id string, args []string) error {
 			return status.Error(codes.NotFound, "history item not found")
 		}
 		for _, tx := range items {
-			if tx.Id == id {
+			if (lookupByRequestID && historyRequestID(tx) == targetID) || (!lookupByRequestID && tx.Id == targetID) {
 				if a.opts.output == "json" {
 					return emitJSON(a.out, historyItemToJSON(tx))
 				}
@@ -788,17 +807,19 @@ func historyToJSON(items []*apix.HttpTransaction) []map[string]any {
 func historyItemToJSON(tx *apix.HttpTransaction) map[string]any {
 	item := map[string]any{
 		"id":          tx.Id,
+		"request_id":  historyRequestID(tx),
 		"timestamp":   tx.Timestamp,
 		"duration_ms": tx.DurationMs,
 	}
 	if tx.Request != nil {
 		item["request"] = map[string]any{
-			"id":        tx.Request.Id,
-			"method":    tx.Request.Method,
-			"url":       tx.Request.Url,
-			"headers":   tx.Request.Headers,
-			"body":      string(tx.Request.Body),
-			"timestamp": tx.Request.Timestamp,
+			"id":         tx.Request.Id,
+			"method":     tx.Request.Method,
+			"url":        tx.Request.Url,
+			"headers":    tx.Request.Headers,
+			"body":       string(tx.Request.Body),
+			"timestamp":  tx.Request.Timestamp,
+			"request_id": historyRequestID(tx),
 		}
 	}
 	if tx.Response != nil {
@@ -817,6 +838,20 @@ func validateStreamingOutput(output string) error {
 		return status.Error(codes.InvalidArgument, "--output json is not supported for streaming commands; use --output ndjson")
 	}
 	return nil
+}
+
+func historyRequestID(tx *apix.HttpTransaction) string {
+	if tx.RequestId != "" {
+		return tx.RequestId
+	}
+	if tx.Request != nil {
+		for key, value := range tx.Request.Headers {
+			if strings.EqualFold(key, "X-Request-ID") && value != "" {
+				return value
+			}
+		}
+	}
+	return tx.Id
 }
 
 func (a *app) cmdWatch(args []string) error {
@@ -861,19 +896,34 @@ func (a *app) cmdWatch(args []string) error {
 			continue
 		}
 		if a.opts.output == "ndjson" || a.opts.output == "json" {
+			requestID := msg.Id
+			for key, value := range msg.Headers {
+				if strings.EqualFold(key, "X-Request-ID") && value != "" {
+					requestID = value
+					break
+				}
+			}
 			if err := emitNDJSON(a.out, map[string]any{
-				"event":     "request",
-				"id":        msg.Id,
-				"method":    msg.Method,
-				"url":       msg.Url,
-				"headers":   msg.Headers,
-				"body":      string(msg.Body),
-				"timestamp": msg.Timestamp,
+				"event":      "request",
+				"id":         msg.Id,
+				"request_id": requestID,
+				"method":     msg.Method,
+				"url":        msg.Url,
+				"headers":    msg.Headers,
+				"body":       string(msg.Body),
+				"timestamp":  msg.Timestamp,
 			}); err != nil {
 				return err
 			}
 		} else {
-			writef(a.out, "%s\t%s\t%s\n", msg.Id, msg.Method, msg.Url)
+			requestID := msg.Id
+			for key, value := range msg.Headers {
+				if strings.EqualFold(key, "X-Request-ID") && value != "" {
+					requestID = value
+					break
+				}
+			}
+			writef(a.out, "%s\t%s\t%s\t%s\n", msg.Id, requestID, msg.Method, msg.Url)
 		}
 		seen++
 		if opts.count > 0 && seen >= opts.count {
@@ -932,13 +982,20 @@ func (a *app) cmdFilter(args []string) error {
 		return nil
 	}
 	tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
-	writeLine(tw, "ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
+	writeLine(tw, "ID\tREQUEST_ID\tMETHOD\tURL\tSTATUS\tDURATION_MS")
 	for _, tx := range items {
 		statusCode := int32(0)
 		if tx.Response != nil {
 			statusCode = tx.Response.StatusCode
 		}
-		writef(tw, "%s\t%s\t%s\t%d\t%d\n", tx.Id, tx.Request.Method, tx.Request.Url, statusCode, tx.DurationMs)
+		writef(tw, "%s\t%s\t%s\t%s\t%d\t%d\n",
+			tx.Id,
+			historyRequestID(tx),
+			tx.Request.Method,
+			tx.Request.Url,
+			statusCode,
+			tx.DurationMs,
+		)
 	}
 	return tw.Flush()
 }

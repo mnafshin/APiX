@@ -282,6 +282,7 @@ export class EngineClient {
             stream.on('data', (raw: any) => {
                 const tx: HttpTransaction = {
                     id: raw.id || '',
+                    requestId: raw.requestId || raw.id || '',
                     request: raw.request || {},
                     response: raw.response || {},
                     timestamp: raw.timestamp || 0,
@@ -358,6 +359,7 @@ export class EngineClient {
             // CaptureTraffic streams HttpRequest; wrap into a partial HttpTransaction
             const tx: HttpTransaction = {
                 id: raw.id || '',
+                requestId: (raw.headers && (raw.headers['X-Request-ID'] || raw.headers['x-request-id'])) || raw.id || '',
                 request: {
                     id: raw.id || '',
                     method: raw.method || '',

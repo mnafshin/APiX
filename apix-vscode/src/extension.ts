@@ -127,6 +127,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('apix.copyAsCurl', (itemOrTx: TrafficItem | HttpTransaction) =>
             copyAsCurl(itemOrTx)
         ),
+        vscode.commands.registerCommand('apix.copyRequestId', (itemOrTxOrID: TrafficItem | HttpTransaction | string) =>
+            copyRequestId(itemOrTxOrID)
+        ),
         vscode.commands.registerCommand('apix.exportHAR', (itemOrTx?: TrafficItem | HttpTransaction) =>
             exportHAR(engineClient!, itemOrTx)
         ),
@@ -374,6 +377,21 @@ async function copyAsCurl(itemOrTx: TrafficItem | HttpTransaction): Promise<void
 
     await vscode.env.clipboard.writeText(buildCurlCommand(tx));
     vscode.window.showInformationMessage('APiX: Copied request as curl.');
+}
+
+async function copyRequestId(itemOrTxOrID: TrafficItem | HttpTransaction | string): Promise<void> {
+    const requestID = typeof itemOrTxOrID === 'string'
+        ? itemOrTxOrID
+        : itemOrTxOrID instanceof TrafficItem
+            ? (itemOrTxOrID.transaction.requestId || itemOrTxOrID.transaction.id)
+            : (itemOrTxOrID.requestId || itemOrTxOrID.id);
+
+    if (!requestID) {
+        vscode.window.showErrorMessage('APiX: No request ID available to copy.');
+        return;
+    }
+    await vscode.env.clipboard.writeText(requestID);
+    vscode.window.showInformationMessage('APiX: Copied request ID.');
 }
 
 async function exportHAR(client: EngineClient, itemOrTx?: TrafficItem | HttpTransaction): Promise<void> {
