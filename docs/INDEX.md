@@ -14,6 +14,7 @@ Welcome to APiX documentation. Start here to find what you're looking for.
 
 **For developers & contributors:**
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md) — how to contribute code and issues
+- [`../SECURITY.md`](../SECURITY.md) — vulnerability reporting and supported security-fix versions
 - [Architecture](#architecture-concepts) — system design deep dives
 - [Testing](#testing-strategy) — testing layers and strategies
 - [Reference](#reference) — CLI, gRPC, config, glossary
