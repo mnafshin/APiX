@@ -67,6 +67,7 @@ Stable contracts and schemas:
 - [`REFERENCE/glossary.md`](REFERENCE/glossary.md) — terminology and concepts
 - [`REFERENCE/OTEL.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
 - [`REFERENCE/plugin-sdk.md`](REFERENCE/plugin-sdk.md) — plugin interfaces and lifecycle
+- [`REFERENCE/versioning-policy.md`](REFERENCE/versioning-policy.md) — semantic versioning, support window, and deprecation rules
 - [`REFERENCE/stability-policy.md`](REFERENCE/stability-policy.md) — stable/experimental/deprecated policy
 
 ---
