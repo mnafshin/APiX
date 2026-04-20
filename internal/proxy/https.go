@@ -173,7 +173,7 @@ func (p *TLSProxy) handleRequest(ctx context.Context, conn net.Conn, br *bufio.R
 
 	// Buffer the entire request body so it can be stored and forwarded.
 	// Limit body size to prevent OOM denial of service.
-	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
+	maxBodyBytes := maxBodyBytes(p.cfg)
 	var bodyBytes []byte
 	if r.Body != nil {
 		var err error
@@ -380,7 +380,7 @@ func (p *TLSProxy) handleHTTP2Request(ctx context.Context, w http.ResponseWriter
 	metrics.IncActive()
 	defer metrics.DecActive()
 
-	maxBodyBytes := int64(p.cfg.MaxBodySizeMB) * 1024 * 1024
+	maxBodyBytes := maxBodyBytes(p.cfg)
 	var bodyBytes []byte
 	if r.Body != nil {
 		var err error
