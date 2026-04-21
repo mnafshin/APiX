@@ -14,7 +14,7 @@ APiX receives security fixes on the following release lines:
 
 Please do **not** open public issues for suspected vulnerabilities.
 
-Report privately by emailing: **security@apix.dev**
+Report privately by emailing (not yet ready): ~~**security@apix.dev**~~
 
 Include:
 - affected version(s)
