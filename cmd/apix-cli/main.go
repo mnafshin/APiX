@@ -185,6 +185,17 @@ func writeString(w io.Writer, s string) {
 	_, _ = io.WriteString(w, s)
 }
 
+// checkHelpFlag returns true if args contain --help or -h, and returns the remaining args
+func checkHelpFlag(args []string) (bool, []string) {
+	for i, arg := range args {
+		if arg == "--help" || arg == "-h" || arg == "help" {
+			remaining := append(args[:i], args[i+1:]...)
+			return true, remaining
+		}
+	}
+	return false, args
+}
+
 func int32FromInt(v int, field string) (int32, error) {
 	if v < -1<<31 || v > 1<<31-1 {
 		return 0, status.Errorf(codes.InvalidArgument, "%s out of range for int32", field)
@@ -641,17 +652,59 @@ func (a *app) cmdPlugins(args []string) error {
 
 func (a *app) cmdHistory(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: history list|get|clear")
+		writeLine(a.out, "Usage: history [--help] <subcommand>")
+		writeLine(a.out, "")
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  list    List captured transactions (default limit 100)")
+		writeLine(a.out, "  get     Get a specific transaction by ID")
+		writeLine(a.out, "  clear   Clear all captured transactions")
+		return nil
 	}
-	switch args[0] {
+
+	helpRequested, remaining := checkHelpFlag(args)
+	if helpRequested && len(remaining) == 0 {
+		writeLine(a.out, "Usage: history [--help] <subcommand>")
+		writeLine(a.out, "")
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  list    List captured transactions (default limit 100)")
+		writeLine(a.out, "  get     Get a specific transaction by ID")
+		writeLine(a.out, "  clear   Clear all captured transactions")
+		return nil
+	}
+
+	switch remaining[0] {
 	case "list":
-		return a.cmdHistoryList(args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: history list [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "Flags:")
+			writeLine(a.out, "  --limit N        Max number of results (default 100)")
+			writeLine(a.out, "  --offset N       Result offset (default 0)")
+			writeLine(a.out, "  --url-filter S   URL substring/regex filter")
+			writeLine(a.out, "  --method M       HTTP method filter")
+			writeLine(a.out, "  --status CODE    HTTP status code filter")
+			writeLine(a.out, "  --since-ms MS    Only include transactions since unix ms")
+			return nil
+		}
+		return a.cmdHistoryList(remaining[1:])
 	case "get":
-		return a.cmdHistoryGet(args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: history get [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "Flags:")
+			writeLine(a.out, "  --request-id ID   Transaction request ID")
+			writeLine(a.out, "  --page-size N     Page size for streaming (default 4096)")
+			return nil
+		}
+		return a.cmdHistoryGet(remaining[1:])
 	case "clear":
-		return a.cmdHistoryClear(args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: history clear")
+			return nil
+		}
+		return a.cmdHistoryClear(remaining[1:])
 	default:
-		return fmt.Errorf("unknown history subcommand: %s", args[0])
+		return fmt.Errorf("unknown history subcommand: %s", remaining[0])
 	}
 }
 
@@ -1245,23 +1298,63 @@ func (a *app) cmdBreakpointToggle(client apix.EngineClient, id string, enabled b
 
 func (a *app) cmdPaused(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: paused watch|forward|drop|respond")
+		writeLine(a.out, "Usage: paused [--help] <subcommand>")
+		writeLine(a.out, "")
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  watch     Watch for paused requests")
+		writeLine(a.out, "  forward   Forward a paused request")
+		writeLine(a.out, "  drop      Drop a paused request")
+		writeLine(a.out, "  respond   Respond to a paused request")
+		return nil
+	}
+	helpRequested, remaining := checkHelpFlag(args)
+	if helpRequested && len(remaining) == 0 {
+		writeLine(a.out, "Usage: paused [--help] <subcommand>")
+		writeLine(a.out, "")
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  watch     Watch for paused requests")
+		writeLine(a.out, "  forward   Forward a paused request")
+		writeLine(a.out, "  drop      Drop a paused request")
+		writeLine(a.out, "  respond   Respond to a paused request")
+		return nil
 	}
 	client, err := a.clientConn()
 	if err != nil {
 		return err
 	}
-	switch args[0] {
+	switch remaining[0] {
 	case "watch":
-		return a.cmdPausedWatch(client, args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: paused watch [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "Watch for requests paused at breakpoints")
+			return nil
+		}
+		return a.cmdPausedWatch(client, remaining[1:])
 	case "forward":
-		return a.cmdPausedForward(client, args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: paused forward <request-id> [flags]")
+			return nil
+		}
+		return a.cmdPausedForward(client, remaining[1:])
 	case "drop":
-		return a.cmdPausedDrop(client, args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: paused drop <request-id>")
+			return nil
+		}
+		return a.cmdPausedDrop(client, remaining[1:])
 	case "respond":
-		return a.cmdPausedRespond(client, args[1:])
+		if helpRequested {
+			writeLine(a.out, "Usage: paused respond <request-id> [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "Flags:")
+			writeLine(a.out, "  --status N         HTTP status code")
+			writeLine(a.out, "  --body FILE        Response body from file")
+			return nil
+		}
+		return a.cmdPausedRespond(client, remaining[1:])
 	default:
-		return fmt.Errorf("unknown paused subcommand: %s", args[0])
+		return fmt.Errorf("unknown paused subcommand: %s", remaining[0])
 	}
 }
 
@@ -1632,7 +1725,14 @@ func (a *app) renderResponse(resp *apix.HttpResponse) error {
 }
 
 func (a *app) cmdCert(args []string) error {
-	if len(args) == 0 || args[0] != "status" {
+	helpRequested, remaining := checkHelpFlag(args)
+	if helpRequested || len(remaining) == 0 {
+		writeLine(a.out, "Usage: cert [--help] status")
+		writeLine(a.out, "")
+		writeLine(a.out, "Show certificate status (CA cert and key ready for proxy)")
+		return nil
+	}
+	if remaining[0] != "status" {
 		return fmt.Errorf("usage: cert status")
 	}
 	info := certInfo(a.cfg)
@@ -1690,11 +1790,21 @@ func (a *app) runConfigCheck(cfgPath string) int {
 }
 
 func (a *app) cmdConfig(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: config show|reload")
+	helpRequested, remaining := checkHelpFlag(args)
+	if helpRequested || len(remaining) == 0 {
+		writeLine(a.out, "Usage: config [--help] <subcommand>")
+		writeLine(a.out, "")
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  show    Show current configuration")
+		writeLine(a.out, "  reload  Reload configuration from disk")
+		return nil
 	}
-	switch args[0] {
+	switch remaining[0] {
 	case "show":
+		if helpRequested {
+			writeLine(a.out, "Usage: config show")
+			return nil
+		}
 		path := a.opts.configPath
 		if path == "" {
 			path = config.DefaultPath()
@@ -1727,11 +1837,17 @@ func (a *app) cmdConfig(args []string) error {
 		writef(a.out, "DB: %s\nCA cert: %s\nCA key: %s\n", a.cfg.DBPath, a.cfg.CACertPath, a.cfg.CAKeyPath)
 		return nil
 	case "reload":
+		if helpRequested {
+			writeLine(a.out, "Usage: config reload [--path FILE]")
+			writeLine(a.out, "")
+			writeLine(a.out, "Reload configuration from disk. Fields that require engine restart are skipped.")
+			return nil
+		}
 		fs := flag.NewFlagSet("config reload", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
 		path := ""
 		fs.StringVar(&path, "path", "", "config file path (defaults to engine startup config path)")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := fs.Parse(remaining[1:]); err != nil {
 			return fmt.Errorf("usage: config reload [--path <file>]")
 		}
 		client, err := a.clientConn()
