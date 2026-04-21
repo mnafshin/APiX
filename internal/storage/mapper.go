@@ -77,15 +77,16 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 			reqID, method, url, reqHeaders string
 			protocol                       string
 			reqBody                        []byte
-			tsMs, durMs                    int64
+			tsMs, durMs, reqBodySize       int64
 			respReqID                      sql.NullString
 			statusCode                     sql.NullInt64
 			statusText, respHeaders        sql.NullString
 			respBody                       []byte
+			respBodySize                   sql.NullInt64
 		)
 		if err := rows.Scan(
-			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs, &protocol,
-			&respReqID, &statusCode, &statusText, &respHeaders, &respBody,
+			&reqID, &method, &url, &reqHeaders, &reqBody, &tsMs, &durMs, &protocol, &reqBodySize,
+			&respReqID, &statusCode, &statusText, &respHeaders, &respBody, &respBodySize,
 		); err != nil {
 			return nil, nil, fmt.Errorf("scan transaction: %w", err)
 		}
@@ -98,6 +99,7 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 			Timestamp:  time.UnixMilli(tsMs),
 			DurationMs: durMs,
 			Protocol:   protocol,
+			BodySize:   reqBodySize,
 		}
 		if err := json.Unmarshal([]byte(reqHeaders), &req.Headers); err != nil {
 			logging.Warnf(logging.WithRequestID(context.Background(), reqID), "failed to unmarshal request headers for request %s: %v", reqID, err)
@@ -116,6 +118,7 @@ func scanTransactionRows(rows *sql.Rows) ([]*RequestRecord, []*ResponseRecord, e
 				StatusCode: int(statusCode.Int64),
 				StatusText: statusText.String,
 				Body:       respBody,
+				BodySize:   respBodySize.Int64,
 			}
 			if respHeaders.Valid {
 				if err := json.Unmarshal([]byte(respHeaders.String), &resp.Headers); err != nil {

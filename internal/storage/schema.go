@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS requests (
     body        BLOB,
     timestamp   INTEGER NOT NULL,           -- Unix milliseconds
     duration_ms INTEGER NOT NULL DEFAULT 0,
-    protocol    TEXT NOT NULL DEFAULT 'HTTP/1.1'  -- negotiated protocol
+    protocol    TEXT NOT NULL DEFAULT 'HTTP/1.1',  -- negotiated protocol
+    body_size   INTEGER NOT NULL DEFAULT 0
 );`
 
 const CreateResponsesTable = `
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS responses (
     status_text TEXT NOT NULL DEFAULT '',
     headers     TEXT NOT NULL DEFAULT '{}', -- JSON object
     body        BLOB,
+    body_size   INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE
 );`
 

@@ -24,6 +24,7 @@ type RequestRecord struct {
 	Timestamp  time.Time
 	DurationMs int64
 	Protocol   string // negotiated protocol: "HTTP/1.1", "HTTP/2.0", "h2c"
+	BodySize   int64
 }
 
 // ResponseRecord is the Go representation of a row in the responses table.
@@ -33,6 +34,7 @@ type ResponseRecord struct {
 	StatusText string
 	Headers    map[string]string
 	Body       []byte
+	BodySize   int64
 }
 
 // BreakpointRecord is the Go representation of a row in the breakpoints table.
@@ -197,8 +199,8 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 
 	query := fmt.Sprintf(`
 		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp, r.duration_ms,
-		       COALESCE(r.protocol,'HTTP/1.1'),
-		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body
+		       COALESCE(r.protocol,'HTTP/1.1'), COALESCE(r.body_size,0),
+		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body, COALESCE(resp.body_size,0)
 		FROM requests r
 		LEFT JOIN responses resp ON r.id = resp.request_id
 		%s
@@ -214,8 +216,8 @@ func (d *DB) ListTransactions(limit, offset int, urlFilter, methodFilter string,
 func (d *DB) ExportTransactions(transactionIDs []string) ([]*RequestRecord, []*ResponseRecord, error) {
 	query := `
 		SELECT r.id, r.method, r.url, r.headers, r.body, r.timestamp, r.duration_ms,
-		       COALESCE(r.protocol,'HTTP/1.1'),
-		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body
+		       COALESCE(r.protocol,'HTTP/1.1'), COALESCE(r.body_size,0),
+		       resp.request_id, resp.status_code, resp.status_text, resp.headers, resp.body, COALESCE(resp.body_size,0)
 		FROM requests r
 		LEFT JOIN responses resp ON r.id = resp.request_id`
 	args := make([]interface{}, 0, len(transactionIDs))
