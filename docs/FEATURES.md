@@ -153,6 +153,7 @@ map_local_rules:
 ```bash
 ./apix-cli templates save --id <req-id> --name "get-user"
 ./apix-cli templates list
+./apix-cli templates execute <id-or-name>
 ./apix-cli templates delete <name>
 ```
 

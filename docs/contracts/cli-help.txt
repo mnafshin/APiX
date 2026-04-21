@@ -10,7 +10,7 @@ Commands:
   breakpoints list|add|delete|enable|disable
   paused watch|forward|drop|respond
   send
-  templates save|list|delete
+  templates save|list|delete|execute
   replay
   cert status
   config show|reload
