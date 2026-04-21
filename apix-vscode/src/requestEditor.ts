@@ -307,6 +307,20 @@ export class RequestEditor {
     validateJsonField('headers', 'headers-error');
     validateJsonField('resp-headers', 'resp-headers-error');
     updateForwardButtonState();
+
+    document.addEventListener('keydown', (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return;
+      }
+
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        forward();
+      } else if (event.key === 'Backspace' && !event.shiftKey) {
+        event.preventDefault();
+        drop();
+      }
+    });
   </script>
 </body>
 </html>`;

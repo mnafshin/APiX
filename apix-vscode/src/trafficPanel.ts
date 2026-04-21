@@ -185,6 +185,9 @@ export class TrafficPanel {
                     vscode.commands.executeCommand('apix.copyAsCurl', message.data.transaction);
                 }
                 break;
+            case 'clearHistory':
+                vscode.commands.executeCommand('apix.clearHistory');
+                break;
             case 'copyRequestId':
                 if (message.data?.requestId) {
                     vscode.commands.executeCommand('apix.copyRequestId', message.data.requestId);
@@ -268,7 +271,11 @@ export class TrafficPanel {
     .status-3xx { color: var(--vscode-charts-blue); }
     .status-4xx { color: var(--vscode-charts-orange); }
     .status-5xx { color: var(--vscode-charts-red); }
+    .panel-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+    .panel-toolbar button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-family: inherit; font-size: 13px; }
+    .panel-toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground)); }
     .filter-bar { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .filter-bar.hidden { display: none; }
     .filter-row { display: flex; gap: 6px; align-items: center; }
     .filter-row input, .filter-row select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 4px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
     .filter-row input:focus, .filter-row select:focus { outline: 1px solid var(--vscode-focusBorder); }
@@ -298,6 +305,9 @@ export class TrafficPanel {
   </style>
 </head>
 <body>
+  <div class="panel-toolbar">
+    <button id="toggle-filters-btn" onclick="toggleFilterBar()" title="Toggle filter bar (Ctrl+F)">Hide Filters</button>
+  </div>
   <div id="stream-error"></div>
   <div class="filter-bar">
     <div class="filter-row">
@@ -356,6 +366,7 @@ export class TrafficPanel {
     let currentFramesRequestId = '';
     let sortKey = null;
     let sortAsc = true;
+    let filtersVisible = true;
 
     window.addEventListener('message', function(event) {
       const msg = event.data;
@@ -380,6 +391,8 @@ export class TrafficPanel {
         restoreFilters(msg.data || {});
       } else if (msg.type === 'filtersCleared') {
         clearAllFilters();
+      } else if (msg.type === 'historyCleared') {
+        clearAll();
       }
     });
 
@@ -657,10 +670,37 @@ export class TrafficPanel {
       }
     }
 
+    function setFilterBarVisible(visible) {
+      filtersVisible = visible;
+      const filterBar = document.querySelector('.filter-bar');
+      const toggleBtn = document.getElementById('toggle-filters-btn');
+      if (filterBar) {
+        filterBar.classList.toggle('hidden', !visible);
+      }
+      if (toggleBtn) {
+        toggleBtn.textContent = visible ? 'Hide Filters' : 'Show Filters';
+      }
+      if (visible) {
+        const firstFilter = document.getElementById('filter');
+        if (firstFilter) {
+          firstFilter.focus();
+        }
+      }
+    }
+
+    function toggleFilterBar() {
+      setFilterBarVisible(!filtersVisible);
+    }
+
+    function clearHistory() {
+      vscode.postMessage({ type: 'clearHistory', data: {} });
+    }
+
     function clearAll() {
       document.getElementById('traffic').innerHTML = '';
       transactions = [];
       count = 0;
+      currentFramesRequestId = '';
       document.getElementById('empty').style.display = 'block';
       closeDetail();
     }
@@ -880,6 +920,27 @@ export class TrafficPanel {
         sortTransactions(key);
       });
     });
+
+    document.addEventListener('keydown', function(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return;
+      }
+
+      const key = String(event.key || '').toLowerCase();
+      if (key === 'f' && !event.shiftKey) {
+        event.preventDefault();
+        toggleFilterBar();
+      } else if (key === 'r' && event.shiftKey) {
+        event.preventDefault();
+        replayRequest();
+      } else if (key === 'c' && event.shiftKey) {
+        event.preventDefault();
+        copyAsCurl();
+      } else if (key === 'k' && event.shiftKey) {
+        event.preventDefault();
+        clearHistory();
+      }
+    });
   </script>
 </body>
 </html>`;
@@ -898,5 +959,9 @@ export class TrafficPanel {
             const d = this._disposables.pop();
             if (d) { d.dispose(); }
         }
+    }
+
+    public clearDisplayedHistory(): void {
+        this._panel.webview.postMessage({ type: 'historyCleared' });
     }
 }
