@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/mnafshin/apix/internal/config"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
@@ -45,6 +46,11 @@ type app struct {
 	cfg    *config.Config
 	conn   *grpc.ClientConn
 	client apix.EngineClient
+	// Color functions (may be no-op if colors are disabled)
+	errorColor   func(string, ...interface{}) string
+	warnColor    func(string, ...interface{}) string
+	successColor func(string, ...interface{}) string
+	infoColor    func(string, ...interface{}) string
 }
 
 type historyListOptions struct {
@@ -257,6 +263,28 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		errw: errw,
 		cfg:  config.LoadConfig(cfgPath),
 	}
+
+	// Initialize color functions based on noColor flag
+	if opts.noColor {
+		app.errorColor = func(format string, args ...interface{}) string {
+			return fmt.Sprintf(format, args...)
+		}
+		app.warnColor = func(format string, args ...interface{}) string {
+			return fmt.Sprintf(format, args...)
+		}
+		app.successColor = func(format string, args ...interface{}) string {
+			return fmt.Sprintf(format, args...)
+		}
+		app.infoColor = func(format string, args ...interface{}) string {
+			return fmt.Sprintf(format, args...)
+		}
+	} else {
+		app.errorColor = color.RedString
+		app.warnColor = color.YellowString
+		app.successColor = color.GreenString
+		app.infoColor = color.BlueString
+	}
+
 	defer app.close()
 
 	// --config-check: validate config then exit without starting anything.
@@ -324,7 +352,12 @@ func (a *app) wrapErr(err error) int {
 	if st, ok := status.FromError(err); ok && st.Code() == codes.Unavailable {
 		displayErr = fmt.Errorf("APiX engine is not running.\n  Start it with: apix-engine\n  Or check: apix-cli status")
 	}
-	writeLine(a.errw, displayErr)
+	if a.opts.output == "text" {
+		errMsg := a.errorColor("error: %v", displayErr)
+		writeLine(a.errw, errMsg)
+	} else {
+		writeLine(a.errw, displayErr)
+	}
 	return exitCode
 }
 
@@ -535,8 +568,12 @@ func (a *app) cmdStatus() error {
 			"tls_enabled": resp.TlsEnabled,
 		})
 	}
+	statusLabel := resp.Status
+	if resp.Status == "running" && a.opts.output == "text" {
+		statusLabel = a.successColor(resp.Status)
+	}
 	writef(a.out, "APiX engine: %s\tversion=%s\tproxy=%d\tgrpc=%d\ttls=%t\n",
-		resp.Status, resp.Version, resp.ProxyPort, resp.GrpcPort, resp.TlsEnabled)
+		statusLabel, resp.Version, resp.ProxyPort, resp.GrpcPort, resp.TlsEnabled)
 	return nil
 }
 
@@ -2060,10 +2097,22 @@ func (a *app) cmdDoctor() error {
 	}
 
 	writef(a.out, "Config: %s\n", configPath)
-	writef(a.out, "Config validation: %s\n", configValidation)
-	writef(a.out, "Cert ready: %v\n", cert["ready"])
+	configMsg := configValidation
+	if configValidation != "ok" && a.opts.output == "text" {
+		configMsg = a.errorColor(configValidation)
+	}
+	writef(a.out, "Config validation: %s\n", configMsg)
+
+	certReady := cert["ready"]
+	certMsg := fmt.Sprintf("%v", certReady)
+	if ok, _ := certReady.(bool); !ok && a.opts.output == "text" {
+		certMsg = a.warnColor(certMsg)
+	}
+	writef(a.out, "Cert ready: %s\n", certMsg)
+
 	if reachable, _ := engine["reachable"].(bool); reachable {
-		writef(a.out, "Engine: reachable (%s)\n", engine["version"])
+		status := a.successColor("reachable")
+		writef(a.out, "Engine: %s (%s)\n", status, engine["version"])
 	} else {
 		writef(a.out, "Engine: unreachable (%v)\n", engine["error"])
 	}
