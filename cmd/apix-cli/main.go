@@ -637,7 +637,7 @@ func (a *app) cmdStatus() error {
 	}
 	statusLabel := resp.Status
 	if resp.Status == "running" && a.opts.output == "text" {
-		statusLabel = a.successColor(resp.Status)
+		statusLabel = a.successColor("%s", resp.Status)
 	}
 	writef(a.out, "APiX engine: %s\tversion=%s\tproxy=%d\tgrpc=%d\ttls=%t\n",
 		statusLabel, resp.Version, resp.ProxyPort, resp.GrpcPort, resp.TlsEnabled)
@@ -2271,14 +2271,14 @@ func (a *app) cmdDoctor() error {
 	writef(a.out, "Config: %s\n", configPath)
 	configMsg := configValidation
 	if configValidation != "ok" && a.opts.output == "text" {
-		configMsg = a.errorColor(configValidation)
+		configMsg = a.errorColor("%s", configValidation)
 	}
 	writef(a.out, "Config validation: %s\n", configMsg)
 
 	certReady := cert["ready"]
 	certMsg := fmt.Sprintf("%v", certReady)
 	if ok, _ := certReady.(bool); !ok && a.opts.output == "text" {
-		certMsg = a.warnColor(certMsg)
+		certMsg = a.warnColor("%s", certMsg)
 	}
 	writef(a.out, "Cert ready: %s\n", certMsg)
 
