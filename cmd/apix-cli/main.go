@@ -47,10 +47,10 @@ type app struct {
 	conn   *grpc.ClientConn
 	client apix.EngineClient
 	// Color functions (may be no-op if colors are disabled)
-	errorColor  func(string, ...interface{}) string
-	warnColor   func(string, ...interface{}) string
+	errorColor   func(string, ...interface{}) string
+	warnColor    func(string, ...interface{}) string
 	successColor func(string, ...interface{}) string
-	infoColor   func(string, ...interface{}) string
+	infoColor    func(string, ...interface{}) string
 }
 
 type historyListOptions struct {
@@ -263,7 +263,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		errw: errw,
 		cfg:  config.LoadConfig(cfgPath),
 	}
-	
+
 	// Initialize color functions based on noColor flag
 	if opts.noColor {
 		app.errorColor = func(format string, args ...interface{}) string {
@@ -284,7 +284,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		app.successColor = color.GreenString
 		app.infoColor = color.BlueString
 	}
-	
+
 	defer app.close()
 
 	// --config-check: validate config then exit without starting anything.
@@ -2102,14 +2102,14 @@ func (a *app) cmdDoctor() error {
 		configMsg = a.errorColor(configValidation)
 	}
 	writef(a.out, "Config validation: %s\n", configMsg)
-	
+
 	certReady := cert["ready"]
 	certMsg := fmt.Sprintf("%v", certReady)
 	if ok, _ := certReady.(bool); !ok && a.opts.output == "text" {
 		certMsg = a.warnColor(certMsg)
 	}
 	writef(a.out, "Cert ready: %s\n", certMsg)
-	
+
 	if reachable, _ := engine["reachable"].(bool); reachable {
 		status := a.successColor("reachable")
 		writef(a.out, "Engine: %s (%s)\n", status, engine["version"])
