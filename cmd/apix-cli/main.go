@@ -44,6 +44,7 @@ type app struct {
 	opts   rootOptions
 	out    io.Writer
 	errw   io.Writer
+	stdin  io.Reader
 	cfg    *config.Config
 	conn   *grpc.ClientConn
 	client apix.EngineClient
@@ -87,17 +88,29 @@ type exportOptions struct {
 	limit  int
 }
 
+type bodyFlag struct {
+	value string
+	set   bool
+}
+
+func (b *bodyFlag) String() string { return b.value }
+func (b *bodyFlag) Set(v string) error {
+	b.value = v
+	b.set = true
+	return nil
+}
+
 type sendOptions struct {
 	method          string
 	url             string
 	headers         headerFlags
-	body            string
+	body            bodyFlag
 	followRedirects bool
 }
 
 type replayOptions struct {
 	headers         headerFlags
-	body            string
+	body            bodyFlag
 	followRedirects bool
 }
 
@@ -186,6 +199,29 @@ func writeString(w io.Writer, s string) {
 	_, _ = io.WriteString(w, s)
 }
 
+func stdinIsTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+func readBodyFromStdin(r io.Reader) (string, error) {
+	if r == nil {
+		return "", nil
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // checkHelpFlag returns true if args contain --help or -h, and returns the remaining args
 func checkHelpFlag(args []string) (bool, []string) {
 	for i, arg := range args {
@@ -245,6 +281,10 @@ func getEnvBool(envVar string, defaultVal bool) bool {
 }
 
 func Run(args []string, out io.Writer, errw io.Writer) int {
+	return runWithStdin(args, out, errw, os.Stdin)
+}
+
+func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader) int {
 	// Read environment variables for defaults (will be overridden by CLI flags)
 	envHost := os.Getenv("APIX_HOST")
 	if envHost == "" {
@@ -328,6 +368,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		opts: opts,
 		out:  out,
 		errw: errw,
+		stdin: stdin,
 		cfg:  config.LoadConfig(cfgPath),
 	}
 
@@ -1578,7 +1619,7 @@ func (a *app) cmdSend(args []string) error {
 	fs.StringVar(&opts.method, "method", "GET", "HTTP method")
 	fs.StringVar(&opts.url, "url", "", "request URL")
 	fs.Var(&opts.headers, "header", "repeatable header key:value")
-	fs.StringVar(&opts.body, "body", "", "request body")
+	fs.Var(&opts.body, "body", "request body")
 	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1589,6 +1630,17 @@ func (a *app) cmdSend(args []string) error {
 	headers, err := opts.headers.Map()
 	if err != nil {
 		return err
+	}
+	body := opts.body.value
+	if !opts.body.set {
+		if stdinIsTerminal(a.stdin) {
+			body = ""
+		} else {
+			body, err = readBodyFromStdin(a.stdin)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	client, err := a.clientConn()
 	if err != nil {
@@ -1601,7 +1653,7 @@ func (a *app) cmdSend(args []string) error {
 			Method:  opts.method,
 			Url:     opts.url,
 			Headers: headers,
-			Body:    []byte(opts.body),
+			Body:    []byte(body),
 		},
 		FollowRedirects: opts.followRedirects,
 	})
@@ -1724,7 +1776,7 @@ func (a *app) cmdReplay(args []string) error {
 	fs.SetOutput(a.errw)
 	opts := replayOptions{}
 	fs.Var(&opts.headers, "header", "repeatable override header key:value")
-	fs.StringVar(&opts.body, "body", "", "override body")
+	fs.Var(&opts.body, "body", "override body")
 	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1737,6 +1789,17 @@ func (a *app) cmdReplay(args []string) error {
 	if err != nil {
 		return err
 	}
+	body := opts.body.value
+	if !opts.body.set {
+		if stdinIsTerminal(a.stdin) {
+			body = ""
+		} else {
+			body, err = readBodyFromStdin(a.stdin)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	client, err := a.clientConn()
 	if err != nil {
 		return err
@@ -1746,7 +1809,7 @@ func (a *app) cmdReplay(args []string) error {
 	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
 		Source:          &apix.ReplaySpec_RequestId{RequestId: id},
 		OverrideHeaders: headers,
-		OverrideBody:    []byte(opts.body),
+		OverrideBody:    []byte(body),
 		FollowRedirects: opts.followRedirects,
 	})
 	if err != nil {

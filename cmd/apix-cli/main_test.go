@@ -142,8 +142,13 @@ func reqBodyBytes(body string) []byte {
 
 func runCLI(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	return runCLIWithInput(t, "", args...)
+}
+
+func runCLIWithInput(t *testing.T, stdin string, args ...string) (int, string, string) {
+	t.Helper()
 	var out, errb bytes.Buffer
-	exit := Run(args, &out, &errb)
+	exit := runWithStdin(args, &out, &errb, bytes.NewBufferString(stdin))
 	return exit, out.String(), errb.String()
 }
 
@@ -399,6 +404,71 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("paused request not resumed")
+	}
+}
+
+func TestCLISendAndReplayReadBodyFromStdin(t *testing.T) {
+	stack := newCLITestStack(t, "")
+
+	sendBodies := make(chan string, 1)
+	sendErrs := make(chan error, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			sendErrs <- err
+			return
+		}
+		_ = r.Body.Close()
+		sendBodies <- string(body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	exit, _, errOut := runCLIWithInput(t, "stdin-send-body", stack.args("--output", "json", "send", "--method", "POST", "--url", upstream.URL+"/send")...)
+	if exit != 0 {
+		t.Fatalf("send exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case body := <-sendBodies:
+		if body != "stdin-send-body" {
+			t.Fatalf("send body=%q", body)
+		}
+	case err := <-sendErrs:
+		t.Fatalf("send handler: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for send body")
+	}
+
+	replayBodies := make(chan string, 1)
+	replayErrs := make(chan error, 1)
+	upstreamReplay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			replayErrs <- err
+			return
+		}
+		_ = r.Body.Close()
+		replayBodies <- string(body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstreamReplay.Close()
+
+	stack.storeTransaction(t, "req-replay-stdin", "POST", upstreamReplay.URL+"/replay", "original-body", "", 200)
+	exit, _, errOut = runCLIWithInput(t, "stdin-replay-body", stack.args("--output", "json", "replay", "req-replay-stdin")...)
+	if exit != 0 {
+		t.Fatalf("replay exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case body := <-replayBodies:
+		if body != "stdin-replay-body" {
+			t.Fatalf("replay body=%q", body)
+		}
+	case err := <-replayErrs:
+		t.Fatalf("replay handler: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replay body")
 	}
 }
 
