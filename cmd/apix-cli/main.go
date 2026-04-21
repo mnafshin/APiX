@@ -187,6 +187,45 @@ func (s *stringSliceFlags) Set(v string) error {
 	return nil
 }
 
+func splitPausedArgs(args []string, valueFlags map[string]struct{}) (string, []string, error) {
+	var requestID string
+	filtered := make([]string, 0, len(args))
+	expectValueFor := ""
+
+	for _, arg := range args {
+		if expectValueFor != "" {
+			filtered = append(filtered, arg)
+			expectValueFor = ""
+			continue
+		}
+
+		if strings.HasPrefix(arg, "-") {
+			filtered = append(filtered, arg)
+			flagName := strings.TrimLeft(arg, "-")
+			if idx := strings.Index(flagName, "="); idx >= 0 {
+				flagName = flagName[:idx]
+			}
+			if _, ok := valueFlags[flagName]; ok && !strings.Contains(arg, "=") {
+				expectValueFor = flagName
+			}
+			continue
+		}
+
+		if requestID == "" {
+			requestID = arg
+			continue
+		}
+
+		return "", nil, fmt.Errorf("too many arguments: %s", arg)
+	}
+
+	if expectValueFor != "" {
+		return "", nil, fmt.Errorf("flag --%s requires a value", expectValueFor)
+	}
+
+	return requestID, filtered, nil
+}
+
 func writeLine(w io.Writer, args ...any) {
 	_, _ = fmt.Fprintln(w, args...)
 }
@@ -1431,18 +1470,24 @@ func (a *app) cmdPaused(args []string) error {
 	case "forward":
 		if helpRequested {
 			writeLine(a.out, "Usage: paused forward <request-id> [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "  --request-id ID   Deprecated alias for <request-id>")
 			return nil
 		}
 		return a.cmdPausedForward(client, remaining[1:])
 	case "drop":
 		if helpRequested {
 			writeLine(a.out, "Usage: paused drop <request-id>")
+			writeLine(a.out, "")
+			writeLine(a.out, "  --request-id ID   Deprecated alias for <request-id>")
 			return nil
 		}
 		return a.cmdPausedDrop(client, remaining[1:])
 	case "respond":
 		if helpRequested {
 			writeLine(a.out, "Usage: paused respond <request-id> [flags]")
+			writeLine(a.out, "")
+			writeLine(a.out, "  --request-id ID   Deprecated alias for <request-id>")
 			writeLine(a.out, "")
 			writeLine(a.out, "Flags:")
 			writeLine(a.out, "  --status N         HTTP status code")
@@ -1511,23 +1556,36 @@ func (a *app) cmdPausedForward(client apix.EngineClient, args []string) error {
 	fs := flag.NewFlagSet("paused forward", flag.ContinueOnError)
 	fs.SetOutput(a.errw)
 	opts := pausedForwardOptions{}
-	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
+	fs.StringVar(&opts.requestID, "request-id", "", "deprecated alias for the positional request ID")
 	fs.StringVar(&opts.method, "method", "", "override method")
 	fs.StringVar(&opts.url, "url", "", "override URL")
 	fs.Var(&opts.headers, "header", "repeatable header override key:value")
 	fs.StringVar(&opts.body, "body", "", "override body")
-	if err := fs.Parse(args); err != nil {
+	requestID, flagArgs, err := splitPausedArgs(args, map[string]struct{}{
+		"request-id": {},
+		"method":      {},
+		"url":         {},
+		"header":      {},
+		"body":        {},
+	})
+	if err != nil {
 		return err
 	}
-	if opts.requestID == "" {
-		return fmt.Errorf("paused forward requires --request-id")
+	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+	if requestID == "" {
+		requestID = opts.requestID
+	}
+	if requestID == "" {
+		return fmt.Errorf("paused forward requires <request-id>")
 	}
 	headers, err := opts.headers.Map()
 	if err != nil {
 		return err
 	}
 	req := &apix.ResumeAction{
-		RequestId: opts.requestID,
+		RequestId: requestID,
 		Action:    apix.ResumeAction_FORWARD,
 	}
 	if opts.method != "" || opts.url != "" || len(headers) > 0 || opts.body != "" {
@@ -1543,41 +1601,63 @@ func (a *app) cmdPausedForward(client apix.EngineClient, args []string) error {
 	if _, err := client.ResumeRequest(ctx, req); err != nil {
 		return err
 	}
-	return a.simpleResult("forwarded", opts.requestID)
+	return a.simpleResult("forwarded", requestID)
 }
 
 func (a *app) cmdPausedDrop(client apix.EngineClient, args []string) error {
 	fs := flag.NewFlagSet("paused drop", flag.ContinueOnError)
 	fs.SetOutput(a.errw)
-	requestID := fs.String("request-id", "", "paused request id")
-	if err := fs.Parse(args); err != nil {
+	requestIDFlag := fs.String("request-id", "", "deprecated alias for the positional request ID")
+	requestID, flagArgs, err := splitPausedArgs(args, map[string]struct{}{
+		"request-id": {},
+	})
+	if err != nil {
 		return err
 	}
-	if *requestID == "" {
-		return fmt.Errorf("paused drop requires --request-id")
+	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+	if requestID == "" {
+		requestID = *requestIDFlag
+	}
+	if requestID == "" {
+		return fmt.Errorf("paused drop requires <request-id>")
 	}
 	ctx, cancel := a.unaryContext()
 	defer cancel()
-	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{RequestId: *requestID, Action: apix.ResumeAction_DROP}); err != nil {
+	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{RequestId: requestID, Action: apix.ResumeAction_DROP}); err != nil {
 		return err
 	}
-	return a.simpleResult("dropped", *requestID)
+	return a.simpleResult("dropped", requestID)
 }
 
 func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
 	fs := flag.NewFlagSet("paused respond", flag.ContinueOnError)
 	fs.SetOutput(a.errw)
 	opts := pausedRespondOptions{statusCode: 200, statusText: "OK"}
-	fs.StringVar(&opts.requestID, "request-id", "", "paused request id")
+	fs.StringVar(&opts.requestID, "request-id", "", "deprecated alias for the positional request ID")
 	fs.IntVar(&opts.statusCode, "status-code", 200, "response status code")
 	fs.StringVar(&opts.statusText, "status-text", "OK", "response status text")
 	fs.Var(&opts.headers, "header", "repeatable header key:value")
 	fs.StringVar(&opts.body, "body", "", "response body")
-	if err := fs.Parse(args); err != nil {
+	requestID, flagArgs, err := splitPausedArgs(args, map[string]struct{}{
+		"request-id":  {},
+		"status-code": {},
+		"status-text": {},
+		"header":      {},
+		"body":        {},
+	})
+	if err != nil {
 		return err
 	}
-	if opts.requestID == "" {
-		return fmt.Errorf("paused respond requires --request-id")
+	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+	if requestID == "" {
+		requestID = opts.requestID
+	}
+	if requestID == "" {
+		return fmt.Errorf("paused respond requires <request-id>")
 	}
 	headers, err := opts.headers.Map()
 	if err != nil {
@@ -1590,7 +1670,7 @@ func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
 		return err
 	}
 	if _, err := client.ResumeRequest(ctx, &apix.ResumeAction{
-		RequestId: opts.requestID,
+		RequestId: requestID,
 		Action:    apix.ResumeAction_RESPOND,
 		ModifiedResponse: &apix.HttpResponse{
 			StatusCode: statusCode,
@@ -1601,7 +1681,7 @@ func (a *app) cmdPausedRespond(client apix.EngineClient, args []string) error {
 	}); err != nil {
 		return err
 	}
-	return a.simpleResult("responded", opts.requestID)
+	return a.simpleResult("responded", requestID)
 }
 
 func (a *app) simpleResult(action, id string) error {

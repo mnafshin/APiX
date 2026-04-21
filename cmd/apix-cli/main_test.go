@@ -417,7 +417,7 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 		close(done)
 	}()
 	time.Sleep(50 * time.Millisecond)
-	exit, _, errOut = runCLI(t, stack.args("paused", "drop", "--request-id", "paused-1")...)
+	exit, _, errOut = runCLI(t, stack.args("paused", "drop", "paused-1")...)
 	if exit != 0 {
 		t.Fatalf("paused drop exit=%d err=%s", exit, errOut)
 	}
@@ -490,6 +490,70 @@ func TestCLISendAndReplayReadBodyFromStdin(t *testing.T) {
 		t.Fatalf("replay handler: %v", err)
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for replay body")
+	}
+}
+
+func TestCLIPausedCommandsUsePositionalRequestIDs(t *testing.T) {
+	stack := newCLITestStack(t, "")
+
+	pauseAndResume := func(id, method, rawURL string) chan struct{} {
+		done := make(chan struct{})
+		go func() {
+			entry := breakpoints.NewPausedEntry(id, "bp-1", mustRequest(t, method, rawURL))
+			_, _ = stack.bpm.Pause(context.Background(), entry)
+			close(done)
+		}()
+		time.Sleep(50 * time.Millisecond)
+		return done
+	}
+
+	forwardDone := pauseAndResume("paused-forward", "POST", "https://example.com/forward")
+	exit, _, errOut := runCLI(t, stack.args("paused", "forward", "paused-forward", "--method", "PATCH", "--url", "https://example.com/forwarded")...)
+	if exit != 0 {
+		t.Fatalf("paused forward exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case <-forwardDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused forward request not resumed")
+	}
+
+	respondDone := pauseAndResume("paused-respond", "GET", "https://example.com/respond")
+	exit, _, errOut = runCLI(t, stack.args("paused", "respond", "paused-respond", "--status-code", "418", "--status-text", "I'm a teapot")...)
+	if exit != 0 {
+		t.Fatalf("paused respond exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case <-respondDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused respond request not resumed")
+	}
+
+	aliasDone := pauseAndResume("paused-alias", "GET", "https://example.com/alias")
+	exit, _, errOut = runCLI(t, stack.args("paused", "drop", "--request-id", "paused-alias")...)
+	if exit != 0 {
+		t.Fatalf("paused drop alias exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case <-aliasDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("paused alias request not resumed")
+	}
+}
+
+func TestCLIPausedForwardHelpMentionsPositionalRequestID(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+
+	exit, out, errOut := runCLI(t, stack.args("paused", "forward", "--help")...)
+	if exit != 0 {
+		t.Fatalf("paused forward help exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, "Usage: paused forward <request-id> [flags]") {
+		t.Fatalf("missing positional usage text: %s", out)
+	}
+	if !strings.Contains(out, "--request-id ID   Deprecated alias for <request-id>") {
+		t.Fatalf("missing deprecated alias text: %s", out)
 	}
 }
 
