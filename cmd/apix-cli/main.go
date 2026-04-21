@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -210,25 +211,80 @@ func capitalizeASCII(s string) string {
 	return strings.ToUpper(s[:1]) + s[1:]
 }
 
+// getEnvInt retrieves an integer environment variable, returning the default if not set or invalid.
+func getEnvInt(envVar string, defaultVal int) int {
+	if val, ok := os.LookupEnv(envVar); ok {
+		if n, err := strconv.Atoi(val); err == nil && n >= 0 && n <= 65535 {
+			return n
+		}
+	}
+	return defaultVal
+}
+
+// getEnvDuration retrieves a duration environment variable, returning the default if not set or invalid.
+func getEnvDuration(envVar string, defaultVal time.Duration) time.Duration {
+	if val, ok := os.LookupEnv(envVar); ok {
+		if dur, err := time.ParseDuration(val); err == nil {
+			return dur
+		}
+	}
+	return defaultVal
+}
+
+// getEnvBool retrieves a boolean environment variable, returning the default if not set or invalid.
+func getEnvBool(envVar string, defaultVal bool) bool {
+	if val, ok := os.LookupEnv(envVar); ok {
+		switch strings.ToLower(val) {
+		case "true", "1", "yes":
+			return true
+		case "false", "0", "no":
+			return false
+		}
+	}
+	return defaultVal
+}
+
 func Run(args []string, out io.Writer, errw io.Writer) int {
+	// Read environment variables for defaults (will be overridden by CLI flags)
+	envHost := os.Getenv("APIX_HOST")
+	if envHost == "" {
+		envHost = "localhost"
+	}
+	envPort := getEnvInt("APIX_PORT", 9090)
+	envTLS := getEnvBool("APIX_TLS", false)
+	envToken := os.Getenv("APIX_TOKEN")
+	envOutput := os.Getenv("APIX_OUTPUT")
+	if envOutput == "" {
+		envOutput = "text"
+	}
+	envTimeout := getEnvDuration("APIX_TIMEOUT", 0)
+
 	fs := flag.NewFlagSet("apix", flag.ContinueOnError)
 	fs.SetOutput(errw)
 
 	var opts rootOptions
-	fs.StringVar(&opts.host, "host", "localhost", "engine host")
-	fs.IntVar(&opts.port, "port", 9090, "engine gRPC port")
-	fs.BoolVar(&opts.tls, "tls", false, "use TLS for gRPC connection")
-	fs.StringVar(&opts.token, "token", "", "auth token")
+	fs.StringVar(&opts.host, "host", envHost, "engine host (env: APIX_HOST)")
+	fs.IntVar(&opts.port, "port", envPort, "engine gRPC port (env: APIX_PORT)")
+	fs.BoolVar(&opts.tls, "tls", envTLS, "use TLS for gRPC connection (env: APIX_TLS)")
+	fs.StringVar(&opts.token, "token", envToken, "auth token (env: APIX_TOKEN)")
 	fs.BoolVar(&opts.verbose, "verbose", false, "enable diagnostic logs")
 	fs.BoolVar(&opts.verbose, "v", false, "shorthand for --verbose")
 	fs.BoolVar(&opts.debug, "debug", false, "enable detailed diagnostic logs")
-	fs.StringVar(&opts.output, "output", "text", "output format: text|json|ndjson")
+	fs.StringVar(&opts.output, "output", envOutput, "output format: text|json|ndjson (env: APIX_OUTPUT)")
 	fs.BoolVar(&opts.noColor, "no-color", false, "disable color output")
-	fs.DurationVar(&opts.timeout, "timeout", 0, "per-command timeout (0 = sensible default)")
+	fs.DurationVar(&opts.timeout, "timeout", envTimeout, "per-command timeout (0 = sensible default) (env: APIX_TIMEOUT)")
 	fs.StringVar(&opts.configPath, "config", "", "path to config file (default: APiX search path)")
 	fs.BoolVar(&opts.configCheck, "config-check", false, "validate config and exit (0=ok, 1=invalid)")
 	fs.Usage = func() {
 		writeLine(errw, "Usage: apix [global flags] <command> [args]")
+		writeLine(errw)
+		writeLine(errw, "Environment Variables:")
+		writeLine(errw, "  APIX_HOST        Engine host (default: localhost)")
+		writeLine(errw, "  APIX_PORT        Engine gRPC port (default: 9090)")
+		writeLine(errw, "  APIX_TLS         Use TLS for connection (default: false)")
+		writeLine(errw, "  APIX_TOKEN       Authentication token")
+		writeLine(errw, "  APIX_OUTPUT      Output format: text|json|ndjson (default: text)")
+		writeLine(errw, "  APIX_TIMEOUT     Per-command timeout (default: 0)")
 		writeLine(errw)
 		writeLine(errw, "Commands:")
 		writeLine(errw, "  status")
