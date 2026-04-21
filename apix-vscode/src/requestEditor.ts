@@ -134,6 +134,9 @@ export class RequestEditor {
     label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 2px; margin-top: 12px; }
     input, select, textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 5px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
     input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); }
+    textarea.json-invalid { border-color: var(--vscode-inputValidation-errorBorder, #f48771) !important; background: var(--vscode-inputValidation-errorBackground, #5a1d1d); }
+    .json-error-msg { font-size: 11px; color: var(--vscode-inputValidation-errorForeground, #f48771); margin-top: 3px; display: none; }
+    .json-error-msg.visible { display: block; }
     .row { display: flex; gap: 8px; }
     .row select { width: 120px; flex-shrink: 0; }
     .row input { flex: 1; }
@@ -141,6 +144,7 @@ export class RequestEditor {
     .actions { display: flex; gap: 8px; margin-top: 20px; }
     .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 16px; border-radius: 3px; cursor: pointer; font-size: 13px; }
     .btn:hover { background: var(--vscode-button-hoverBackground); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-danger { background: var(--vscode-inputValidation-errorBackground, #5a1d1d); }
     .btn-secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .hidden { display: none; }
@@ -160,6 +164,7 @@ export class RequestEditor {
   </div>
   <label>Headers (JSON)</label>
   <textarea id="headers" rows="6">${escAttr(headersJson)}</textarea>
+  <div class="json-error-msg" id="headers-error"></div>
   <label>Request Body</label>
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
 
@@ -171,12 +176,13 @@ export class RequestEditor {
     <input type="text" id="resp-status-text" value="OK" />
     <label>Response Headers (JSON)</label>
     <textarea id="resp-headers" rows="4">{}</textarea>
+    <div class="json-error-msg" id="resp-headers-error"></div>
     <label>Response Body</label>
     <textarea id="resp-body" rows="6"></textarea>
   </div>
 
   <div class="actions">
-    <button class="btn" onclick="forward()">▶ Forward</button>
+    <button class="btn" id="forward-btn" onclick="forward()">▶ Forward</button>
     <button class="btn btn-danger" onclick="drop()">✕ Drop</button>
     <button class="btn btn-secondary" onclick="toggleRespond()">↩ Respond with...</button>
     <button class="btn hidden" id="send-respond" onclick="sendRespond()">Send Response</button>
@@ -192,12 +198,75 @@ export class RequestEditor {
       if (methodEl.options[i].value === initMethod) { methodEl.selectedIndex = i; break; }
     }
 
+    function validateJsonField(fieldId, errorId) {
+      const field = document.getElementById(fieldId);
+      const errorEl = document.getElementById(errorId);
+      const value = field.value.trim();
+      
+      if (!value) {
+        field.classList.remove('json-invalid');
+        errorEl.classList.remove('visible');
+        return true;
+      }
+      
+      try {
+        JSON.parse(value);
+        field.classList.remove('json-invalid');
+        errorEl.classList.remove('visible');
+        return true;
+      } catch (e) {
+        field.classList.add('json-invalid');
+        errorEl.textContent = '✕ Invalid JSON: ' + e.message;
+        errorEl.classList.add('visible');
+        return false;
+      }
+    }
+
+    function updateForwardButtonState() {
+      const headersValid = !document.getElementById('headers').classList.contains('json-invalid');
+      const respHeadersValid = !document.getElementById('resp-headers').classList.contains('json-invalid');
+      const forwardBtn = document.getElementById('forward-btn');
+      forwardBtn.disabled = !headersValid;
+    }
+
+    function updateSendRespondButtonState() {
+      const respHeadersValid = !document.getElementById('resp-headers').classList.contains('json-invalid');
+      const sendBtn = document.getElementById('send-respond');
+      sendBtn.disabled = !respHeadersValid;
+    }
+
+    const headersField = document.getElementById('headers');
+    const respHeadersField = document.getElementById('resp-headers');
+
+    headersField.addEventListener('input', () => {
+      validateJsonField('headers', 'headers-error');
+      updateForwardButtonState();
+    });
+
+    respHeadersField.addEventListener('input', () => {
+      validateJsonField('resp-headers', 'resp-headers-error');
+      updateSendRespondButtonState();
+    });
+
+    headersField.addEventListener('blur', () => {
+      validateJsonField('headers', 'headers-error');
+      updateForwardButtonState();
+    });
+
+    respHeadersField.addEventListener('blur', () => {
+      validateJsonField('resp-headers', 'resp-headers-error');
+      updateSendRespondButtonState();
+    });
+
     function getHeaders() {
       try { return JSON.parse(document.getElementById('headers').value); }
       catch(e) { return {}; }
     }
 
     function forward() {
+      if (!validateJsonField('headers', 'headers-error')) {
+        return;
+      }
       vscode.postMessage({ type: 'forward', data: {
         method: document.getElementById('method').value,
         url: document.getElementById('url').value,
@@ -215,9 +284,16 @@ export class RequestEditor {
       const sendBtn = document.getElementById('send-respond');
       section.classList.toggle('visible');
       sendBtn.style.display = section.classList.contains('visible') ? '' : 'none';
+      if (section.classList.contains('visible')) {
+        validateJsonField('resp-headers', 'resp-headers-error');
+        updateSendRespondButtonState();
+      }
     }
 
     function sendRespond() {
+      if (!validateJsonField('resp-headers', 'resp-headers-error')) {
+        return;
+      }
       let respHeaders = {};
       try { respHeaders = JSON.parse(document.getElementById('resp-headers').value); } catch(e) {}
       vscode.postMessage({ type: 'respond', data: {
@@ -227,6 +303,10 @@ export class RequestEditor {
         body: document.getElementById('resp-body').value,
       }});
     }
+
+    validateJsonField('headers', 'headers-error');
+    validateJsonField('resp-headers', 'resp-headers-error');
+    updateForwardButtonState();
   </script>
 </body>
 </html>`;
