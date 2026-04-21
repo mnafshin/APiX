@@ -163,12 +163,16 @@ export class ReplayPanel {
     h2 { margin-top: 0; font-size: 16px; }
     label { display: block; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 2px; margin-top: 12px; }
     input, select, textarea { width: 100%; box-sizing: border-box; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, #555); padding: 5px 8px; border-radius: 3px; font-family: inherit; font-size: 13px; }
+    textarea.json-invalid { border-color: var(--vscode-inputValidation-errorBorder, #f48771) !important; background: var(--vscode-inputValidation-errorBackground, #5a1d1d); }
+    .json-error-msg { font-size: 11px; color: var(--vscode-inputValidation-errorForeground, #f48771); margin-top: 3px; display: none; }
+    .json-error-msg.visible { display: block; }
     .row { display: flex; gap: 8px; }
     .row > * { flex: 1; }
     .row .small { max-width: 140px; }
     textarea { resize: vertical; min-height: 80px; font-family: var(--vscode-editor-font-family, monospace); }
     .btn { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 6px 12px; border-radius: 3px; cursor: pointer; font-size: 13px; margin-top: 10px; margin-right: 8px; }
     .btn:hover { background: var(--vscode-button-hoverBackground); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: 13px; }
     .checkbox-row input { width: auto; }
     hr { border: none; border-top: 1px solid var(--vscode-panel-border); margin: 20px 0; }
@@ -206,12 +210,14 @@ export class ReplayPanel {
   </div>
   <label>Headers (JSON)</label>
   <textarea id="headers" rows="6">${escAttr(headersJson)}</textarea>
+  <div class="json-error-msg" id="headers-error"></div>
   <label>Body</label>
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
   <hr>
   <h3 style="font-size:14px;margin:0 0 8px">Overrides (for replay mode)</h3>
   <label>Override Headers (JSON — merged with original)</label>
   <textarea id="override-headers" rows="3">{}</textarea>
+  <div class="json-error-msg" id="override-headers-error"></div>
   <label>Override Body (leave empty to use original)</label>
   <textarea id="override-body" rows="3"></textarea>
   <div class="checkbox-row">
@@ -223,7 +229,7 @@ export class ReplayPanel {
     <label for="use-raw" style="margin:0">Use edited request above (instead of original from history)</label>
   </div>
   <br>
-  <button class="btn" onclick="sendRequest()">▶ Send</button>
+  <button class="btn" id="send-btn" onclick="sendRequest()">▶ Send</button>
   <span id="spinner" class="spinner">⏳</span>
   <div id="error-msg" class="error-msg"></div>
 
@@ -244,6 +250,60 @@ export class ReplayPanel {
     for (let i = 0; i < methodEl.options.length; i++) {
       if (methodEl.options[i].value === initMethod) { methodEl.selectedIndex = i; break; }
     }
+
+    function validateJsonField(fieldId, errorId) {
+      const field = document.getElementById(fieldId);
+      const errorEl = document.getElementById(errorId);
+      const value = field.value.trim();
+      
+      if (!value) {
+        field.classList.remove('json-invalid');
+        errorEl.classList.remove('visible');
+        return true;
+      }
+      
+      try {
+        JSON.parse(value);
+        field.classList.remove('json-invalid');
+        errorEl.classList.remove('visible');
+        return true;
+      } catch (e) {
+        field.classList.add('json-invalid');
+        errorEl.textContent = '✕ Invalid JSON: ' + e.message;
+        errorEl.classList.add('visible');
+        return false;
+      }
+    }
+
+    function updateSendButtonState() {
+      const headersValid = !document.getElementById('headers').classList.contains('json-invalid');
+      const overrideHeadersValid = !document.getElementById('override-headers').classList.contains('json-invalid');
+      const sendBtn = document.getElementById('send-btn');
+      sendBtn.disabled = !headersValid || !overrideHeadersValid;
+    }
+
+    const headersField = document.getElementById('headers');
+    const overrideHeadersField = document.getElementById('override-headers');
+
+    headersField.addEventListener('input', () => {
+      validateJsonField('headers', 'headers-error');
+      updateSendButtonState();
+    });
+
+    overrideHeadersField.addEventListener('input', () => {
+      validateJsonField('override-headers', 'override-headers-error');
+      updateSendButtonState();
+    });
+
+    headersField.addEventListener('blur', () => {
+      validateJsonField('headers', 'headers-error');
+      updateSendButtonState();
+    });
+
+    overrideHeadersField.addEventListener('blur', () => {
+      validateJsonField('override-headers', 'override-headers-error');
+      updateSendButtonState();
+    });
 
     function renderTemplates() {
       const sel = document.getElementById('template-select');
@@ -266,9 +326,14 @@ export class ReplayPanel {
       document.getElementById('url').value = tpl.request.url || '';
       document.getElementById('headers').value = JSON.stringify(tpl.request.headers || {}, null, 2);
       document.getElementById('body').value = tpl.request.body ? String(tpl.request.body) : '';
+      validateJsonField('headers', 'headers-error');
+      updateSendButtonState();
     }
 
     function saveTemplate() {
+      if (!validateJsonField('headers', 'headers-error')) {
+        return;
+      }
       vscode.postMessage({ type: 'saveTemplate', data: {
         id: document.getElementById('template-id').value,
         name: document.getElementById('template-name').value,
@@ -304,6 +369,12 @@ export class ReplayPanel {
     });
 
     function sendRequest() {
+      if (!validateJsonField('headers', 'headers-error')) {
+        return;
+      }
+      if (!validateJsonField('override-headers', 'override-headers-error')) {
+        return;
+      }
       document.getElementById('error-msg').textContent = '';
       document.getElementById('spinner').classList.add('active');
       vscode.postMessage({ type: 'send', data: {
@@ -331,6 +402,9 @@ export class ReplayPanel {
       section.scrollIntoView({ behavior: 'smooth' });
     }
 
+    validateJsonField('headers', 'headers-error');
+    validateJsonField('override-headers', 'override-headers-error');
+    updateSendButtonState();
     renderTemplates();
   </script>
 </body>
