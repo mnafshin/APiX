@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { TrafficPanel } from './trafficPanel';
 import { BreakpointsProvider, BreakpointItem } from './breakpointsProvider';
-import { TrafficProvider, TrafficItem } from './trafficProvider';
+import { TrafficProvider, TrafficItem, ErrorItem } from './trafficProvider';
 import { MocksProvider, MockItem } from './mocksProvider';
 import { EngineProcessManager } from './engineProcessManager';
 import { ReplayPanel } from './replayPanel';
@@ -22,6 +22,8 @@ let mocksProvider: MocksProvider | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 let pausedRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let pausedRetryDelayMs = 1000;
+let trafficTreeView: vscode.TreeView<TrafficItem | ErrorItem> | undefined;
+let selectedTrafficItem: TrafficItem | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
     const config = vscode.workspace.getConfiguration('apix');
@@ -65,10 +67,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     breakpointsProvider = new BreakpointsProvider(engineClient, outputChannel);
     mocksProvider = new MocksProvider(engineClient, outputChannel);
 
-    const trafficViewDisposable = vscode.window.registerTreeDataProvider(
-        'apix.trafficView',
-        trafficProvider
-    );
+    trafficTreeView = vscode.window.createTreeView('apix.trafficView', {
+        treeDataProvider: trafficProvider,
+        canSelectMany: false,
+    });
+    const trafficSelectionDisposable = trafficTreeView.onDidChangeSelection((e) => {
+        selectedTrafficItem = e.selection.find((item): item is TrafficItem => item instanceof TrafficItem);
+    });
 
     const breakpointsViewDisposable = vscode.window.registerTreeDataProvider(
         'apix.breakpointsView',
@@ -81,7 +86,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
 
     context.subscriptions.push(
-        trafficViewDisposable,
+        trafficTreeView,
+        trafficSelectionDisposable,
         breakpointsViewDisposable,
         mocksViewDisposable,
 
@@ -95,6 +101,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             try {
                 await engineClient?.clearHistory();
                 trafficProvider?.refresh();
+                TrafficPanel.currentPanel?.clearDisplayedHistory();
             } catch (err: any) {
                 vscode.window.showErrorMessage(`APiX: Failed to clear history — ${err?.message || err}`);
             }
@@ -120,14 +127,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             }
         }),
         vscode.commands.registerCommand('apix.replayRequest', (itemOrId: TrafficItem | string) => {
-            const id = typeof itemOrId === 'string' ? itemOrId : itemOrId?.transaction?.id;
+            const id = typeof itemOrId === 'string'
+                ? itemOrId
+                : itemOrId?.transaction?.id || selectedTrafficItem?.transaction?.id;
             if (id) { openReplayPanel(context, engineClient!, id); }
         }),
         vscode.commands.registerCommand('apix.composeRequest', () =>
             openReplayPanel(context, engineClient!)
         ),
         vscode.commands.registerCommand('apix.copyAsCurl', (itemOrTx: TrafficItem | HttpTransaction) =>
-            copyAsCurl(itemOrTx)
+            copyAsCurl(itemOrTx || selectedTrafficItem)
         ),
         vscode.commands.registerCommand('apix.copyRequestId', (itemOrTxOrID: TrafficItem | HttpTransaction | string) =>
             copyRequestId(itemOrTxOrID)
@@ -373,7 +382,7 @@ async function openReplayPanel(
     await ReplayPanel.show(context.extensionUri, client, requestId);
 }
 
-async function copyAsCurl(itemOrTx: TrafficItem | HttpTransaction): Promise<void> {
+async function copyAsCurl(itemOrTx?: TrafficItem | HttpTransaction): Promise<void> {
     const tx = itemOrTx instanceof TrafficItem ? itemOrTx.transaction : itemOrTx;
     if (!tx?.request?.url) {
         vscode.window.showErrorMessage('APiX: No request available to copy as curl.');

@@ -44,8 +44,24 @@ func (c *Config) ValidateRuntime() error {
 
 func (c *Config) validate(allowBoundPorts bool) error {
 	var errs []error
-	var httpPort, grpcPort int
 
+	applyValidationDefaults(c)
+	errs = append(errs, c.validatePorts(allowBoundPorts)...)
+	errs = append(errs, c.validateDatabase()...)
+	errs = append(errs, c.validateConnectionPool()...)
+	errs = append(errs, c.validateTLSAndAuth()...)
+	errs = append(errs, c.validatePluginPaths()...)
+	errs = append(errs, c.validateURLPatterns()...)
+	errs = append(errs, c.validateLogging()...)
+	errs = append(errs, c.validateMapLocalRules()...)
+
+	if len(errs) > 0 {
+		return &ValidationError{Errs: errs}
+	}
+	return nil
+}
+
+func applyValidationDefaults(c *Config) {
 	// Keep zero values on direct Config literals safe by restoring secure
 	// defaults; explicit negative values remain invalid and are rejected below.
 	if c.MaxHeadersPerRequest == 0 {
@@ -66,39 +82,17 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	if c.MaxURLLength == 0 {
 		c.MaxURLLength = 8 * 1024
 	}
+}
 
-	// ── Port validation ────────────────────────────────────────────────────
-	if c.HTTPPort == "" {
-		errs = append(errs, fmt.Errorf("http_port must be set"))
-	} else if parsed, err := strconv.Atoi(c.HTTPPort); err != nil {
-		errs = append(errs, fmt.Errorf("invalid http_port %q: %w — must be a number between 1-65535", c.HTTPPort, err))
-	} else {
-		httpPort = parsed
-		if httpPort < 1 || httpPort > 65535 {
-			errs = append(errs, fmt.Errorf("invalid http_port %q: must be a number between 1-65535", c.HTTPPort))
-		}
-	}
+func (c *Config) validatePorts(allowBoundPorts bool) []error {
+	var errs []error
+	httpPort := validateNamedPort(&errs, "http_port", c.HTTPPort, true)
+	grpcPort := validateNamedPort(&errs, "grpc_port", c.GRPCPort, true)
 
-	if c.GRPCPort == "" {
-		errs = append(errs, fmt.Errorf("grpc_port must be set"))
-	} else if parsed, err := strconv.Atoi(c.GRPCPort); err != nil {
-		errs = append(errs, fmt.Errorf("invalid grpc_port %q: %w — must be a number between 1-65535", c.GRPCPort, err))
-	} else {
-		grpcPort = parsed
-		if grpcPort < 1 || grpcPort > 65535 {
-			errs = append(errs, fmt.Errorf("invalid grpc_port %q: must be a number between 1-65535", c.GRPCPort))
-		}
-	}
 	if c.MCPEnabled {
-		if c.MCPPort == "" {
-			errs = append(errs, fmt.Errorf("mcp_port must be set when mcp_enabled is true"))
-		} else if _, err := strconv.Atoi(c.MCPPort); err != nil {
-			errs = append(errs, fmt.Errorf("invalid mcp_port %q: %w — must be a number between 1-65535", c.MCPPort, err))
-		}
+		validateNamedPort(&errs, "mcp_port", c.MCPPort, false)
 	}
 
-	// ── Port conflict checks ───────────────────────────────────────────────
-	// Only check when port values look valid.
 	if !allowBoundPorts && httpPort >= 1 && httpPort <= 65535 {
 		if conflictErr := checkPortAvailable("tcp", c.HTTPPort); conflictErr != nil {
 			errs = append(errs, fmt.Errorf("http_port %s is already in use: %w — stop the conflicting process or choose a different port", c.HTTPPort, conflictErr))
@@ -109,8 +103,6 @@ func (c *Config) validate(allowBoundPorts bool) error {
 			errs = append(errs, fmt.Errorf("grpc_port %s is already in use: %w — stop the conflicting process or choose a different port", c.GRPCPort, conflictErr))
 		}
 	}
-
-	// ── gRPC bind address ──────────────────────────────────────────────────
 	if c.GRPCBindAddress != "" {
 		if ip := net.ParseIP(c.GRPCBindAddress); ip == nil && c.GRPCBindAddress != "localhost" {
 			errs = append(errs, fmt.Errorf("grpc_bind_address %q is invalid — use an IP address, localhost, 0.0.0.0, or ::1", c.GRPCBindAddress))
@@ -124,12 +116,40 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	// ── Database path ──────────────────────────────────────────────────────
-	if c.DBPath == "" {
-		errs = append(errs, fmt.Errorf("db_path must be set — e.g. db_path: apix.db"))
+	return errs
+}
+
+func validateNamedPort(errs *[]error, field, value string, required bool) int {
+	if value == "" {
+		if required {
+			*errs = append(*errs, fmt.Errorf("%s must be set", field))
+		} else {
+			*errs = append(*errs, fmt.Errorf("%s must be set when mcp_enabled is true", field))
+		}
+		return 0
 	}
 
-	// ── Connection pool ────────────────────────────────────────────────────
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("invalid %s %q: %w — must be a number between 1-65535", field, value, err))
+		return 0
+	}
+	if parsed < 1 || parsed > 65535 {
+		*errs = append(*errs, fmt.Errorf("invalid %s %q: must be a number between 1-65535", field, value))
+	}
+	return parsed
+}
+
+func (c *Config) validateDatabase() []error {
+	if c.DBPath == "" {
+		return []error{fmt.Errorf("db_path must be set — e.g. db_path: apix.db")}
+	}
+	return nil
+}
+
+func (c *Config) validateConnectionPool() []error {
+	var errs []error
+
 	if c.MaxIdleConnsPerHost <= 0 {
 		errs = append(errs, fmt.Errorf("max_idle_conns_per_host must be > 0 (got %d) — recommended value: 10", c.MaxIdleConnsPerHost))
 	}
@@ -155,7 +175,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		errs = append(errs, fmt.Errorf("max_body_size_mb must be >= 0 (got %d) — use 0 to disable the limit", c.MaxBodySizeMB))
 	}
 
-	// ── TLS / auth ─────────────────────────────────────────────────────────
+	return errs
+}
+
+func (c *Config) validateTLSAndAuth() []error {
+	var errs []error
+
 	if strings.TrimSpace(c.AuthTokenFile) != "" {
 		if _, err := os.Stat(c.AuthTokenFile); os.IsNotExist(err) {
 			errs = append(errs, fmt.Errorf("auth_token_file %q does not exist", c.AuthTokenFile))
@@ -208,7 +233,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	// ── Plugin paths ───────────────────────────────────────────────────────
+	return errs
+}
+
+func (c *Config) validatePluginPaths() []error {
+	var errs []error
+
 	for i, p := range c.PluginPaths {
 		if p == "" {
 			errs = append(errs, fmt.Errorf("plugin_paths[%d] is empty — remove the entry or provide a valid path", i))
@@ -219,7 +249,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	// ── URL pattern regex validation ───────────────────────────────────────
+	return errs
+}
+
+func (c *Config) validateURLPatterns() []error {
+	var errs []error
+
 	for i, pat := range c.URLPatterns {
 		if pat == "" {
 			errs = append(errs, fmt.Errorf("url_patterns[%d] is empty — remove the entry or provide a valid regex", i))
@@ -230,7 +265,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	// ── logging options ─────────────────────────────────────────────────────
+	return errs
+}
+
+func (c *Config) validateLogging() []error {
+	var errs []error
+
 	if c.LogFormat != "" && c.LogFormat != "text" && c.LogFormat != "json" {
 		errs = append(errs, fmt.Errorf("log_format %q is invalid — use \"text\" or \"json\"", c.LogFormat))
 	}
@@ -266,7 +306,12 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	// ── map-local rules ────────────────────────────────────────────────────
+	return errs
+}
+
+func (c *Config) validateMapLocalRules() []error {
+	var errs []error
+
 	for i, rule := range c.MapLocalRules {
 		if rule.URLPattern == "" {
 			errs = append(errs, fmt.Errorf("map_local_rules[%d].url_pattern is empty — provide a valid regex", i))
@@ -281,10 +326,7 @@ func (c *Config) validate(allowBoundPorts bool) error {
 		}
 	}
 
-	if len(errs) > 0 {
-		return &ValidationError{Errs: errs}
-	}
-	return nil
+	return errs
 }
 
 func grpcBindRequiresRemoteSecurity(addr string) bool {

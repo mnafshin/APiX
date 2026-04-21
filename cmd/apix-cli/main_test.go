@@ -142,8 +142,13 @@ func reqBodyBytes(body string) []byte {
 
 func runCLI(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
+	return runCLIWithInput(t, "", args...)
+}
+
+func runCLIWithInput(t *testing.T, stdin string, args ...string) (int, string, string) {
+	t.Helper()
 	var out, errb bytes.Buffer
-	exit := Run(args, &out, &errb)
+	exit := runWithStdin(args, &out, &errb, bytes.NewBufferString(stdin))
 	return exit, out.String(), errb.String()
 }
 
@@ -364,6 +369,27 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 	if len(templates) != 1 || templates[0]["id"] != "tpl-1" {
 		t.Fatalf("unexpected templates list: %#v", templates)
 	}
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "execute", "tpl-1")...)
+	if exit != 0 {
+		t.Fatalf("templates execute by id exit=%d err=%s", exit, errOut)
+	}
+	var execResp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &execResp); err != nil {
+		t.Fatalf("templates execute by id json: %v", err)
+	}
+	if int(execResp["status_code"].(float64)) != 200 || execResp["body"] != "pong" {
+		t.Fatalf("unexpected execute response by id: %#v", execResp)
+	}
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "execute", "health")...)
+	if exit != 0 {
+		t.Fatalf("templates execute by name exit=%d err=%s", exit, errOut)
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &execResp); err != nil {
+		t.Fatalf("templates execute by name json: %v", err)
+	}
+	if int(execResp["status_code"].(float64)) != 200 || execResp["body"] != "pong" {
+		t.Fatalf("unexpected execute response by name: %#v", execResp)
+	}
 	exit, _, errOut = runCLI(t, stack.args("templates", "delete", "tpl-1")...)
 	if exit != 0 {
 		t.Fatalf("templates delete exit=%d err=%s", exit, errOut)
@@ -399,6 +425,71 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("paused request not resumed")
+	}
+}
+
+func TestCLISendAndReplayReadBodyFromStdin(t *testing.T) {
+	stack := newCLITestStack(t, "")
+
+	sendBodies := make(chan string, 1)
+	sendErrs := make(chan error, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			sendErrs <- err
+			return
+		}
+		_ = r.Body.Close()
+		sendBodies <- string(body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstream.Close()
+
+	exit, _, errOut := runCLIWithInput(t, "stdin-send-body", stack.args("--output", "json", "send", "--method", "POST", "--url", upstream.URL+"/send")...)
+	if exit != 0 {
+		t.Fatalf("send exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case body := <-sendBodies:
+		if body != "stdin-send-body" {
+			t.Fatalf("send body=%q", body)
+		}
+	case err := <-sendErrs:
+		t.Fatalf("send handler: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for send body")
+	}
+
+	replayBodies := make(chan string, 1)
+	replayErrs := make(chan error, 1)
+	upstreamReplay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			replayErrs <- err
+			return
+		}
+		_ = r.Body.Close()
+		replayBodies <- string(body)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer upstreamReplay.Close()
+
+	stack.storeTransaction(t, "req-replay-stdin", "POST", upstreamReplay.URL+"/replay", "original-body", "", 200)
+	exit, _, errOut = runCLIWithInput(t, "stdin-replay-body", stack.args("--output", "json", "replay", "req-replay-stdin")...)
+	if exit != 0 {
+		t.Fatalf("replay exit=%d err=%s", exit, errOut)
+	}
+	select {
+	case body := <-replayBodies:
+		if body != "stdin-replay-body" {
+			t.Fatalf("replay body=%q", body)
+		}
+	case err := <-replayErrs:
+		t.Fatalf("replay handler: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for replay body")
 	}
 }
 

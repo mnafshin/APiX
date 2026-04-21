@@ -14,7 +14,7 @@ Intercept, inspect, and modify HTTP/HTTPS traffic with a local MITM proxy, a gRP
 - **gRPC API** (`:9090` by default) for extension/CLI automation
 - **Breakpoints** with conditions (URL, method, headers, body regex, response status)
 - **Replay + compose** requests (`ReplayRequest`, `ComposeRequest`)
-- **Saved request templates** (save/list/delete)
+- **Saved request templates** (save/list/delete/execute)
 - **History storage** in SQLite, plus HAR export/import
 - **WebSocket frame capture** for upgraded sessions
 - **GraphQL metadata extraction** for request/response inspection
@@ -73,7 +73,7 @@ Then run the extension from VS Code (`Run Extension`), or package/install from `
 - `breakpoints list|add|delete|enable|disable`
 - `paused watch|forward|drop|respond`
 - `send`
-- `templates save|list|delete`
+- `templates save|list|delete|execute`
 - `replay`
 - `cert`, `config`, `doctor`, `completion`
 

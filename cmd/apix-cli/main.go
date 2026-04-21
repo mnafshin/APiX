@@ -44,6 +44,7 @@ type app struct {
 	opts   rootOptions
 	out    io.Writer
 	errw   io.Writer
+	stdin  io.Reader
 	cfg    *config.Config
 	conn   *grpc.ClientConn
 	client apix.EngineClient
@@ -87,17 +88,29 @@ type exportOptions struct {
 	limit  int
 }
 
+type bodyFlag struct {
+	value string
+	set   bool
+}
+
+func (b *bodyFlag) String() string { return b.value }
+func (b *bodyFlag) Set(v string) error {
+	b.value = v
+	b.set = true
+	return nil
+}
+
 type sendOptions struct {
 	method          string
 	url             string
 	headers         headerFlags
-	body            string
+	body            bodyFlag
 	followRedirects bool
 }
 
 type replayOptions struct {
 	headers         headerFlags
-	body            string
+	body            bodyFlag
 	followRedirects bool
 }
 
@@ -225,6 +238,29 @@ func writeString(w io.Writer, s string) {
 	_, _ = io.WriteString(w, s)
 }
 
+func stdinIsTerminal(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+func readBodyFromStdin(r io.Reader) (string, error) {
+	if r == nil {
+		return "", nil
+	}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 // checkHelpFlag returns true if args contain --help or -h, and returns the remaining args
 func checkHelpFlag(args []string) (bool, []string) {
 	for i, arg := range args {
@@ -284,6 +320,10 @@ func getEnvBool(envVar string, defaultVal bool) bool {
 }
 
 func Run(args []string, out io.Writer, errw io.Writer) int {
+	return runWithStdin(args, out, errw, os.Stdin)
+}
+
+func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader) int {
 	// Read environment variables for defaults (will be overridden by CLI flags)
 	envHost := os.Getenv("APIX_HOST")
 	if envHost == "" {
@@ -335,7 +375,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
-		writeLine(errw, "  templates save|list|delete")
+		writeLine(errw, "  templates save|list|delete|execute")
 		writeLine(errw, "  replay")
 		writeLine(errw, "  cert status")
 		writeLine(errw, "  config show|reload")
@@ -367,6 +407,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		opts: opts,
 		out:  out,
 		errw: errw,
+		stdin: stdin,
 		cfg:  config.LoadConfig(cfgPath),
 	}
 
@@ -1658,7 +1699,7 @@ func (a *app) cmdSend(args []string) error {
 	fs.StringVar(&opts.method, "method", "GET", "HTTP method")
 	fs.StringVar(&opts.url, "url", "", "request URL")
 	fs.Var(&opts.headers, "header", "repeatable header key:value")
-	fs.StringVar(&opts.body, "body", "", "request body")
+	fs.Var(&opts.body, "body", "request body")
 	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1669,6 +1710,17 @@ func (a *app) cmdSend(args []string) error {
 	headers, err := opts.headers.Map()
 	if err != nil {
 		return err
+	}
+	body := opts.body.value
+	if !opts.body.set {
+		if stdinIsTerminal(a.stdin) {
+			body = ""
+		} else {
+			body, err = readBodyFromStdin(a.stdin)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	client, err := a.clientConn()
 	if err != nil {
@@ -1681,7 +1733,7 @@ func (a *app) cmdSend(args []string) error {
 			Method:  opts.method,
 			Url:     opts.url,
 			Headers: headers,
-			Body:    []byte(opts.body),
+			Body:    []byte(body),
 		},
 		FollowRedirects: opts.followRedirects,
 	})
@@ -1693,7 +1745,7 @@ func (a *app) cmdSend(args []string) error {
 
 func (a *app) cmdTemplates(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: templates save|list|delete")
+		return fmt.Errorf("usage: templates save|list|delete|execute")
 	}
 	client, err := a.clientConn()
 	if err != nil {
@@ -1780,6 +1832,11 @@ func (a *app) cmdTemplates(args []string) error {
 			writef(tw, "%s\t%s\t%s\t%s\n", tpl.Id, tpl.Name, tpl.GetRequest().GetMethod(), tpl.GetRequest().GetUrl())
 		}
 		return tw.Flush()
+	case "execute":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: templates execute <id-or-name>")
+		}
+		return a.cmdTemplatesExecute(client, args[1])
 	case "delete":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: templates delete <id>")
@@ -1799,12 +1856,65 @@ func (a *app) cmdTemplates(args []string) error {
 	}
 }
 
+func (a *app) cmdTemplatesExecute(client apix.EngineClient, identifier string) error {
+	tpl, err := a.lookupRequestTemplate(client, identifier)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ComposeRequest(ctx, &apix.ComposeSpec{
+		Request:         tpl.GetRequest(),
+		FollowRedirects: true,
+	})
+	if err != nil {
+		return err
+	}
+	return a.renderResponse(resp)
+}
+
+func (a *app) lookupRequestTemplate(client apix.EngineClient, identifier string) (*apix.RequestTemplate, error) {
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ListRequestTemplates(ctx, &apix.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	if identifier == "" {
+		return nil, fmt.Errorf("template identifier is required")
+	}
+
+	var nameMatches []*apix.RequestTemplate
+	for _, tpl := range resp.Templates {
+		if tpl.GetId() == identifier {
+			return tpl, nil
+		}
+		if tpl.GetName() == identifier {
+			nameMatches = append(nameMatches, tpl)
+		}
+	}
+
+	switch len(nameMatches) {
+	case 0:
+		return nil, status.Errorf(codes.NotFound, "template %q not found", identifier)
+	case 1:
+		return nameMatches[0], nil
+	default:
+		ids := make([]string, 0, len(nameMatches))
+		for _, tpl := range nameMatches {
+			ids = append(ids, tpl.GetId())
+		}
+		sort.Strings(ids)
+		return nil, fmt.Errorf("template name %q is ambiguous; matched ids: %s", identifier, strings.Join(ids, ", "))
+	}
+}
+
 func (a *app) cmdReplay(args []string) error {
 	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
 	fs.SetOutput(a.errw)
 	opts := replayOptions{}
 	fs.Var(&opts.headers, "header", "repeatable override header key:value")
-	fs.StringVar(&opts.body, "body", "", "override body")
+	fs.Var(&opts.body, "body", "override body")
 	fs.BoolVar(&opts.followRedirects, "follow-redirects", true, "follow redirects")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -1817,6 +1927,17 @@ func (a *app) cmdReplay(args []string) error {
 	if err != nil {
 		return err
 	}
+	body := opts.body.value
+	if !opts.body.set {
+		if stdinIsTerminal(a.stdin) {
+			body = ""
+		} else {
+			body, err = readBodyFromStdin(a.stdin)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	client, err := a.clientConn()
 	if err != nil {
 		return err
@@ -1826,7 +1947,7 @@ func (a *app) cmdReplay(args []string) error {
 	resp, err := client.ReplayRequest(ctx, &apix.ReplaySpec{
 		Source:          &apix.ReplaySpec_RequestId{RequestId: id},
 		OverrideHeaders: headers,
-		OverrideBody:    []byte(opts.body),
+		OverrideBody:    []byte(body),
 		FollowRedirects: opts.followRedirects,
 	})
 	if err != nil {
@@ -2031,7 +2152,7 @@ _apix() {
   local cur prev words cword
   _init_completion || return
   local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond save show reload status"
+  local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
 complete -F _apix apix
