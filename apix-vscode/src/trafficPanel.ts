@@ -181,7 +181,11 @@ export class TrafficPanel {
   <style nonce="${nonce}">
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border); font-weight: 600; position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 1; }
+    th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border); font-weight: 600; position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 1; user-select: none; }
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { background: var(--vscode-list-hoverBackground); }
+    th .sort-indicator { margin-left: 4px; opacity: 0; font-size: 11px; }
+    th.sort-asc .sort-indicator, th.sort-desc .sort-indicator { opacity: 1; }
     td { padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
     tr:hover { background: var(--vscode-list-hoverBackground); }
     .method { font-weight: 600; }
@@ -249,7 +253,7 @@ export class TrafficPanel {
   </div>
   <table>
     <thead>
-      <tr><th>#</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th><th>Time</th></tr>
+      <tr><th>#</th><th class="sortable" data-sort-key="method">Method<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="url">URL<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="status">Status<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="duration">Duration<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="time">Time<span class="sort-indicator"></span></th></tr>
     </thead>
     <tbody id="traffic"></tbody>
   </table>
@@ -279,6 +283,8 @@ export class TrafficPanel {
     let transactions = [];
     let count = 0;
     let currentFramesRequestId = '';
+    let sortKey = null;
+    let sortAsc = true;
 
     window.addEventListener('message', function(event) {
       const msg = event.data;
@@ -303,29 +309,7 @@ export class TrafficPanel {
     });
 
     function addRow(tx, num) {
-      const tbody = document.getElementById('traffic');
-      const method = (tx.request && tx.request.method) ? tx.request.method : 'GET';
-      const url = (tx.request && tx.request.url) ? tx.request.url : '';
-      const status = (tx.response && tx.response.statusCode) ? tx.response.statusCode : '-';
-      const isWebSocket = isWebSocketTransaction(tx);
-      const methodClass = 'method-' + method.toLowerCase();
-      const statusClass = (typeof status === 'number')
-        ? (status >= 500 ? 'status-5xx' : status >= 400 ? 'status-4xx' : status >= 300 ? 'status-3xx' : 'status-2xx')
-        : '';
-      const time = tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString() : '';
-      const duration = tx.durationMs ? tx.durationMs + 'ms' : '-';
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + num + '</td>' +
-        '<td class="method ' + methodClass + '">' + escHtml(method) + '</td>' +
-        '<td title="' + escHtml(url) + '">' + (isWebSocket ? '<span class="badge badge-ws">WS</span>' : '') + escHtml(url) + '</td>' +
-        '<td class="' + statusClass + '">' + escHtml(String(status)) + '</td>' +
-        '<td>' + escHtml(duration) + '</td>' +
-        '<td>' + escHtml(time) + '</td>';
-      tr.setAttribute('data-tx-index', String(num - 1));
-      tr.onclick = function() { showDetail(tx); };
-      tbody.prepend(tr);
-      applyFilter();
+      rerenderTable();
     }
 
     function escHtml(str) {
@@ -607,6 +591,56 @@ export class TrafficPanel {
     }
 
     function applyFilter() {
+      rerenderTable();
+    }
+
+    function getSortValue(tx, key) {
+      switch (key) {
+        case 'method':
+          return (tx.request && tx.request.method) ? tx.request.method.toUpperCase() : '';
+        case 'url':
+          return (tx.request && tx.request.url) ? tx.request.url.toLowerCase() : '';
+        case 'status':
+          return (tx.response && tx.response.statusCode) ? tx.response.statusCode : 0;
+        case 'duration':
+          return tx.durationMs || 0;
+        case 'time':
+          return tx.timestamp ? new Date(tx.timestamp).getTime() : 0;
+        default:
+          return '';
+      }
+    }
+
+    function sortTransactions(key) {
+      if (sortKey === key) {
+        sortAsc = !sortAsc;
+      } else {
+        sortKey = key;
+        sortAsc = true;
+      }
+      updateSortIndicators();
+      rerenderTable();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('th.sortable').forEach(function(th) {
+        th.classList.remove('sort-asc', 'sort-desc');
+        const indicator = th.querySelector('.sort-indicator');
+        if (th.getAttribute('data-sort-key') === sortKey) {
+          if (sortAsc) {
+            th.classList.add('sort-asc');
+            indicator.textContent = '▲';
+          } else {
+            th.classList.add('sort-desc');
+            indicator.textContent = '▼';
+          }
+        } else {
+          indicator.textContent = '';
+        }
+      });
+    }
+
+    function getVisibleTransactions() {
       const q = (document.getElementById('filter').value || '').toLowerCase();
       const method = document.getElementById('filter-method').value;
       const status = (document.getElementById('filter-status').value || '').trim().toLowerCase();
@@ -617,12 +651,7 @@ export class TrafficPanel {
       const durMax = durMaxVal !== '' ? Number(durMaxVal) : null;
       const bodySearch = (document.getElementById('filter-body').value || '').toLowerCase();
 
-      document.querySelectorAll('#traffic tr').forEach(function(tr) {
-        const idxAttr = tr.getAttribute('data-tx-index');
-        if (idxAttr === null) { tr.style.display = ''; return; }
-        const tx = transactions[parseInt(idxAttr, 10)];
-        if (!tx) { tr.style.display = ''; return; }
-
+      const filtered = transactions.filter(function(tx, idx) {
         const txMethod = (tx.request && tx.request.method) || '';
         const txUrl = (tx.request && tx.request.url) || '';
         const txStatus = (tx.response && tx.response.statusCode) || 0;
@@ -632,22 +661,71 @@ export class TrafficPanel {
         const txReqBody = ((tx.request && tx.request.body) || '').toLowerCase();
         const txRespBody = ((tx.response && tx.response.body) || '').toLowerCase();
 
-        if (q && !txUrl.toLowerCase().includes(q)) { tr.style.display = 'none'; return; }
-        if (method && txMethod !== method) { tr.style.display = 'none'; return; }
+        if (q && !txUrl.toLowerCase().includes(q)) { return false; }
+        if (method && txMethod !== method) { return false; }
         if (status) {
           if (/^\dxx$/.test(status)) {
             const prefix = parseInt(status[0], 10);
-            if (Math.floor(txStatus / 100) !== prefix) { tr.style.display = 'none'; return; }
+            if (Math.floor(txStatus / 100) !== prefix) { return false; }
           } else if (/^\d+$/.test(status)) {
-            if (String(txStatus) !== status) { tr.style.display = 'none'; return; }
+            if (String(txStatus) !== status) { return false; }
           }
         }
-        if (ctFilter && !txCt.includes(ctFilter)) { tr.style.display = 'none'; return; }
-        if (durMin !== null && txDur < durMin) { tr.style.display = 'none'; return; }
-        if (durMax !== null && txDur > durMax) { tr.style.display = 'none'; return; }
-        if (bodySearch && !txReqBody.includes(bodySearch) && !txRespBody.includes(bodySearch)) { tr.style.display = 'none'; return; }
-        tr.style.display = '';
+        if (ctFilter && !txCt.includes(ctFilter)) { return false; }
+        if (durMin !== null && txDur < durMin) { return false; }
+        if (durMax !== null && txDur > durMax) { return false; }
+        if (bodySearch && !txReqBody.includes(bodySearch) && !txRespBody.includes(bodySearch)) { return false; }
+        return true;
       });
+
+      if (sortKey) {
+        filtered.sort(function(a, b) {
+          const aVal = getSortValue(a, sortKey);
+          const bVal = getSortValue(b, sortKey);
+          let cmp = 0;
+          if (aVal < bVal) { cmp = -1; }
+          else if (aVal > bVal) { cmp = 1; }
+          return sortAsc ? cmp : -cmp;
+        });
+      }
+
+      return filtered;
+    }
+
+    function rerenderTable() {
+      const tbody = document.getElementById('traffic');
+      tbody.innerHTML = '';
+      let displayNum = 1;
+      const visible = getVisibleTransactions();
+      visible.forEach(function(tx, idx) {
+        const method = (tx.request && tx.request.method) ? tx.request.method : 'GET';
+        const url = (tx.request && tx.request.url) ? tx.request.url : '';
+        const status = (tx.response && tx.response.statusCode) ? tx.response.statusCode : '-';
+        const isWebSocket = isWebSocketTransaction(tx);
+        const methodClass = 'method-' + method.toLowerCase();
+        const statusClass = (typeof status === 'number')
+          ? (status >= 500 ? 'status-5xx' : status >= 400 ? 'status-4xx' : status >= 300 ? 'status-3xx' : 'status-2xx')
+          : '';
+        const time = tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString() : '';
+        const duration = tx.durationMs ? tx.durationMs + 'ms' : '-';
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + displayNum + '</td>' +
+          '<td class="method ' + methodClass + '">' + escHtml(method) + '</td>' +
+          '<td title="' + escHtml(url) + '">' + (isWebSocket ? '<span class="badge badge-ws">WS</span>' : '') + escHtml(url) + '</td>' +
+          '<td class="' + statusClass + '">' + escHtml(String(status)) + '</td>' +
+          '<td>' + escHtml(duration) + '</td>' +
+          '<td>' + escHtml(time) + '</td>';
+        tr.setAttribute('data-tx-index', String(transactions.indexOf(tx)));
+        tr.onclick = function() { showDetail(tx); };
+        tbody.appendChild(tr);
+        displayNum++;
+      });
+      if (visible.length === 0) {
+        document.getElementById('empty').style.display = 'block';
+      } else {
+        document.getElementById('empty').style.display = 'none';
+      }
     }
 
     document.getElementById('filter').addEventListener('input', applyFilter);
@@ -657,6 +735,13 @@ export class TrafficPanel {
     document.getElementById('filter-dur-min').addEventListener('input', applyFilter);
     document.getElementById('filter-dur-max').addEventListener('input', applyFilter);
     document.getElementById('filter-body').addEventListener('input', applyFilter);
+
+    document.querySelectorAll('th.sortable').forEach(function(th) {
+      th.addEventListener('click', function() {
+        const key = this.getAttribute('data-sort-key');
+        sortTransactions(key);
+      });
+    });
   </script>
 </body>
 </html>`;
