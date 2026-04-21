@@ -174,6 +174,53 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "apix.openTrafficPanel",
+        "key": "ctrl+shift+x",
+        "mac": "cmd+shift+x",
+        "when": "!apixTrafficPanelFocus"
+      },
+      {
+        "command": "apix.clearHistory",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l"
+      },
+      {
+        "command": "apix.refreshTraffic",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r"
+      },
+      {
+        "command": "apix.composeRequest",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n"
+      },
+      {
+        "command": "apix.copyAsCurl",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c",
+        "when": "view == apix.trafficView && viewItem == httpTransaction"
+      },
+      {
+        "command": "apix.replayRequest",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "view == apix.trafficView && viewItem == httpTransaction"
+      },
+      {
+        "command": "apix.addBreakpoint",
+        "key": "ctrl+shift+b",
+        "mac": "cmd+shift+b",
+        "when": "view == apix.breakpointsView"
+      },
+      {
+        "command": "apix.exportHAR",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "view == apix.trafficView"
+      }
+    ],
     "menus": {
       "view/title": [
         {
