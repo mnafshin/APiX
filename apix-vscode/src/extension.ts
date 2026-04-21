@@ -142,7 +142,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             importHAR(engineClient!, trafficProvider!)
         ),
         vscode.commands.registerCommand('apix.openTrafficPanel', () =>
-            TrafficPanel.createOrShow(context.extensionUri, engineClient!)
+            TrafficPanel.createOrShow(context, engineClient!)
         ),
         vscode.commands.registerCommand('apix.refreshTraffic', () => {
             trafficProvider?.refresh();

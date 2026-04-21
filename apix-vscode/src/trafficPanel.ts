@@ -2,23 +2,44 @@ import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { HttpTransaction } from './types';
 
+interface TrafficFilterState {
+    url: string;
+    method: string;
+    status: string;
+    contentType: string;
+    durationMin: string;
+    durationMax: string;
+    body: string;
+}
+
 /**
  * TrafficPanel renders live HTTP traffic in a VS Code WebviewPanel.
  * It subscribes to the CaptureTraffic gRPC stream and pushes updates to the
- * webview via postMessage.
+ * webview via postMessage. Filters are persisted using workspace state.
  */
 export class TrafficPanel {
     public static currentPanel: TrafficPanel | undefined;
     private static readonly viewType = 'apixTraffic';
+    private static readonly FILTER_STATE_KEY = 'apix.trafficFilters';
 
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
+    private readonly _context: vscode.ExtensionContext;
     private _disposables: vscode.Disposable[] = [];
     private _captureStream: { cancel: () => void } | undefined;
     private _captureRetryTimer: ReturnType<typeof setTimeout> | undefined;
     private _captureRetryDelayMs = 1000;
+    private _filterState: TrafficFilterState = {
+        url: '',
+        method: '',
+        status: '',
+        contentType: '',
+        durationMin: '',
+        durationMax: '',
+        body: '',
+    };
 
-    public static createOrShow(extensionUri: vscode.Uri, client: EngineClient): void {
+    public static createOrShow(context: vscode.ExtensionContext, client: EngineClient): void {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
@@ -34,20 +55,24 @@ export class TrafficPanel {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')],
+                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
             }
         );
 
-        TrafficPanel.currentPanel = new TrafficPanel(panel, extensionUri, client);
+        TrafficPanel.currentPanel = new TrafficPanel(panel, context, client);
     }
 
     private constructor(
         panel: vscode.WebviewPanel,
-        extensionUri: vscode.Uri,
+        context: vscode.ExtensionContext,
         private readonly client: EngineClient
     ) {
         this._panel = panel;
-        this._extensionUri = extensionUri;
+        this._extensionUri = context.extensionUri;
+        this._context = context;
+
+        // Restore filters from workspace state
+        this._restoreFilters();
 
         this._update();
         this._startCapture();
@@ -67,7 +92,26 @@ export class TrafficPanel {
         );
     }
 
-    /** Start the CaptureTraffic gRPC stream and push each transaction to the webview. */
+    private _restoreFilters(): void {
+        try {
+            const stored = this._context.workspaceState.get<TrafficFilterState>(TrafficPanel.FILTER_STATE_KEY);
+            if (stored) {
+                this._filterState = { ...this._filterState, ...stored };
+            }
+        } catch (err) {
+            // Silently fail if there's an issue restoring filters
+        }
+    }
+
+    private async _saveFilters(): Promise<void> {
+        try {
+            await this._context.workspaceState.update(TrafficPanel.FILTER_STATE_KEY, this._filterState);
+        } catch (err) {
+            // Silently fail if there's an issue saving filters
+        }
+    }
+
+        /** Start the CaptureTraffic gRPC stream and push each transaction to the webview. */
     private _startCapture(): void {
         if (this._captureRetryTimer) {
             clearTimeout(this._captureRetryTimer);
@@ -152,11 +196,37 @@ export class TrafficPanel {
             case 'inspectRequest':
                 // Detail is handled client-side; nothing to do here
                 break;
+            case 'saveFilters':
+                if (message.data) {
+                    this._filterState = { ...message.data };
+                    void this._saveFilters();
+                }
+                break;
+            case 'clearFilters':
+                this._filterState = {
+                    url: '',
+                    method: '',
+                    status: '',
+                    contentType: '',
+                    durationMin: '',
+                    durationMax: '',
+                    body: '',
+                };
+                void this._saveFilters();
+                this._panel.webview.postMessage({ type: 'filtersCleared' });
+                break;
         }
     }
 
     private _update(): void {
         this._panel.webview.html = this._getHtml();
+        // Send initial filter state to webview after HTML is loaded
+        setTimeout(() => {
+            this._panel.webview.postMessage({
+                type: 'initFilters',
+                data: this._filterState,
+            });
+        }, 100);
     }
 
     private _getNonce(): string {
@@ -241,7 +311,8 @@ export class TrafficPanel {
         <option value="PATCH">PATCH</option>
       </select>
       <input type="text" id="filter-status" class="filter-status" placeholder="Status (2xx, 200)" title="Filter by status code or range (e.g. 2xx, 4xx, 404)" />
-      <button onclick="clearAll()">Clear</button>
+      <button onclick="clearFilters()" id="clear-btn">Clear Filters</button>
+      <span id="filter-status-badge" class="filter-status-badge"></span>
     </div>
     <div class="filter-row">
       <input type="text" id="filter-ct" class="filter-ct" placeholder="Content-Type…" title="Filter by response Content-Type substring" />
@@ -305,6 +376,10 @@ export class TrafficPanel {
         const el = document.getElementById('stream-error');
         el.style.display = 'none';
         el.textContent = '';
+      } else if (msg.type === 'initFilters') {
+        restoreFilters(msg.data || {});
+      } else if (msg.type === 'filtersCleared') {
+        clearAllFilters();
       }
     });
 
@@ -590,7 +665,70 @@ export class TrafficPanel {
       closeDetail();
     }
 
+    function clearFilters() {
+      document.getElementById('filter').value = '';
+      document.getElementById('filter-method').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-ct').value = '';
+      document.getElementById('filter-dur-min').value = '';
+      document.getElementById('filter-dur-max').value = '';
+      document.getElementById('filter-body').value = '';
+      updateFilterStatusBadge();
+      vscode.postMessage({ type: 'clearFilters' });
+      rerenderTable();
+    }
+
+    function clearAllFilters() {
+      document.getElementById('filter').value = '';
+      document.getElementById('filter-method').value = '';
+      document.getElementById('filter-status').value = '';
+      document.getElementById('filter-ct').value = '';
+      document.getElementById('filter-dur-min').value = '';
+      document.getElementById('filter-dur-max').value = '';
+      document.getElementById('filter-body').value = '';
+      updateFilterStatusBadge();
+      rerenderTable();
+    }
+
+    function restoreFilters(filterState) {
+      document.getElementById('filter').value = filterState.url || '';
+      document.getElementById('filter-method').value = filterState.method || '';
+      document.getElementById('filter-status').value = filterState.status || '';
+      document.getElementById('filter-ct').value = filterState.contentType || '';
+      document.getElementById('filter-dur-min').value = filterState.durationMin || '';
+      document.getElementById('filter-dur-max').value = filterState.durationMax || '';
+      document.getElementById('filter-body').value = filterState.body || '';
+      updateFilterStatusBadge();
+      rerenderTable();
+    }
+
+    function updateFilterStatusBadge() {
+      const filters = {
+        url: document.getElementById('filter').value,
+        method: document.getElementById('filter-method').value,
+        status: document.getElementById('filter-status').value,
+        contentType: document.getElementById('filter-ct').value,
+        durationMin: document.getElementById('filter-dur-min').value,
+        durationMax: document.getElementById('filter-dur-max').value,
+        body: document.getElementById('filter-body').value,
+      };
+
+      const activeCount = Object.values(filters).filter(v => v).length;
+      const badge = document.getElementById('filter-status-badge');
+      if (activeCount > 0) {
+        badge.textContent = activeCount + ' filter' + (activeCount !== 1 ? 's' : '');
+        badge.classList.add('active');
+      } else {
+        badge.textContent = '';
+        badge.classList.remove('active');
+      }
+
+      // Save filters
+      vscode.postMessage({ type: 'saveFilters', data: filters });
+    }
+
     function applyFilter() {
+      updateFilterStatusBadge();
       rerenderTable();
     }
 
