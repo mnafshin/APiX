@@ -296,7 +296,7 @@ func Run(args []string, out io.Writer, errw io.Writer) int {
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
-		writeLine(errw, "  templates save|list|delete")
+		writeLine(errw, "  templates save|list|delete|execute")
 		writeLine(errw, "  replay")
 		writeLine(errw, "  cert status")
 		writeLine(errw, "  config show|reload")
@@ -1613,7 +1613,7 @@ func (a *app) cmdSend(args []string) error {
 
 func (a *app) cmdTemplates(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: templates save|list|delete")
+		return fmt.Errorf("usage: templates save|list|delete|execute")
 	}
 	client, err := a.clientConn()
 	if err != nil {
@@ -1700,6 +1700,11 @@ func (a *app) cmdTemplates(args []string) error {
 			writef(tw, "%s\t%s\t%s\t%s\n", tpl.Id, tpl.Name, tpl.GetRequest().GetMethod(), tpl.GetRequest().GetUrl())
 		}
 		return tw.Flush()
+	case "execute":
+		if len(args) < 2 {
+			return fmt.Errorf("usage: templates execute <id-or-name>")
+		}
+		return a.cmdTemplatesExecute(client, args[1])
 	case "delete":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: templates delete <id>")
@@ -1716,6 +1721,59 @@ func (a *app) cmdTemplates(args []string) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown templates subcommand: %s", args[0])
+	}
+}
+
+func (a *app) cmdTemplatesExecute(client apix.EngineClient, identifier string) error {
+	tpl, err := a.lookupRequestTemplate(client, identifier)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ComposeRequest(ctx, &apix.ComposeSpec{
+		Request:         tpl.GetRequest(),
+		FollowRedirects: true,
+	})
+	if err != nil {
+		return err
+	}
+	return a.renderResponse(resp)
+}
+
+func (a *app) lookupRequestTemplate(client apix.EngineClient, identifier string) (*apix.RequestTemplate, error) {
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	resp, err := client.ListRequestTemplates(ctx, &apix.Empty{})
+	if err != nil {
+		return nil, err
+	}
+	if identifier == "" {
+		return nil, fmt.Errorf("template identifier is required")
+	}
+
+	var nameMatches []*apix.RequestTemplate
+	for _, tpl := range resp.Templates {
+		if tpl.GetId() == identifier {
+			return tpl, nil
+		}
+		if tpl.GetName() == identifier {
+			nameMatches = append(nameMatches, tpl)
+		}
+	}
+
+	switch len(nameMatches) {
+	case 0:
+		return nil, status.Errorf(codes.NotFound, "template %q not found", identifier)
+	case 1:
+		return nameMatches[0], nil
+	default:
+		ids := make([]string, 0, len(nameMatches))
+		for _, tpl := range nameMatches {
+			ids = append(ids, tpl.GetId())
+		}
+		sort.Strings(ids)
+		return nil, fmt.Errorf("template name %q is ambiguous; matched ids: %s", identifier, strings.Join(ids, ", "))
 	}
 }
 
@@ -1951,7 +2009,7 @@ _apix() {
   local cur prev words cword
   _init_completion || return
   local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond save show reload status"
+  local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
 complete -F _apix apix

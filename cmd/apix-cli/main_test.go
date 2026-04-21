@@ -364,6 +364,27 @@ func TestCLIWriteWorkflows_EngineBacked(t *testing.T) {
 	if len(templates) != 1 || templates[0]["id"] != "tpl-1" {
 		t.Fatalf("unexpected templates list: %#v", templates)
 	}
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "execute", "tpl-1")...)
+	if exit != 0 {
+		t.Fatalf("templates execute by id exit=%d err=%s", exit, errOut)
+	}
+	var execResp map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &execResp); err != nil {
+		t.Fatalf("templates execute by id json: %v", err)
+	}
+	if int(execResp["status_code"].(float64)) != 200 || execResp["body"] != "pong" {
+		t.Fatalf("unexpected execute response by id: %#v", execResp)
+	}
+	exit, out, errOut = runCLI(t, stack.args("--output", "json", "templates", "execute", "health")...)
+	if exit != 0 {
+		t.Fatalf("templates execute by name exit=%d err=%s", exit, errOut)
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &execResp); err != nil {
+		t.Fatalf("templates execute by name json: %v", err)
+	}
+	if int(execResp["status_code"].(float64)) != 200 || execResp["body"] != "pong" {
+		t.Fatalf("unexpected execute response by name: %#v", execResp)
+	}
 	exit, _, errOut = runCLI(t, stack.args("templates", "delete", "tpl-1")...)
 	if exit != 0 {
 		t.Fatalf("templates delete exit=%d err=%s", exit, errOut)
