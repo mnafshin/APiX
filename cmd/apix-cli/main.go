@@ -1436,7 +1436,7 @@ func (a *app) cmdLearn(args []string) error {
 
 func (a *app) cmdContract(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: contract init|validate")
+		return fmt.Errorf("usage: contract init|validate|export-openapi|import-openapi")
 	}
 	switch args[0] {
 	case "init":
@@ -1514,8 +1514,107 @@ func (a *app) cmdContract(args []string) error {
 		}
 		writef(a.out, "Contract valid: %s (schema=%s, endpoints=%d)\n", clean, c.SchemaVersion, endpointCount)
 		return nil
+	case "export-openapi":
+		fs := flag.NewFlagSet("contract export-openapi", flag.ContinueOnError)
+		fs.SetOutput(a.errw)
+		var contractPath, outPath, format string
+		fs.StringVar(&contractPath, "contract", "", "contract file path (.yaml, .yml, .json)")
+		fs.StringVar(&outPath, "output", "", "output file path (.yaml, .yml, .json)")
+		fs.StringVar(&format, "format", "yaml", "output format: yaml|json")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if strings.TrimSpace(contractPath) == "" || strings.TrimSpace(outPath) == "" {
+			return fmt.Errorf("usage: contract export-openapi --contract <path> --output <path>")
+		}
+		contractClean := filepath.Clean(contractPath)
+		c, validation, err := contracts.ValidateFile(contractClean)
+		if err != nil {
+			return err
+		}
+		if validation != nil {
+			return validation
+		}
+		doc, diags := contracts.ExportOpenAPI31(c)
+		if len(diags) > 0 {
+			for _, d := range diags {
+				writef(a.errw, "warning: %s: %s\n", d.Path, d.Message)
+			}
+		}
+		var encoded []byte
+		switch strings.ToLower(format) {
+		case "json":
+			encoded, err = json.MarshalIndent(doc, "", "  ")
+		default:
+			encoded, err = yaml.Marshal(doc)
+		}
+		if err != nil {
+			return fmt.Errorf("encode openapi: %w", err)
+		}
+		if len(encoded) == 0 || encoded[len(encoded)-1] != '\n' {
+			encoded = append(encoded, '\n')
+		}
+		outClean := filepath.Clean(outPath)
+		if err := os.WriteFile(outClean, encoded, 0o600); err != nil {
+			return fmt.Errorf("write openapi: %w", err)
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"output":   outClean,
+				"format":   format,
+				"warnings": len(diags),
+			})
+		}
+		writef(a.out, "OpenAPI 3.1 exported: %s\n", outClean)
+		return nil
+	case "import-openapi":
+		fs := flag.NewFlagSet("contract import-openapi", flag.ContinueOnError)
+		fs.SetOutput(a.errw)
+		var openapiPath, outPath string
+		fs.StringVar(&openapiPath, "openapi", "", "OpenAPI file path (.yaml, .yml, .json)")
+		fs.StringVar(&outPath, "output", "", "output contract file path")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if strings.TrimSpace(openapiPath) == "" || strings.TrimSpace(outPath) == "" {
+			return fmt.Errorf("usage: contract import-openapi --openapi <path> --output <path>")
+		}
+		openapiClean := filepath.Clean(openapiPath)
+		data, err := os.ReadFile(openapiClean)
+		if err != nil {
+			return fmt.Errorf("read openapi: %w", err)
+		}
+		c, diags, err := contracts.ImportOpenAPI31Bytes(openapiClean, data)
+		if err != nil {
+			return err
+		}
+		if len(diags) > 0 {
+			for _, d := range diags {
+				writef(a.errw, "note: %s: %s\n", d.Path, d.Message)
+			}
+		}
+		if c == nil {
+			return fmt.Errorf("import failed: contract is nil")
+		}
+		validation := contracts.Validate(c)
+		if validation.HasErrors() {
+			return validation
+		}
+		outClean := filepath.Clean(outPath)
+		if err := contracts.SaveYAML(outClean, c); err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"output":    outClean,
+				"endpoints": len(c.Endpoints),
+				"notes":     len(diags),
+			})
+		}
+		writef(a.out, "Contract imported: %s (endpoints=%d)\n", outClean, len(c.Endpoints))
+		return nil
 	default:
-		return fmt.Errorf("usage: contract init|validate")
+		return fmt.Errorf("usage: contract init|validate|export-openapi|import-openapi")
 	}
 }
 
