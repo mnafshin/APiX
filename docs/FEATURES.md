@@ -360,6 +360,7 @@ breakpoints list|add|delete|enable|disable
 paused watch|forward|drop|respond
 templates save|list|delete
 replay                   # replay stored requests
+learn                    # infer draft OpenAPI from observed traffic
 config                   # show/validate config
 doctor [bundle]          # diagnostics or support bundle
 tui                      # interactive live traffic terminal UI

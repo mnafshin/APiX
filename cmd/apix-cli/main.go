@@ -21,6 +21,7 @@ import (
 	"github.com/fatih/color"
 	tuimode "github.com/mnafshin/apix/cmd/apix-cli/tui"
 	"github.com/mnafshin/apix/internal/config"
+	"github.com/mnafshin/apix/internal/learn"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gopkg.in/yaml.v3"
 )
 
 type rootOptions struct {
@@ -90,6 +92,14 @@ type exportOptions struct {
 	format string
 	output string
 	limit  int
+}
+
+type learnOptions struct {
+	limit   int
+	output  string
+	format  string
+	title   string
+	version string
 }
 
 type bodyFlag struct {
@@ -376,6 +386,7 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		writeLine(errw, "  watch [traffic]")
 		writeLine(errw, "  filter")
 		writeLine(errw, "  export")
+		writeLine(errw, "  learn")
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
@@ -459,6 +470,8 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		return app.exec("filter", func() error { return app.cmdFilter(fs.Args()[1:]) })
 	case "export":
 		return app.exec("export", func() error { return app.cmdExport(fs.Args()[1:]) })
+	case "learn":
+		return app.exec("learn", func() error { return app.cmdLearn(fs.Args()[1:]) })
 	case "breakpoints":
 		return app.exec("breakpoints", func() error { return app.cmdBreakpoints(fs.Args()[1:]) })
 	case "paused":
@@ -1312,6 +1325,109 @@ func (a *app) cmdExport(args []string) error {
 			return err
 		}
 	}
+}
+
+func (a *app) cmdLearn(args []string) error {
+	fs := flag.NewFlagSet("learn", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	opts := learnOptions{
+		limit:   500,
+		format:  "yaml",
+		title:   "APiX Learned API",
+		version: "0.1.0",
+	}
+	fs.IntVar(&opts.limit, "limit", 500, "max number of transactions to infer from")
+	fs.StringVar(&opts.output, "output", "", "output file path (default: stdout)")
+	fs.StringVar(&opts.format, "format", "yaml", "output format: yaml|json")
+	fs.StringVar(&opts.title, "title", "APiX Learned API", "OpenAPI info.title value")
+	fs.StringVar(&opts.version, "version", "0.1.0", "OpenAPI info.version value")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if opts.limit <= 0 {
+		return fmt.Errorf("limit must be > 0")
+	}
+	if opts.format != "yaml" && opts.format != "json" {
+		return fmt.Errorf("unsupported format %q (use yaml or json)", opts.format)
+	}
+
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.unaryContext()
+	defer cancel()
+	limit, err := int32FromInt(opts.limit, "limit")
+	if err != nil {
+		return err
+	}
+	stream, err := client.GetHistory(ctx, &apix.HistoryQuery{Limit: limit})
+	if err != nil {
+		return err
+	}
+	items, err := recvHistory(stream)
+	if err != nil {
+		return err
+	}
+	observations := make([]learn.Observation, 0, len(items))
+	for _, tx := range items {
+		if tx.GetRequest() == nil {
+			continue
+		}
+		method := tx.GetRequest().GetMethod()
+		if method == "" {
+			continue
+		}
+		observations = append(observations, learn.Observation{
+			Method:          method,
+			URL:             tx.GetRequest().GetUrl(),
+			RequestHeaders:  tx.GetRequest().GetHeaders(),
+			RequestBody:     tx.GetRequest().GetBody(),
+			ResponseStatus:  int(tx.GetResponse().GetStatusCode()),
+			ResponseHeaders: tx.GetResponse().GetHeaders(),
+			ResponseBody:    tx.GetResponse().GetBody(),
+		})
+	}
+
+	spec := learn.BuildOpenAPISpec(observations, opts.title, opts.version)
+	var encoded []byte
+	switch opts.format {
+	case "json":
+		encoded, err = json.MarshalIndent(spec, "", "  ")
+	case "yaml":
+		encoded, err = yaml.Marshal(spec)
+	}
+	if err != nil {
+		return fmt.Errorf("encode learned openapi: %w", err)
+	}
+	if len(encoded) == 0 || encoded[len(encoded)-1] != '\n' {
+		encoded = append(encoded, '\n')
+	}
+
+	if opts.output != "" {
+		cleanPath := filepath.Clean(opts.output)
+		if err := os.WriteFile(cleanPath, encoded, 0o644); err != nil {
+			return fmt.Errorf("write learned openapi: %w", err)
+		}
+		pathCount := 0
+		if paths, ok := spec["paths"].(map[string]any); ok {
+			pathCount = len(paths)
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"output":             cleanPath,
+				"format":             opts.format,
+				"paths":              pathCount,
+				"observations_count": len(observations),
+			})
+		}
+		writef(a.out, "Draft OpenAPI written: %s (paths=%d, observations=%d)\n", cleanPath, pathCount, len(observations))
+		writeLine(a.out, "Note: this is proposal-only output; review before contract promotion.")
+		return nil
+	}
+
+	_, err = a.out.Write(encoded)
+	return err
 }
 
 func (a *app) cmdBreakpoints(args []string) error {
@@ -2171,7 +2287,7 @@ func completionScript(shell string) (string, error) {
 _apix() {
   local cur prev words cword
   _init_completion || return
-  local commands="status plugins history watch breakpoints paused send templates replay cert config setup tui completion doctor help"
+  local commands="status plugins history watch filter export learn breakpoints paused send templates replay cert config setup tui completion doctor help"
   local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status bundle"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
@@ -2185,6 +2301,7 @@ _apix() {
     'plugins:Plugin commands'
     'history:History commands'
     'watch:Watch traffic'
+    'learn:Infer draft OpenAPI from observed traffic'
     'breakpoints:Breakpoint commands'
     'paused:Paused request commands'
     'send:Send a raw request'
@@ -2202,7 +2319,7 @@ _apix() {
 }
 _apix "$@"
 `
-	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send templates replay cert config setup tui completion doctor help"
+	const fish = `complete -c apix -f -a "status plugins history watch filter export learn breakpoints paused send templates replay cert config setup tui completion doctor help"
 complete -c apix -n "__fish_seen_subcommand_from doctor" -f -a "bundle"
 `
 	switch shell {

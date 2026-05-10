@@ -15,6 +15,7 @@ Commands:
   watch [traffic]
   filter
   export
+  learn
   breakpoints list|add|delete|enable|disable
   paused watch|forward|drop|respond
   send
