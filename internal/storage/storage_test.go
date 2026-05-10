@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,6 +65,112 @@ func TestSchemaCreatesHistoryIndexes(t *testing.T) {
 		if !indexes[idx] {
 			t.Errorf("missing index %q", idx)
 		}
+	}
+}
+
+func TestOpenSetsStorageSchemaVersion(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t)
+
+	var got int
+	if err := db.db.QueryRow("PRAGMA user_version").Scan(&got); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if got != storageSchemaVersion {
+		t.Fatalf("schema version: got %d want %d", got, storageSchemaVersion)
+	}
+}
+
+func TestOpenMigratesLegacyBreakpointsSchema(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "legacy.db")
+	raw, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open legacy db: %v", err)
+	}
+	if _, err := raw.Exec(`CREATE TABLE breakpoints (
+		id          TEXT PRIMARY KEY,
+		url_pattern TEXT NOT NULL,
+		methods     TEXT NOT NULL DEFAULT '[]',
+		enabled     INTEGER NOT NULL DEFAULT 1,
+		label       TEXT NOT NULL DEFAULT '',
+		created_at  INTEGER NOT NULL
+	);`); err != nil {
+		t.Fatalf("create legacy breakpoints table: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
+
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open migrated db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	rows, err := db.db.Query(`PRAGMA table_info(breakpoints)`)
+	if err != nil {
+		t.Fatalf("query table_info(breakpoints): %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	cols := map[string]bool{}
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			typ       string
+			notNull   int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &dfltValue, &pk); err != nil {
+			t.Fatalf("scan table_info row: %v", err)
+		}
+		cols[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate table_info rows: %v", err)
+	}
+
+	required := []string{"header_name", "header_value", "body_pattern", "status_codes"}
+	for _, name := range required {
+		if !cols[name] {
+			t.Fatalf("expected migrated column %q to exist", name)
+		}
+	}
+
+	var gotVersion int
+	if err := db.db.QueryRow("PRAGMA user_version").Scan(&gotVersion); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if gotVersion != storageSchemaVersion {
+		t.Fatalf("schema version after migration: got %d want %d", gotVersion, storageSchemaVersion)
+	}
+}
+
+func TestOpenRejectsFutureStorageSchemaVersion(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "future.db")
+	raw, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open future db: %v", err)
+	}
+	if _, err := raw.Exec(fmt.Sprintf("PRAGMA user_version = %d", storageSchemaVersion+1)); err != nil {
+		t.Fatalf("set future user_version: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("close future db: %v", err)
+	}
+
+	_, err = Open(dbPath)
+	if err == nil {
+		t.Fatal("expected future schema version to fail open")
+	}
+	if !strings.Contains(err.Error(), "newer than this binary supports") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

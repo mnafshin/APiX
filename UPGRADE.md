@@ -51,3 +51,11 @@ Check version compatibility in [`docs/REFERENCE/compatibility-matrix.md`](docs/R
 4. Start old version and run `./apix-cli status`.
 
 If rollback is required because of compatibility, keep your previous version pinned and open an issue with the failing workflow and versions.
+
+## Storage schema compatibility
+
+- APiX storage upgrades are applied at startup using ordered schema migrations.
+- If your DB schema is newer than the running APiX binary supports, startup fails fast with a compatibility error.
+- For rollback across storage-changing releases, restore both binary and DB backup together.
+
+See [`docs/REFERENCE/storage-migrations.md`](docs/REFERENCE/storage-migrations.md) for migration rules.
