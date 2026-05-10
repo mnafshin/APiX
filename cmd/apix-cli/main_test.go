@@ -614,6 +614,33 @@ func TestCLIFilter_EngineBacked(t *testing.T) {
 	}
 }
 
+func TestCLILearn_EngineBacked(t *testing.T) {
+	t.Parallel()
+	stack := newCLITestStack(t, "")
+	stack.storeTransaction(t, "learn-1", "GET", "https://api.example.com/users/123?include=posts", "", `{"id":123,"name":"A"}`, 200)
+	stack.storeTransaction(t, "learn-2", "POST", "https://api.example.com/users", `{"name":"A"}`, `{"id":124}`, 201)
+
+	outPath := filepath.Join(t.TempDir(), "openapi.learned.yaml")
+	exit, out, errOut := runCLI(t, stack.args("--output", "json", "learn", "--format", "yaml", "--output", outPath, "--limit", "50")...)
+	if exit != 0 {
+		t.Fatalf("learn exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"output":`) {
+		t.Fatalf("learn output=%s", out)
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read learned file: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "openapi: 3.0.3") {
+		t.Fatalf("missing openapi version in learned output: %s", content)
+	}
+	if !strings.Contains(content, "/users/{id}:") {
+		t.Fatalf("missing normalized /users/{id} path in learned output: %s", content)
+	}
+}
+
 func TestCLIExport_EngineBacked(t *testing.T) {
 	t.Parallel()
 	stack := newCLITestStack(t, "")

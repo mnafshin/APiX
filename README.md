@@ -75,6 +75,7 @@ Then run the extension from VS Code (`Run Extension`), or package/install from `
 - `send`
 - `templates save|list|delete|execute`
 - `replay`
+- `learn`
 - `cert`, `config`, `doctor`, `tui`, `completion`
 
 Use `apix help` for details.
