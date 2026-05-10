@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
+	metrics "github.com/mnafshin/apix/internal/metrics"
 	"io"
 	"net"
 	"net/http"
@@ -101,6 +102,8 @@ func copyHeadersExcluding(src http.Header, exclude ...string) http.Header {
 func relayWebSocket(ctx context.Context, engine TransactionStore, transactionID string, clientConn, upstreamConn *websocket.Conn) {
 	relayCtx, cancelRelay := context.WithCancel(ctx)
 	defer cancelRelay()
+	metrics.IncWebSocketActive()
+	defer metrics.DecWebSocketActive()
 
 	var forwardCloseOnce sync.Once
 	var shutdownOnce sync.Once
@@ -194,6 +197,7 @@ func isExpectedWebSocketClose(err error) bool {
 }
 
 func recordWebSocketFrame(ctx context.Context, engine TransactionStore, transactionID, direction string, opcode int, payload []byte) {
+	metrics.IncWebSocketFrame(direction)
 	if engine == nil {
 		return
 	}
