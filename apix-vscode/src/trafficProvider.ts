@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { HttpTransaction } from './types';
 import { isWebSocketTransaction } from './trafficFormats';
+import { Logger } from './logger';
 
 /**
  * TrafficProvider implements TreeDataProvider for the APiX Traffic tree view.
@@ -19,7 +20,7 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
     private captureRetryTimer: ReturnType<typeof setTimeout> | undefined;
     private captureRetryDelayMs = 1000;
 
-    constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {
+    constructor(private readonly client: EngineClient, private readonly logger: Logger) {
         const config = vscode.workspace.getConfiguration('apix');
         this.maxItems = config.get<number>('traffic.maxItems', 500);
         this.startCapture();
@@ -61,7 +62,7 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
             return txs.map(tx => new TrafficItem(tx));
         } catch (err: any) {
             const msg = err?.message || String(err);
-            this.output?.appendLine(`[APiX] Traffic view error: ${msg}`);
+            this.logger.error('Traffic view error', { message: msg });
             return [new ErrorItem(`Connection lost: ${msg}`, 'apix.refreshTraffic')];
         }
     }
@@ -80,14 +81,14 @@ export class TrafficProvider implements vscode.TreeDataProvider<TrafficItem | Er
                     this.scheduleRefresh();
                 },
                 (err) => {
-                    this.output?.appendLine(`[APiX] Traffic stream error: ${err?.message || err}`);
+                    this.logger.error('Traffic stream error', { message: err?.message || String(err) });
                     this.scheduleCaptureRetry();
                 },
                 () => this.scheduleCaptureRetry()
             );
             this.captureStream = { cancel: () => stream.cancel() };
         } catch (err) {
-            this.output?.appendLine(`[APiX] Could not start traffic stream: ${err}`);
+            this.logger.error('Could not start traffic stream', { message: String(err) });
             this.scheduleCaptureRetry();
         }
     }

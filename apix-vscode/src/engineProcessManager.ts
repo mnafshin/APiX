@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as child_process from 'child_process';
 import * as path from 'path';
+import { Logger } from './logger';
 
 /**
  * EngineProcessManager starts and stops the apix-engine binary as a child
@@ -21,7 +22,6 @@ export class EngineProcessManager {
     private restartAttempts = 0;
     private restartTimer: ReturnType<typeof setTimeout> | null = null;
     private stopping = false;
-    private outputChannel: vscode.OutputChannel | null = null;
     /** Callback invoked after a successful auto-restart so streams can be re-established. */
     onRestart: (() => void) | null = null;
     /** Callback invoked when an unexpected exit is detected. */
@@ -29,7 +29,10 @@ export class EngineProcessManager {
     /** Callback invoked when auto-restart has been scheduled. */
     onRestarting: ((attempt: number, delayMs: number) => void) | null = null;
 
-    constructor(private readonly context: vscode.ExtensionContext) {}
+    constructor(
+        private readonly context: vscode.ExtensionContext,
+        private readonly logger: Logger
+    ) {}
 
     /** Start the engine subprocess. Resolves when the engine signals readiness. */
     async start(): Promise<void> {
@@ -45,11 +48,7 @@ export class EngineProcessManager {
         this.isStarting = true;
         try {
             const binaryPath = this._binaryPath();
-            if (!this.outputChannel) {
-                this.outputChannel = vscode.window.createOutputChannel('APiX Engine');
-            }
-            const outputChannel = this.outputChannel;
-            outputChannel.show(true);
+            this.logger.info('Starting engine process', { binaryPath });
 
             this.startPromise = new Promise((resolve, reject) => {
                 try {
@@ -69,13 +68,13 @@ export class EngineProcessManager {
                     };
 
                     const timeout = setTimeout(() => {
-                        outputChannel.appendLine('[APiX] Warning: engine did not signal ready within 10s — proceeding anyway.');
+                        this.logger.warn('Engine did not signal ready within 10s; proceeding anyway.');
                         resolveOnce();
                     }, 10000);
 
                     proc.stdout?.on('data', (data: Buffer) => {
                         const text = data.toString();
-                        outputChannel.append(text);
+                        this.logEngineOutput('stdout', text);
                         if (text.includes('gRPC server listening') || text.includes('Starting gRPC')) {
                             clearTimeout(timeout);
                             resolveOnce();
@@ -83,12 +82,12 @@ export class EngineProcessManager {
                     });
 
                     proc.stderr?.on('data', (data: Buffer) => {
-                        outputChannel.append(data.toString());
+                        this.logEngineOutput('stderr', data.toString());
                     });
 
                     proc.on('error', (err: Error) => {
                         clearTimeout(timeout);
-                        outputChannel.appendLine(`[APiX] Process error: ${err.message}`);
+                        this.logger.error('Engine process error', { message: err.message });
                         if (!resolved) {
                             resolved = true;
                             this.isStarting = false;
@@ -104,7 +103,7 @@ export class EngineProcessManager {
                         }
                         if (!this.stopping && code !== 0 && code !== null) {
                             const msg = `APiX Engine exited unexpectedly (code ${code}, signal ${signal})`;
-                            outputChannel.appendLine(`[APiX] ${msg}`);
+                            this.logger.error(msg);
                             this.onUnexpectedExit?.(msg);
                             this.scheduleAutoRestart();
                         }
@@ -158,14 +157,18 @@ export class EngineProcessManager {
         }
         if (this.restartAttempts >= MAX_RESTART_ATTEMPTS) {
             const msg = `APiX Engine failed to restart after ${MAX_RESTART_ATTEMPTS} attempts.`;
-            this.outputChannel?.appendLine(`[APiX] ${msg}`);
+            this.logger.error(msg);
             void vscode.window.showErrorMessage(msg);
             return;
         }
 
         this.restartAttempts += 1;
         const delayMs = Math.min(BACKOFF_INITIAL_MS * Math.pow(2, this.restartAttempts - 1), BACKOFF_MAX_MS);
-        this.outputChannel?.appendLine(`[APiX] Auto-restart attempt ${this.restartAttempts}/${MAX_RESTART_ATTEMPTS} in ${delayMs}ms`);
+        this.logger.warn('Scheduling engine auto-restart', {
+            attempt: this.restartAttempts,
+            maxAttempts: MAX_RESTART_ATTEMPTS,
+            delayMs,
+        });
         this.onRestarting?.(this.restartAttempts, delayMs);
 
         this.restartTimer = setTimeout(async () => {
@@ -178,10 +181,24 @@ export class EngineProcessManager {
                 this.onRestart?.();
             } catch (err: any) {
                 const msg = err?.message || String(err);
-                this.outputChannel?.appendLine(`[APiX] Auto-restart attempt ${this.restartAttempts} failed: ${msg}`);
+                this.logger.error('Engine auto-restart attempt failed', {
+                    attempt: this.restartAttempts,
+                    message: msg,
+                });
                 this.scheduleAutoRestart();
             }
         }, delayMs);
+    }
+
+    private logEngineOutput(stream: 'stdout' | 'stderr', raw: string): void {
+        const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
+        for (const line of lines) {
+            if (stream === 'stderr') {
+                this.logger.warn('Engine output', { stream, line });
+            } else {
+                this.logger.debug('Engine output', { stream, line });
+            }
+        }
     }
 
     /** Resolve the path to the bundled engine binary. */
