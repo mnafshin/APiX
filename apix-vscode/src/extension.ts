@@ -9,8 +9,11 @@ import { ReplayPanel } from './replayPanel';
 import { RequestEditor } from './requestEditor';
 import { HttpTransaction } from './types';
 import { buildCurlCommand } from './trafficFormats';
+import { WelcomePanel } from './welcomePanel';
 
 const AUTH_TOKEN_SECRET_KEY = 'apix.authToken';
+const WELCOME_SHOWN_KEY = 'apix.welcomeShown';
+const HIDE_WELCOME_KEY = 'apix.hideWelcome';
 
 let engineClient: EngineClient | undefined;
 let processManager: EngineProcessManager | undefined;
@@ -144,6 +147,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         vscode.commands.registerCommand('apix.openTrafficPanel', () =>
             TrafficPanel.createOrShow(context, engineClient!)
         ),
+        vscode.commands.registerCommand('apix.showWelcome', () =>
+            WelcomePanel.show(context, engineClient!)
+        ),
         vscode.commands.registerCommand('apix.refreshTraffic', () => {
             trafficProvider?.refresh();
         }),
@@ -181,6 +187,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
             .catch(err => outputChannel?.appendLine(`APiX: auto-start failed — ${err?.message || err}`));
 
+    }
+
+    const hideWelcome = context.globalState.get<boolean>(HIDE_WELCOME_KEY, false);
+    const welcomeShown = context.globalState.get<boolean>(WELCOME_SHOWN_KEY, false);
+    if (!hideWelcome && !welcomeShown) {
+        void context.globalState.update(WELCOME_SHOWN_KEY, true);
+        WelcomePanel.show(context, engineClient!);
     }
 }
 

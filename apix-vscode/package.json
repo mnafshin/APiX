@@ -38,6 +38,7 @@
     "onCommand:apix.exportHAR",
     "onCommand:apix.importHAR",
     "onCommand:apix.openTrafficPanel",
+    "onCommand:apix.showWelcome",
     "onCommand:apix.refreshTraffic",
     "onCommand:apix.mocks.refresh",
     "onCommand:apix.mocks.toggle",
@@ -118,6 +119,11 @@
         "command": "apix.openTrafficPanel",
         "title": "APiX: Open Traffic Inspector",
         "icon": "$(globe)"
+      },
+      {
+        "command": "apix.showWelcome",
+        "title": "APiX: Show Welcome",
+        "icon": "$(home)"
       },
       {
         "command": "apix.refreshTraffic",
