@@ -117,7 +117,7 @@
       },
       {
         "command": "apix.openTrafficPanel",
-        "title": "APiX: Open Traffic Inspector",
+        "title": "APiX: Open Unified Workspace",
         "icon": "$(globe)"
       },
       {

@@ -251,7 +251,7 @@ async function startEngine(
 ): Promise<void> {
     if (pm.isRunning()) {
         statusBarItem!.text = '$(circle-filled) APiX: Running';
-        statusBarItem!.tooltip = 'APiX: Running — click to open traffic panel';
+        statusBarItem!.tooltip = 'APiX: Running — click to open unified workspace';
         statusBarItem!.command = 'apix.openTrafficPanel';
         breakpointsProvider.refresh();
         trafficProvider.refresh();
@@ -274,7 +274,7 @@ async function startEngine(
         }
 
         statusBarItem!.text = '$(circle-filled) APiX: Running';
-        statusBarItem!.tooltip = 'APiX: Running — click to open traffic panel';
+        statusBarItem!.tooltip = 'APiX: Running — click to open unified workspace';
         statusBarItem!.command = 'apix.openTrafficPanel';
 
         breakpointsProvider.refresh();
