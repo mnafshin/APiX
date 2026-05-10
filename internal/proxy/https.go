@@ -255,7 +255,7 @@ func (p *TLSProxy) processRequestPipeline(ctx context.Context, r *http.Request, 
 		Raw:      r,
 	}
 
-	proxyReq, err = runPluginRequest(ctx, p.plugins, proxyReq, logPrefix)
+	proxyReq, err = runPluginRequest(ctx, p.plugins, proxyReq, logPrefix, p.cfg.PluginExecutionTimeoutSec)
 	if err != nil {
 		ioHooks.writeError(http.StatusBadGateway, fmt.Sprintf("plugin error: %v", err))
 		return
@@ -336,7 +336,7 @@ func (p *TLSProxy) processRequestPipeline(ctx context.Context, r *http.Request, 
 		Body:       io.NopCloser(bytes.NewReader(respBody)),
 		Raw:        upResp,
 	}
-	proxyResp, err = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, logPrefix)
+	proxyResp, err = runPluginResponse(ctx, p.plugins, proxyReq, proxyResp, logPrefix, p.cfg.PluginExecutionTimeoutSec)
 	if err != nil {
 		ioHooks.writeError(http.StatusBadGateway, fmt.Sprintf("plugin OnResponse error: %v", err))
 		return

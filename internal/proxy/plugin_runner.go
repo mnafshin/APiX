@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"runtime"
 	"time"
 
 	logging "github.com/mnafshin/apix/internal/logging"
@@ -12,11 +13,12 @@ import (
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
-// runPluginRequest executes the RunRequest hook via type assertion.
+// runPluginRequest executes the RunRequest hook via type assertion with optional timeout.
 // Returns the (possibly modified) request, or an error if the hook failed.
 // Callers may pass nil or a value that does not implement RequestPlugin —
 // in both cases the original req is returned unchanged.
-func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest, logTag string) (*plugins.ProxyRequest, error) {
+// timeoutSec: plugin execution timeout in seconds (0 = no timeout).
+func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest, logTag string, timeoutSec int) (*plugins.ProxyRequest, error) {
 	rp, ok := chain.(RequestPlugin)
 	if !ok || rp == nil {
 		return req, nil
@@ -24,16 +26,42 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 	pluginName := pluginMetricName(chain)
 	start := time.Now()
 	var runErr error
+
+	// Track memory before and after plugin execution
+	var m1 runtime.MemStats
+	runtime.ReadMemStats(&m1)
+
 	func() {
 		defer func() {
 			recoverProxyPanic(ctx, fmt.Sprintf("%s: panic in plugin OnRequest", logTag), func() {
 				runErr = fmt.Errorf("plugin panic")
 			})
+			// Track memory after plugin execution
+			var m2 runtime.MemStats
+			runtime.ReadMemStats(&m2)
+			memDeltaMB := float64((m2.Alloc - m1.Alloc)) / 1024 / 1024
+			if memDeltaMB > 10 {
+				logging.Warnf(ctx, "%s: plugin %q allocated %.2f MB during OnRequest", logTag, pluginName, memDeltaMB)
+			}
 		}()
-		modified, err := rp.RunRequest(ctx, req)
+
+		// Apply plugin execution timeout if configured
+		execCtx := ctx
+		if timeoutSec > 0 {
+			var cancel context.CancelFunc
+			execCtx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+			defer cancel()
+		}
+
+		modified, err := rp.RunRequest(execCtx, req)
 		if err != nil {
-			logging.Errorf(ctx, "%s: plugin OnRequest error: %v", logTag, err)
-			runErr = err
+			if execCtx.Err() == context.DeadlineExceeded {
+				logging.Errorf(ctx, "%s: plugin %q OnRequest timeout exceeded (%d sec)", logTag, pluginName, timeoutSec)
+				runErr = fmt.Errorf("plugin timeout")
+			} else {
+				logging.Errorf(ctx, "%s: plugin %q OnRequest error: %v", logTag, pluginName, err)
+				runErr = err
+			}
 			return
 		}
 		req = modified
@@ -45,11 +73,12 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 	return req, nil
 }
 
-// runPluginResponse executes the RunResponse hook via type assertion.
+// runPluginResponse executes the RunResponse hook via type assertion with optional timeout.
 // Returns the (possibly modified) response, or an error when the plugin fails.
 // Callers may pass nil or a value that does not implement ResponsePlugin —
 // in both cases the original resp is returned unchanged.
-func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string) (*plugins.ProxyResponse, error) {
+// timeoutSec: plugin execution timeout in seconds (0 = no timeout).
+func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest, resp *plugins.ProxyResponse, logTag string, timeoutSec int) (*plugins.ProxyResponse, error) {
 	rp, ok := chain.(ResponsePlugin)
 	if !ok || rp == nil {
 		return resp, nil
@@ -57,16 +86,42 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 	pluginName := pluginMetricName(chain)
 	start := time.Now()
 	var runErr error
+
+	// Track memory before and after plugin execution
+	var m1 runtime.MemStats
+	runtime.ReadMemStats(&m1)
+
 	func() {
 		defer func() {
 			recoverProxyPanic(ctx, fmt.Sprintf("%s: panic in plugin OnResponse", logTag), func() {
 				runErr = fmt.Errorf("plugin panic")
 			})
+			// Track memory after plugin execution
+			var m2 runtime.MemStats
+			runtime.ReadMemStats(&m2)
+			memDeltaMB := float64((m2.Alloc - m1.Alloc)) / 1024 / 1024
+			if memDeltaMB > 10 {
+				logging.Warnf(ctx, "%s: plugin %q allocated %.2f MB during OnResponse", logTag, pluginName, memDeltaMB)
+			}
 		}()
-		modResp, err := rp.RunResponse(ctx, req, resp)
+
+		// Apply plugin execution timeout if configured
+		execCtx := ctx
+		if timeoutSec > 0 {
+			var cancel context.CancelFunc
+			execCtx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+			defer cancel()
+		}
+
+		modResp, err := rp.RunResponse(execCtx, req, resp)
 		if err != nil {
-			logging.Errorf(ctx, "%s: plugin OnResponse error: %v", logTag, err)
-			runErr = err
+			if execCtx.Err() == context.DeadlineExceeded {
+				logging.Errorf(ctx, "%s: plugin %q OnResponse timeout exceeded (%d sec)", logTag, pluginName, timeoutSec)
+				runErr = fmt.Errorf("plugin timeout")
+			} else {
+				logging.Errorf(ctx, "%s: plugin %q OnResponse error: %v", logTag, pluginName, err)
+				runErr = err
+			}
 			return
 		}
 		if modResp != nil {

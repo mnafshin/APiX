@@ -345,7 +345,7 @@ func (p *HTTPProxy) readRequestBody(r *http.Request, maxBytes int64) ([]byte, er
 // runPluginRequest runs the OnRequest plugin chain with panic recovery.
 // Returns the (possibly modified) ProxyRequest, or an error on failure.
 func (p *HTTPProxy) runPluginRequest(ctx context.Context, req *plugins.ProxyRequest) (*plugins.ProxyRequest, error) {
-	return runPluginRequest(ctx, p.plugins, req, "http proxy")
+	return runPluginRequest(ctx, p.plugins, req, "http proxy", p.cfg.PluginExecutionTimeoutSec)
 }
 
 // writeMockedResponse writes a plugin-provided mocked response to w.
@@ -525,7 +525,7 @@ func (p *HTTPProxy) runPluginResponse(ctx context.Context, req *plugins.ProxyReq
 		return resp, body, nil
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
-	modResp, err := runPluginResponse(ctx, p.plugins, req, resp, "http proxy")
+	modResp, err := runPluginResponse(ctx, p.plugins, req, resp, "http proxy", p.cfg.PluginExecutionTimeoutSec)
 	if err != nil {
 		return nil, nil, err
 	}
