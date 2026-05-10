@@ -1,0 +1,6 @@
+# benchmark_name	max_ns_per_op	max_allocs_per_op
+BenchmarkStorage_SaveRequest	200000	64
+BenchmarkStorage_ListTransactions	1200000	7000
+BenchmarkPluginRuntime_RunRequest_5Plugins	1500	12
+BenchmarkHTTPProxy_Parallel	800000	400
+BenchmarkBreakpoints_Evaluate	100000	80

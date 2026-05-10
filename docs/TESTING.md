@@ -226,17 +226,16 @@ go test -bench=. -benchmem ./internal/proxy ./internal/storage ./internal/breakp
 # Run one benchmark
 go test -bench=BenchmarkStorage_SaveRequest -benchmem ./internal/storage
 
-# Compare with baseline
-go test -bench=. -benchmem ./internal/proxy -benchstat=old.txt > new.txt
-# (requires benchstat tool)
+# CI regression gate with explicit thresholds
+make perf-check
 ```
 
 **Guidelines:**
 - Use real components (proxy, storage, engine) not mocks
 - Reset timer after setup: `b.ResetTimer()`
 - Allocations matter: `-benchmem` shows allocs/op
-- Track historical baseline in CI artifacts before asserting performance targets
-- Increases >10% should be investigated
+- Thresholds are maintained in `scripts/perf/thresholds.tsv`
+- Any threshold violation is a release-blocking regression
 
 ## Infrastructure & Helpers
 

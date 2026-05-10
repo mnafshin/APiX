@@ -7,6 +7,7 @@ This checklist defines required validation before cutting a release tag.
 | Surface | Required checks | Blocking |
 |---|---|---|
 | Engine + core Go packages | `go build ./...`, `go vet ./...`, `go test ./internal/... -race` | Yes |
+| Performance regression budget | `make perf-check` | Yes |
 | End-to-end behavior | `go test ./tests/e2e/...` | Yes |
 | Proto contract | `buf lint`, `buf breaking` against `main` | Yes |
 | VS Code extension | `npm ci`, `npx tsc --noEmit`, `npm run compile` | Yes |
