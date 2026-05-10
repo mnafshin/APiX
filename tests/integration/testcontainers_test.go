@@ -210,7 +210,7 @@ func TestContainers_ProxyCapturesHTTPBinRequest(t *testing.T) {
 	// Give the engine a moment to persist.
 	time.Sleep(300 * time.Millisecond)
 
-	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestContainers_ProxyCapturesPostBody(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}
@@ -286,7 +286,7 @@ func TestContainers_ReplayFromStoredTransaction(t *testing.T) {
 
 	time.Sleep(300 * time.Millisecond)
 
-	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0)
+	txs, _, err := stack.db.ListTransactions(10, 0, "", "", 0, "")
 	if err != nil || len(txs) == 0 {
 		t.Fatalf("no stored transactions: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestContainers_MultipleRequestsDifferentEndpoints(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
-	txs, _, err := stack.db.ListTransactions(20, 0, "", "", 0)
+	txs, _, err := stack.db.ListTransactions(20, 0, "", "", 0, "")
 	if err != nil {
 		t.Fatalf("ListTransactions: %v", err)
 	}

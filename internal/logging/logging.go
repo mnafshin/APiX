@@ -28,6 +28,7 @@ const RequestIDHeader = "X-Request-ID"
 // global holds the active *slog.Logger with lock-free loads/stores.
 var global atomic.Pointer[slog.Logger]
 var levelVar slog.LevelVar
+
 type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
@@ -100,7 +101,7 @@ func OpenWriter(output string, maxSizeMB, maxFiles int, compress bool) (io.Write
 	default:
 		dir := filepath.Dir(output)
 		if dir != "." && dir != "" {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o750); err != nil {
 				return nil, nil, fmt.Errorf("create log directory %q: %w", dir, err)
 			}
 		}

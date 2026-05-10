@@ -15,8 +15,12 @@ http_read_header_timeout_sec
 http_read_timeout_sec
 http_write_timeout_sec
 idle_conn_timeout_sec
+log_compress
 log_format
 log_level
+log_max_files
+log_max_size_mb
+log_output
 max_body_size_mb
 max_header_value_bytes
 max_headers_per_request

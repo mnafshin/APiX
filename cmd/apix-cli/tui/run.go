@@ -216,14 +216,14 @@ func renderDetails(table *tview.Table, details *tview.TextView, items []trafficI
 	}
 	sort.Strings(headerKeys)
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("[yellow]ID:[-] %s\n", item.id))
-	sb.WriteString(fmt.Sprintf("[yellow]Request ID:[-] %s\n", item.requestID))
-	sb.WriteString(fmt.Sprintf("[yellow]Method:[-] %s\n", item.method))
-	sb.WriteString(fmt.Sprintf("[yellow]URL:[-] %s\n", item.url))
-	sb.WriteString(fmt.Sprintf("[yellow]Timestamp:[-] %s\n\n", item.timestamp))
+	_, _ = fmt.Fprintf(&sb, "[yellow]ID:[-] %s\n", item.id)
+	_, _ = fmt.Fprintf(&sb, "[yellow]Request ID:[-] %s\n", item.requestID)
+	_, _ = fmt.Fprintf(&sb, "[yellow]Method:[-] %s\n", item.method)
+	_, _ = fmt.Fprintf(&sb, "[yellow]URL:[-] %s\n", item.url)
+	_, _ = fmt.Fprintf(&sb, "[yellow]Timestamp:[-] %s\n\n", item.timestamp)
 	sb.WriteString("[yellow]Headers[-]\n")
 	for _, k := range headerKeys {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", k, item.headers[k]))
+		_, _ = fmt.Fprintf(&sb, "%s: %s\n", k, item.headers[k])
 	}
 	if item.body != "" {
 		sb.WriteString("\n[yellow]Body[-]\n")
