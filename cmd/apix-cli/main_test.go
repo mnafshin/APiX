@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -772,6 +773,37 @@ func TestCLIOperability(t *testing.T) {
 	}
 	if !strings.Contains(out, `"reachable":true`) {
 		t.Fatalf("doctor output=%s", out)
+	}
+	bundlePath := filepath.Join(dir, "diag.zip")
+	exit, out, errOut = runCLI(t, stack.args("--config", cfgPath, "--token", stack.token, "--output", "json", "doctor", "bundle", "--file", bundlePath)...)
+	if exit != 0 {
+		t.Fatalf("doctor bundle exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"bundle_path":`) {
+		t.Fatalf("doctor bundle output=%s", out)
+	}
+	archive, err := zip.OpenReader(bundlePath)
+	if err != nil {
+		t.Fatalf("open bundle zip: %v", err)
+	}
+	defer archive.Close()
+	expected := map[string]bool{
+		"doctor.json":          false,
+		"cli.json":             false,
+		"config_snapshot.json": false,
+		"environment.json":     false,
+		"reproduction.txt":     false,
+		"README.txt":           false,
+	}
+	for _, f := range archive.File {
+		if _, ok := expected[f.Name]; ok {
+			expected[f.Name] = true
+		}
+	}
+	for name, found := range expected {
+		if !found {
+			t.Fatalf("expected %s in diagnostic bundle", name)
+		}
 	}
 
 	exit, out, errOut = runCLI(t, "completion", "bash")

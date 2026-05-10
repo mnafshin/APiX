@@ -43,6 +43,7 @@ Browse [`how-to/`](how-to/) for step-by-step recipes:
 - [Replay Requests](how-to/replay.md)
 - [Plugin Development](how-to/plugin-development.md)
 - [Plugin Configuration](how-to/plugin-configuration.md)
+- [Bug Reports with Diagnostic Bundles](how-to/bug-report-diagnostics.md)
 
 ---
 

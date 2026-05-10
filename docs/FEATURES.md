@@ -361,7 +361,7 @@ paused watch|forward|drop|respond
 templates save|list|delete
 replay                   # replay stored requests
 config                   # show/validate config
-doctor                   # diagnostic info
+doctor [bundle]          # diagnostics or support bundle
 completion               # shell completion
 cert show|install|export # CA certificate management
 send                     # send custom HTTP request
@@ -436,7 +436,8 @@ lsof -i :8080              # see what's using port
 
 **Plugins not loading:**
 ```bash
-./apix-cli doctor          # full diagnostic
+./apix-cli doctor                   # full diagnostic
+./apix-cli doctor bundle --file apix-diagnostic.zip
 ./apix-engine --config-check
 ```
 
