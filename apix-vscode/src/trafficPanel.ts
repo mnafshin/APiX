@@ -21,6 +21,7 @@ export class TrafficPanel {
     public static currentPanel: TrafficPanel | undefined;
     private static readonly viewType = 'apixTraffic';
     private static readonly FILTER_STATE_KEY = 'apix.trafficFilters';
+    private static readonly DETAIL_WIDTH_STATE_KEY = 'apix.trafficDetailWidthPercent';
 
     private readonly _panel: vscode.WebviewPanel;
     private readonly _extensionUri: vscode.Uri;
@@ -38,6 +39,7 @@ export class TrafficPanel {
         durationMax: '',
         body: '',
     };
+    private _detailWidthPercent = 50;
 
     public static createOrShow(context: vscode.ExtensionContext, client: EngineClient): void {
         const column = vscode.window.activeTextEditor
@@ -73,6 +75,7 @@ export class TrafficPanel {
 
         // Restore filters from workspace state
         this._restoreFilters();
+        this._restoreDetailWidth();
 
         this._update();
         this._startCapture();
@@ -103,11 +106,32 @@ export class TrafficPanel {
         }
     }
 
+    private _restoreDetailWidth(): void {
+        try {
+            const stored = this._context.workspaceState.get<number>(TrafficPanel.DETAIL_WIDTH_STATE_KEY);
+            if (typeof stored === 'number' && Number.isFinite(stored)) {
+                this._detailWidthPercent = Math.max(10, Math.min(90, stored));
+            }
+        } catch (err) {
+            // Silently fail if there's an issue restoring layout state
+        }
+    }
+
     private async _saveFilters(): Promise<void> {
         try {
             await this._context.workspaceState.update(TrafficPanel.FILTER_STATE_KEY, this._filterState);
         } catch (err) {
             // Silently fail if there's an issue saving filters
+        }
+    }
+
+    private async _saveDetailWidth(widthPercent: number): Promise<void> {
+        try {
+            const clamped = Math.max(10, Math.min(90, widthPercent));
+            await this._context.workspaceState.update(TrafficPanel.DETAIL_WIDTH_STATE_KEY, clamped);
+            this._detailWidthPercent = clamped;
+        } catch (err) {
+            // Silently fail if there's an issue saving layout state
         }
     }
 
@@ -218,6 +242,11 @@ export class TrafficPanel {
                 void this._saveFilters();
                 this._panel.webview.postMessage({ type: 'filtersCleared' });
                 break;
+            case 'saveDetailPaneWidth':
+                if (typeof message.data?.widthPercent === 'number' && Number.isFinite(message.data.widthPercent)) {
+                    void this._saveDetailWidth(message.data.widthPercent);
+                }
+                break;
         }
     }
 
@@ -228,6 +257,10 @@ export class TrafficPanel {
             this._panel.webview.postMessage({
                 type: 'initFilters',
                 data: this._filterState,
+            });
+            this._panel.webview.postMessage({
+                type: 'initDetailPaneWidth',
+                data: { widthPercent: this._detailWidthPercent },
             });
         }, 100);
     }
@@ -291,6 +324,9 @@ export class TrafficPanel {
     #stream-error { display: none; margin-bottom: 8px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--vscode-inputValidation-errorBorder, #be1100); background: var(--vscode-inputValidation-errorBackground, #5a1d1d); color: var(--vscode-inputValidation-errorForeground, #fff); font-size: 12px; }
     #detail { display: none; position: fixed; top: 0; right: 0; width: 50%; height: 100%; background: var(--vscode-editor-background); border-left: 1px solid var(--vscode-panel-border); padding: 16px; overflow-y: auto; z-index: 10; box-sizing: border-box; }
     #detail.open { display: block; }
+    #detail-resizer { display: none; position: fixed; top: 0; height: 100%; width: 8px; right: 50%; margin-right: -4px; cursor: col-resize; z-index: 11; background: transparent; }
+    #detail-resizer:hover, #detail-resizer.dragging { background: var(--vscode-focusBorder); opacity: 0.35; }
+    #detail-resizer.collapsed { right: 0; margin-right: 0; width: 10px; }
     #detail h3 { margin-top: 0; font-size: 14px; word-break: break-all; }
     #detail h4 { font-size: 12px; margin: 12px 0 4px; color: var(--vscode-descriptionForeground); }
     #detail pre { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 0; }
@@ -339,6 +375,7 @@ export class TrafficPanel {
     <tbody id="traffic"></tbody>
   </table>
   <div id="empty" class="empty">No traffic captured yet. Send requests through the proxy to see them here.</div>
+  <div id="detail-resizer" title="Drag to resize detail pane. Double-click to collapse/expand."></div>
   <div id="detail">
     <button class="close-btn" onclick="closeDetail()">✕</button>
     <h3 id="detail-title"></h3>
@@ -367,6 +404,10 @@ export class TrafficPanel {
     let sortKey = null;
     let sortAsc = true;
     let filtersVisible = true;
+    let detailWidthPercent = 50;
+    let detailLastOpenWidthPercent = 50;
+    let detailCollapsed = false;
+    let isResizingDetail = false;
 
     window.addEventListener('message', function(event) {
       const msg = event.data;
@@ -393,6 +434,13 @@ export class TrafficPanel {
         clearAllFilters();
       } else if (msg.type === 'historyCleared') {
         clearAll();
+      } else if (msg.type === 'initDetailPaneWidth') {
+        const width = Number(msg.data && msg.data.widthPercent);
+        if (!isNaN(width) && isFinite(width)) {
+          detailWidthPercent = clampDetailWidthPercent(width);
+          detailLastOpenWidthPercent = detailWidthPercent;
+          applyDetailPaneLayout();
+        }
       }
     });
 
@@ -405,7 +453,11 @@ export class TrafficPanel {
     }
 
     function showDetail(tx) {
+      if (detailCollapsed) {
+        detailCollapsed = false;
+      }
       document.getElementById('detail').classList.add('open');
+      applyDetailPaneLayout();
       const method = (tx.request && tx.request.method) || '';
       const url = (tx.request && tx.request.url) || '';
       const isWebSocket = isWebSocketTransaction(tx);
@@ -437,6 +489,7 @@ export class TrafficPanel {
 
     function closeDetail() {
       document.getElementById('detail').classList.remove('open');
+      applyDetailPaneLayout();
     }
 
     function renderGraphQLDetail(tx) {
@@ -912,6 +965,87 @@ export class TrafficPanel {
       }
     }
 
+    function clampDetailWidthPercent(value) {
+      return Math.max(10, Math.min(90, value));
+    }
+
+    function applyDetailPaneLayout() {
+      const detail = document.getElementById('detail');
+      const resizer = document.getElementById('detail-resizer');
+      const isOpen = detail.classList.contains('open');
+      if (!isOpen && !detailCollapsed) {
+        resizer.style.display = 'none';
+        return;
+      }
+      resizer.style.display = 'block';
+      if (detailCollapsed) {
+        detail.classList.remove('open');
+        resizer.classList.add('collapsed');
+        resizer.style.right = '0px';
+        return;
+      }
+      resizer.classList.remove('collapsed');
+      detail.style.width = detailWidthPercent + '%';
+      resizer.style.right = detailWidthPercent + '%';
+    }
+
+    function toggleDetailCollapse() {
+      const detail = document.getElementById('detail');
+      const isOpen = detail.classList.contains('open');
+      if (!isOpen && !detailCollapsed) {
+        return;
+      }
+      if (detailCollapsed) {
+        detailCollapsed = false;
+        detail.classList.add('open');
+        detailWidthPercent = clampDetailWidthPercent(detailLastOpenWidthPercent);
+      } else {
+        detailCollapsed = true;
+        detailLastOpenWidthPercent = detailWidthPercent;
+      }
+      applyDetailPaneLayout();
+    }
+
+    function onDetailResizeStart(event) {
+      const detail = document.getElementById('detail');
+      if (!detail.classList.contains('open')) {
+        return;
+      }
+      detailCollapsed = false;
+      isResizingDetail = true;
+      const resizer = document.getElementById('detail-resizer');
+      resizer.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      event.preventDefault();
+    }
+
+    function onDetailResizeMove(event) {
+      if (!isResizingDetail) {
+        return;
+      }
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      if (viewportWidth <= 0) {
+        return;
+      }
+      const minWidthPx = 200;
+      const maxWidthPx = Math.max(minWidthPx, viewportWidth - minWidthPx);
+      const rawWidthPx = viewportWidth - event.clientX;
+      const clampedWidthPx = Math.max(minWidthPx, Math.min(maxWidthPx, rawWidthPx));
+      detailWidthPercent = clampDetailWidthPercent((clampedWidthPx / viewportWidth) * 100);
+      detailLastOpenWidthPercent = detailWidthPercent;
+      applyDetailPaneLayout();
+    }
+
+    function onDetailResizeEnd() {
+      if (!isResizingDetail) {
+        return;
+      }
+      isResizingDetail = false;
+      document.getElementById('detail-resizer').classList.remove('dragging');
+      document.body.style.userSelect = '';
+      vscode.postMessage({ type: 'saveDetailPaneWidth', data: { widthPercent: detailWidthPercent } });
+    }
+
     document.getElementById('filter').addEventListener('input', applyFilter);
     document.getElementById('filter-method').addEventListener('change', applyFilter);
     document.getElementById('filter-status').addEventListener('input', applyFilter);
@@ -947,6 +1081,10 @@ export class TrafficPanel {
         clearHistory();
       }
     });
+    document.getElementById('detail-resizer').addEventListener('mousedown', onDetailResizeStart);
+    document.getElementById('detail-resizer').addEventListener('dblclick', toggleDetailCollapse);
+    window.addEventListener('mousemove', onDetailResizeMove);
+    window.addEventListener('mouseup', onDetailResizeEnd);
   </script>
 </body>
 </html>`;
