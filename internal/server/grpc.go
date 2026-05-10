@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"math"
 	"net"
+	"os"
 	"time"
 
 	"github.com/mnafshin/apix/internal/config"
@@ -146,7 +148,25 @@ func grpcServerOptionsFromConfig(cfg *config.Config) ([]grpc.ServerOption, error
 		return nil, fmt.Errorf("gRPC TLS: failed to load cert %q and key %q: %w", cfg.GRPCCertPath, cfg.GRPCKeyPath, err)
 	}
 
-	tlsCfg := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	// Configure mTLS client authentication if enabled
+	if cfg.GRPCClientAuth && cfg.GRPCClientCAPath != "" {
+		caCertPEM, err := os.ReadFile(cfg.GRPCClientCAPath)
+		if err != nil {
+			return nil, fmt.Errorf("gRPC mTLS: failed to read client CA cert from %q: %w", cfg.GRPCClientCAPath, err)
+		}
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCertPEM) {
+			return nil, fmt.Errorf("gRPC mTLS: failed to parse client CA cert from %q", cfg.GRPCClientCAPath)
+		}
+		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+		tlsCfg.ClientCAs = caCertPool
+	}
+
 	return []grpc.ServerOption{grpc.Creds(credentials.NewTLS(tlsCfg))}, nil
 }
 
@@ -165,6 +185,9 @@ func StartGRPCServer(ctx context.Context, eng *engine.Engine, re *replay.Engine,
 	}
 	if cfg.TLSEnabled {
 		logging.Infof(ctx, "gRPC TLS enabled (cert: %s)", cfg.GRPCCertPath)
+		if cfg.GRPCClientAuth && cfg.GRPCClientCAPath != "" {
+			logging.Infof(ctx, "gRPC mTLS client auth enabled (client CA: %s)", cfg.GRPCClientCAPath)
+		}
 	}
 
 	grpcServer := NewGRPCServer(cfg, serverOpts...)

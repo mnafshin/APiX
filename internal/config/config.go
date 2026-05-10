@@ -21,8 +21,10 @@ type Config struct {
 	// GRPCCertPath and GRPCKeyPath are the TLS certificate and private key for
 	// the gRPC server when tls_enabled is true. These are separate from the MITM
 	// proxy CA cert/key (CACertPath/CAKeyPath). Required when tls_enabled is true.
-	GRPCCertPath                     string `yaml:"grpc_cert_path"`
-	GRPCKeyPath                      string `yaml:"grpc_key_path"`
+	GRPCCertPath  string `yaml:"grpc_cert_path"`
+	GRPCKeyPath   string `yaml:"grpc_key_path"`
+	GRPCClientCAPath  string `yaml:"grpc_client_ca_path"`
+	GRPCClientAuth    bool   `yaml:"grpc_client_auth"` // Require mTLS client authentication
 	AuthToken                        string `yaml:"auth_token"`
 	AuthTokenFile                    string `yaml:"auth_token_file"`
 	AuthTokenRequireStrictPerms      bool   `yaml:"auth_token_require_strict_perms"`
