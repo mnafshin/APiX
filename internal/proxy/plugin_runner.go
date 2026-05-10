@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
+	"time"
 
 	logging "github.com/mnafshin/apix/internal/logging"
+	metrics "github.com/mnafshin/apix/internal/metrics"
 	"github.com/mnafshin/apix/pkg/plugins"
 )
 
@@ -18,6 +21,8 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 	if !ok || rp == nil {
 		return req, nil
 	}
+	pluginName := pluginMetricName(chain)
+	start := time.Now()
 	var runErr error
 	func() {
 		defer func() {
@@ -33,6 +38,7 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 		}
 		req = modified
 	}()
+	metrics.ObservePluginExecution(pluginName, "request", time.Since(start).Seconds(), runErr != nil)
 	if runErr != nil {
 		return nil, runErr
 	}
@@ -48,6 +54,8 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 	if !ok || rp == nil {
 		return resp, nil
 	}
+	pluginName := pluginMetricName(chain)
+	start := time.Now()
 	var runErr error
 	func() {
 		defer func() {
@@ -65,10 +73,25 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 			resp = modResp
 		}
 	}()
+	metrics.ObservePluginExecution(pluginName, "response", time.Since(start).Seconds(), runErr != nil)
 	if runErr != nil {
 		return nil, runErr
 	}
 	return resp, nil
+}
+
+func pluginMetricName(chain any) string {
+	if chain == nil {
+		return "unknown"
+	}
+	t := reflect.TypeOf(chain)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if name := t.Name(); name != "" {
+		return name
+	}
+	return "unknown"
 }
 
 // drainPluginResponseBody reads the response body from a plugin-modified response.

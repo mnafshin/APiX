@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	logging "github.com/mnafshin/apix/internal/logging"
+	metrics "github.com/mnafshin/apix/internal/metrics"
 	"io"
 	"net/http"
 	"sync"
@@ -233,7 +234,9 @@ func (e *Engine) PauseRequest(tx *proxy.Transaction) (*proxy.Transaction, proxy.
 	}
 
 	entry := breakpoints.NewPausedEntry(tx.ID, bpID, tx.Request.Raw)
+	pauseStart := time.Now()
 	decision, err := e.bpManager.Pause(pauseCtx, entry)
+	metrics.ObserveBreakpointPause(time.Since(pauseStart).Seconds())
 	if err != nil {
 		// Timeout or context cancellation: forward unchanged rather than dropping.
 		return tx, proxy.ResumeForward, nil
@@ -293,7 +296,9 @@ func (e *Engine) PauseResponse(tx *proxy.Transaction, statusCode int, responseBo
 	}
 
 	entry := breakpoints.NewPausedEntry(tx.ID, bpID, tx.Request.Raw)
+	pauseStart := time.Now()
 	decision, err := e.bpManager.Pause(pauseCtx, entry)
+	metrics.ObserveBreakpointPause(time.Since(pauseStart).Seconds())
 	if err != nil || decision == nil {
 		return tx, proxy.ResumeForward, nil
 	}
