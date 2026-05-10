@@ -790,10 +790,14 @@ export class TrafficPanel {
     }
 
     function sortTransactions(key) {
-      if (sortKey === key) {
-        sortAsc = !sortAsc;
-      } else {
+      // Cycle sort state: asc -> desc -> default (newest first)
+      if (sortKey !== key) {
         sortKey = key;
+        sortAsc = true;
+      } else if (sortAsc) {
+        sortAsc = false;
+      } else {
+        sortKey = null;
         sortAsc = true;
       }
       updateSortIndicators();
@@ -856,16 +860,18 @@ export class TrafficPanel {
         return true;
       });
 
-      if (sortKey) {
-        filtered.sort(function(a, b) {
-          const aVal = getSortValue(a, sortKey);
-          const bVal = getSortValue(b, sortKey);
-          let cmp = 0;
-          if (aVal < bVal) { cmp = -1; }
-          else if (aVal > bVal) { cmp = 1; }
-          return sortAsc ? cmp : -cmp;
-        });
+      if (!sortKey) {
+        return filtered.reverse();
       }
+
+      filtered.sort(function(a, b) {
+        const aVal = getSortValue(a, sortKey);
+        const bVal = getSortValue(b, sortKey);
+        let cmp = 0;
+        if (aVal < bVal) { cmp = -1; }
+        else if (aVal > bVal) { cmp = 1; }
+        return sortAsc ? cmp : -cmp;
+      });
 
       return filtered;
     }
