@@ -4,7 +4,6 @@ access_log_path
 audit_log_enabled
 audit_log_path
 auth_token_require_strict_perms
-contract_paths
 dial_timeout_sec
 grpc_bind_address
 grpc_port

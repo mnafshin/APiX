@@ -1410,7 +1410,7 @@ func (a *app) cmdLearn(args []string) error {
 
 	if opts.output != "" {
 		cleanPath := filepath.Clean(opts.output)
-		if err := os.WriteFile(cleanPath, encoded, 0o644); err != nil {
+		if err := os.WriteFile(cleanPath, encoded, 0o600); err != nil {
 			return fmt.Errorf("write learned openapi: %w", err)
 		}
 		pathCount := 0
