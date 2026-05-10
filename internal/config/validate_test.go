@@ -463,6 +463,31 @@ func TestValidate_PluginPaths(t *testing.T) {
 	}
 }
 
+func TestValidate_ContractPaths(t *testing.T) {
+	t.Parallel()
+	tmp := t.TempDir()
+	existing := filepath.Join(tmp, "service.apix.yaml")
+	if err := os.WriteFile(existing, []byte("schema_version: apix.contract/v1"), 0o600); err != nil {
+		t.Fatalf("create temp contract: %v", err)
+	}
+
+	httpPort, grpcPort := mustFreePorts(t)
+	cfg := &Config{
+		HTTPPort:            httpPort,
+		GRPCPort:            grpcPort,
+		DBPath:              "apix.db",
+		MaxIdleConnsPerHost: 10,
+		ContractPaths:       []string{existing, "/nonexistent/contract.apix.yaml"},
+	}
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for missing contract path")
+	}
+	if !strings.Contains(err.Error(), "contract_paths") {
+		t.Fatalf("expected contract_paths error, got: %v", err)
+	}
+}
+
 // TestValidate_URLPatterns checks that invalid regex patterns are caught.
 func TestValidate_URLPatterns(t *testing.T) {
 	t.Parallel()

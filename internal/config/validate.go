@@ -51,6 +51,7 @@ func (c *Config) validate(allowBoundPorts bool) error {
 	errs = append(errs, c.validateConnectionPool()...)
 	errs = append(errs, c.validateTLSAndAuth()...)
 	errs = append(errs, c.validatePluginPaths()...)
+	errs = append(errs, c.validateContractPaths()...)
 	errs = append(errs, c.validateURLPatterns()...)
 	errs = append(errs, c.validateLogging()...)
 	errs = append(errs, c.validateMapLocalRules()...)
@@ -249,6 +250,20 @@ func (c *Config) validatePluginPaths() []error {
 		}
 	}
 
+	return errs
+}
+
+func (c *Config) validateContractPaths() []error {
+	var errs []error
+	for i, p := range c.ContractPaths {
+		if p == "" {
+			errs = append(errs, fmt.Errorf("contract_paths[%d] is empty — remove the entry or provide a valid path", i))
+			continue
+		}
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			errs = append(errs, fmt.Errorf("contract_paths[%d] %q does not exist — check the path or remove the entry", i, p))
+		}
+	}
 	return errs
 }
 

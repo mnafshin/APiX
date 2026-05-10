@@ -63,3 +63,7 @@ history_max_rows: 0          # keep at most N transactions (prunes oldest first)
 #     file_path: './mocks/users.json'
 #     content_type: 'application/json'
 #     status_code: 200
+
+# Optional APiX contracts loaded at startup for design-time validation and tooling.
+# contract_paths:
+#   - "./contracts/service.apix.yaml"

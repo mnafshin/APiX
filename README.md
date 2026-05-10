@@ -76,6 +76,7 @@ Then run the extension from VS Code (`Run Extension`), or package/install from `
 - `templates save|list|delete|execute`
 - `replay`
 - `learn`
+- `contract init|validate`
 - `cert`, `config`, `doctor`, `tui`, `completion`
 
 Use `apix help` for details.
@@ -119,6 +120,7 @@ Validate config:
 | `log_format` / `log_level` | `text` / `info` | Engine log output shape and verbosity |
 | `mcp_enabled` / `mcp_port` | `false` / `9093` | MCP server |
 | `mcp_allow_replay` / `mcp_allow_compose` | `false` / `false` | Side-effect MCP tools |
+| `contract_paths` | empty | APiX contract files loaded/validated on engine startup |
 | `map_local_rules` | empty | URL regex -> local file response mapping (`file_path`, with `local_path` alias) |
 
 ## Security model

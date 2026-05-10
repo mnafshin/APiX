@@ -14,6 +14,7 @@ import (
 
 	"github.com/mnafshin/apix/internal/breakpoints"
 	"github.com/mnafshin/apix/internal/config"
+	"github.com/mnafshin/apix/internal/contracts"
 	"github.com/mnafshin/apix/internal/engine"
 	"github.com/mnafshin/apix/internal/metrics"
 	"github.com/mnafshin/apix/internal/pluginrt"
@@ -82,8 +83,17 @@ func main() {
 			logging.Errorf(ctx, "config validation failed: %v", err)
 			logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
 		}
+		if err := validateConfiguredContracts(ctx, cfg.ContractPaths); err != nil {
+			logging.Errorf(ctx, "contract validation failed: %v", err)
+			logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
+		}
 		logging.Infof(ctx, "config: validation passed")
 		return
+	}
+
+	if err := validateConfiguredContracts(ctx, cfg.ContractPaths); err != nil {
+		logging.Errorf(ctx, "load contracts: %v", err)
+		logging.Fatalf(ctx, "%s", usermsg.UserMessage(err))
 	}
 
 	// 2. Open SQLite database.
@@ -238,6 +248,18 @@ func initStorage(ctx context.Context, cfg *config.Config) *storage.DB {
 	}
 	db.StartPeriodicPrune(ctx, 24*time.Hour, cfg.HistoryMaxAgeDays, cfg.HistoryMaxRows)
 	return db
+}
+
+func validateConfiguredContracts(ctx context.Context, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	loaded, err := contracts.LoadAll(paths)
+	if err != nil {
+		return fmt.Errorf("load configured contracts: %w", err)
+	}
+	logging.Infof(ctx, "contracts loaded: %d", len(loaded))
+	return nil
 }
 
 func initPlugins(ctx context.Context, cfg *config.Config) (*pluginrt.Runtime, *builtins.OTelTracing) {

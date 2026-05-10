@@ -16,6 +16,7 @@ Commands:
   filter
   export
   learn
+  contract init|validate
   breakpoints list|add|delete|enable|disable
   paused watch|forward|drop|respond
   send
