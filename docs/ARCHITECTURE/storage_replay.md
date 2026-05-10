@@ -33,7 +33,10 @@ Indexes include timestamp/method/url and websocket transaction lookups to keep l
 - `synchronous=NORMAL`
 - `busy_timeout=5000`
 - `foreign_keys=ON`
-- schema bootstrap + lightweight migrations
+- schema bootstrap + versioned migrations (`PRAGMA user_version`)
+
+Migration policy and compatibility guarantees are documented in
+[`docs/REFERENCE/storage-migrations.md`](../REFERENCE/storage-migrations.md).
 
 In-memory mode (`:memory:`) pins connection count to 1 so tests share one database.
 
