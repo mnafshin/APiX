@@ -362,6 +362,7 @@ templates save|list|delete
 replay                   # replay stored requests
 config                   # show/validate config
 doctor [bundle]          # diagnostics or support bundle
+tui                      # interactive live traffic terminal UI
 completion               # shell completion
 cert show|install|export # CA certificate management
 send                     # send custom HTTP request

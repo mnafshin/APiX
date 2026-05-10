@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	tuimode "github.com/mnafshin/apix/cmd/apix-cli/tui"
 	"github.com/mnafshin/apix/internal/config"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
@@ -383,6 +384,7 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		writeLine(errw, "  cert status")
 		writeLine(errw, "  config show|reload")
 		writeLine(errw, "  setup [profile]")
+		writeLine(errw, "  tui")
 		writeLine(errw, "  completion <bash|zsh|fish>")
 		writeLine(errw, "  doctor [bundle]")
 		writeLine(errw, "  help")
@@ -471,10 +473,12 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		return app.exec("cert", func() error { return app.cmdCert(fs.Args()[1:]) })
 	case "config":
 		return app.exec("config", func() error { return app.cmdConfig(fs.Args()[1:]) })
-	case "completion":
-		return app.exec("completion", func() error { return app.cmdCompletion(fs.Args()[1:]) })
 	case "setup":
 		return app.exec("setup", func() error { return app.cmdSetup(fs.Args()[1:]) })
+	case "tui":
+		return app.exec("tui", app.cmdTUI)
+	case "completion":
+		return app.exec("completion", func() error { return app.cmdCompletion(fs.Args()[1:]) })
 	case "doctor":
 		return app.exec("doctor", func() error { return app.cmdDoctor(fs.Args()[1:]) })
 	case "help":
@@ -1159,6 +1163,19 @@ func (a *app) cmdWatch(args []string) error {
 			return nil
 		}
 	}
+}
+
+func (a *app) cmdTUI() error {
+	if a.opts.output != "text" {
+		return status.Error(codes.InvalidArgument, "tui supports only --output text")
+	}
+	client, err := a.clientConn()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := a.streamContext()
+	defer cancel()
+	return tuimode.Run(ctx, client)
 }
 
 func (a *app) cmdFilter(args []string) error {
@@ -2154,7 +2171,7 @@ func completionScript(shell string) (string, error) {
 _apix() {
   local cur prev words cword
   _init_completion || return
-  local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
+  local commands="status plugins history watch breakpoints paused send templates replay cert config setup tui completion doctor help"
   local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status bundle"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
@@ -2175,6 +2192,8 @@ _apix() {
     'replay:Replay a stored request'
     'cert:Certificate commands'
     'config:Configuration commands'
+    'setup:Generate starter config'
+    'tui:Interactive terminal UI'
     'completion:Generate shell completion'
     'doctor:Run diagnostics'
     'help:Show help'
@@ -2183,7 +2202,7 @@ _apix() {
 }
 _apix "$@"
 `
-	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
+	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send templates replay cert config setup tui completion doctor help"
 complete -c apix -n "__fish_seen_subcommand_from doctor" -f -a "bundle"
 `
 	switch shell {

@@ -23,6 +23,7 @@ Commands:
   cert status
   config show|reload
   setup [profile]
+  tui
   completion <bash|zsh|fish>
   doctor [bundle]
   help
