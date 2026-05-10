@@ -51,9 +51,14 @@ type Config struct {
 	// still unblock it). Default: 120.
 	BreakpointPauseTimeoutSec int `yaml:"breakpoint_pause_timeout_sec"`
 
-	// Observability
-	MetricsEnabled bool   `yaml:"metrics_enabled"`
-	MetricsPort    string `yaml:"metrics_port"`
+	// PluginExecutionTimeoutSec is the maximum number of seconds a single plugin
+	// may execute during request/response processing. If a plugin exceeds this
+	// timeout, it is canceled and the request is failed (unless error isolation
+	// allows continuation). 0 means no timeout (use request context deadline only).
+	// Default: 10 seconds.
+	PluginExecutionTimeoutSec int    `yaml:"plugin_execution_timeout_sec"`
+	MetricsEnabled            bool   `yaml:"metrics_enabled"`
+	MetricsPort               string `yaml:"metrics_port"`
 	// HealthPort is the TCP port for the lightweight HTTP health endpoint
 	// that always serves GET /healthz → 200 {"status":"ok"}. Set to "" to
 	// disable. Default: "9092".
@@ -198,6 +203,7 @@ func LoadConfig(path string) *Config {
 		MaxURLLength:                     8 * 1024,
 		MaxBodySizeMB:                    32,
 		BreakpointPauseTimeoutSec:        120,
+		PluginExecutionTimeoutSec:        10,
 		// Observability defaults
 		MetricsEnabled:      false,
 		MetricsPort:         "9091",
