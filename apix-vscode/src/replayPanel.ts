@@ -190,48 +190,49 @@ export class ReplayPanel {
   </style>
 </head>
 <body>
+  <main aria-label="${requestId ? 'Replay request editor' : 'Request composer'}">
   <h2>${requestId ? '↺ Replay Request' : '✎ Request Composer'}</h2>
   <div class="row">
-    <input id="template-name" placeholder="Template name" />
-    <input id="template-id" placeholder="Template id (optional)" />
+    <input id="template-name" placeholder="Template name" aria-label="Template name" />
+    <input id="template-id" placeholder="Template id (optional)" aria-label="Template ID" />
   </div>
   <div class="row">
-    <select id="template-select"></select>
-    <button class="btn" onclick="loadTemplate()">Load</button>
-    <button class="btn" onclick="saveTemplate()">Save</button>
-    <button class="btn" onclick="deleteTemplate()">Delete</button>
+    <select id="template-select" aria-label="Saved request templates"></select>
+    <button class="btn" onclick="loadTemplate()" aria-label="Load selected template">Load</button>
+    <button class="btn" onclick="saveTemplate()" aria-label="Save current template">Save</button>
+    <button class="btn" onclick="deleteTemplate()" aria-label="Delete selected template">Delete</button>
   </div>
   <div class="row">
-    <select id="method" class="small">
+    <select id="method" class="small" aria-label="HTTP method">
       <option>GET</option><option>POST</option><option>PUT</option>
       <option>DELETE</option><option>PATCH</option><option>HEAD</option><option>OPTIONS</option>
     </select>
-    <input type="text" id="url" value="${escAttr(req?.url || '')}" placeholder="https://..." />
+    <input type="text" id="url" value="${escAttr(req?.url || '')}" placeholder="https://..." aria-label="Request URL" />
   </div>
-  <label>Headers (JSON)</label>
-  <textarea id="headers" rows="6">${escAttr(headersJson)}</textarea>
-  <div class="json-error-msg" id="headers-error"></div>
-  <label>Body</label>
+  <label for="headers">Headers (JSON)</label>
+  <textarea id="headers" rows="6" aria-describedby="headers-error">${escAttr(headersJson)}</textarea>
+  <div class="json-error-msg" id="headers-error" role="alert" aria-live="polite"></div>
+  <label for="body">Body</label>
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
   <hr>
   <h3 style="font-size:14px;margin:0 0 8px">Overrides (for replay mode)</h3>
-  <label>Override Headers (JSON — merged with original)</label>
-  <textarea id="override-headers" rows="3">{}</textarea>
-  <div class="json-error-msg" id="override-headers-error"></div>
-  <label>Override Body (leave empty to use original)</label>
+  <label for="override-headers">Override Headers (JSON — merged with original)</label>
+  <textarea id="override-headers" rows="3" aria-describedby="override-headers-error">{}</textarea>
+  <div class="json-error-msg" id="override-headers-error" role="alert" aria-live="polite"></div>
+  <label for="override-body">Override Body (leave empty to use original)</label>
   <textarea id="override-body" rows="3"></textarea>
   <div class="checkbox-row">
-    <input type="checkbox" id="follow-redirects" checked />
+    <input type="checkbox" id="follow-redirects" checked aria-label="Follow redirects" />
     <label for="follow-redirects" style="margin:0">Follow redirects</label>
   </div>
   <div class="checkbox-row" ${requestId ? '' : 'style="display:none"'}>
-    <input type="checkbox" id="use-raw" ${requestId ? '' : 'checked'} />
+    <input type="checkbox" id="use-raw" ${requestId ? '' : 'checked'} aria-label="Use edited request instead of original history request" />
     <label for="use-raw" style="margin:0">Use edited request above (instead of original from history)</label>
   </div>
   <br>
-  <button class="btn" id="send-btn" onclick="sendRequest()">▶ Send</button>
+  <button class="btn" id="send-btn" onclick="sendRequest()" aria-label="Send request">▶ Send</button>
   <span id="spinner" class="spinner">⏳</span>
-  <div id="error-msg" class="error-msg"></div>
+  <div id="error-msg" class="error-msg" role="alert" aria-live="polite"></div>
 
   <div id="response-section">
     <hr>
@@ -240,6 +241,7 @@ export class ReplayPanel {
     <label>Response Headers</label><pre id="resp-headers"></pre>
     <label>Response Body</label><pre id="resp-body"></pre>
   </div>
+  </main>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();

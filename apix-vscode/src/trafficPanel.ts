@@ -286,6 +286,7 @@ export class TrafficPanel {
   <title>APiX Traffic</title>
   <style nonce="${nonce}">
     body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 8px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--vscode-panel-border); font-weight: 600; position: sticky; top: 0; background: var(--vscode-editor-background); z-index: 1; user-select: none; }
     th.sortable { cursor: pointer; }
@@ -338,17 +339,25 @@ export class TrafficPanel {
     #ws-frame-list { display: grid; gap: 8px; }
     .ws-frame { background: var(--vscode-textCodeBlock-background); padding: 8px; border-radius: 4px; }
     .ws-frame-meta { display: flex; gap: 8px; font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 4px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, tr:focus-visible, th.sortable:focus-visible {
+      outline: 2px solid var(--vscode-focusBorder);
+      outline-offset: 1px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
   </style>
 </head>
 <body>
-  <div class="panel-toolbar">
-    <button id="toggle-filters-btn" onclick="toggleFilterBar()" title="Toggle filter bar (Ctrl+F)">Hide Filters</button>
-  </div>
+  <div class="sr-only" id="sr-live" aria-live="polite" aria-atomic="true"></div>
+  <header class="panel-toolbar">
+    <button id="toggle-filters-btn" onclick="toggleFilterBar()" title="Toggle filter bar (Ctrl+F)" aria-label="Toggle filter controls">Hide Filters</button>
+  </header>
   <div id="stream-error"></div>
-  <div class="filter-bar">
+  <section class="filter-bar" aria-label="Traffic filters">
     <div class="filter-row">
-      <input type="text" id="filter" class="filter-url" placeholder="Filter by URL..." title="Filter by URL substring" />
-      <select id="filter-method" title="Filter by HTTP method">
+      <input type="text" id="filter" class="filter-url" placeholder="Filter by URL..." title="Filter by URL substring" aria-label="Filter by URL" />
+      <select id="filter-method" title="Filter by HTTP method" aria-label="Filter by method">
         <option value="">All Methods</option>
         <option value="GET">GET</option>
         <option value="POST">POST</option>
@@ -356,28 +365,28 @@ export class TrafficPanel {
         <option value="DELETE">DELETE</option>
         <option value="PATCH">PATCH</option>
       </select>
-      <input type="text" id="filter-status" class="filter-status" placeholder="Status (2xx, 200)" title="Filter by status code or range (e.g. 2xx, 4xx, 404)" />
-      <button onclick="clearFilters()" id="clear-btn">Clear Filters</button>
+      <input type="text" id="filter-status" class="filter-status" placeholder="Status (2xx, 200)" title="Filter by status code or range (e.g. 2xx, 4xx, 404)" aria-label="Filter by status code" />
+      <button onclick="clearFilters()" id="clear-btn" aria-label="Clear all traffic filters">Clear Filters</button>
       <span id="filter-status-badge" class="filter-status-badge"></span>
     </div>
     <div class="filter-row">
-      <input type="text" id="filter-ct" class="filter-ct" placeholder="Content-Type…" title="Filter by response Content-Type substring" />
-      <input type="number" id="filter-dur-min" class="filter-dur" placeholder="Min ms" title="Minimum duration (ms)" />
+      <input type="text" id="filter-ct" class="filter-ct" placeholder="Content-Type…" title="Filter by response Content-Type substring" aria-label="Filter by content type" />
+      <input type="number" id="filter-dur-min" class="filter-dur" placeholder="Min ms" title="Minimum duration (ms)" aria-label="Minimum duration in milliseconds" />
       <span class="filter-sep">–</span>
-      <input type="number" id="filter-dur-max" class="filter-dur" placeholder="Max ms" title="Maximum duration (ms)" />
-      <input type="text" id="filter-body" class="filter-body" placeholder="Body search…" title="Search in request or response body" />
+      <input type="number" id="filter-dur-max" class="filter-dur" placeholder="Max ms" title="Maximum duration (ms)" aria-label="Maximum duration in milliseconds" />
+      <input type="text" id="filter-body" class="filter-body" placeholder="Body search…" title="Search in request or response body" aria-label="Filter by request or response body text" />
     </div>
-  </div>
-  <table>
+  </section>
+  <table aria-label="Captured API traffic">
     <thead>
-      <tr><th>#</th><th class="sortable" data-sort-key="method">Method<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="url">URL<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="status">Status<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="duration">Duration<span class="sort-indicator"></span></th><th class="sortable" data-sort-key="time">Time<span class="sort-indicator"></span></th></tr>
+      <tr><th scope="col">#</th><th scope="col" class="sortable" data-sort-key="method">Method<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="url">URL<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="status">Status<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="duration">Duration<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="time">Time<span class="sort-indicator" aria-hidden="true"></span></th></tr>
     </thead>
     <tbody id="traffic"></tbody>
   </table>
   <div id="empty" class="empty">No traffic captured yet. Send requests through the proxy to see them here.</div>
   <div id="detail-resizer" title="Drag to resize detail pane. Double-click to collapse/expand."></div>
-  <div id="detail">
-    <button class="close-btn" onclick="closeDetail()">✕</button>
+  <aside id="detail" aria-label="Traffic request details">
+    <button class="close-btn" onclick="closeDetail()" aria-label="Close request details">✕</button>
     <h3 id="detail-title"></h3>
     <h4>Request Headers</h4><pre id="detail-req-headers"></pre>
     <h4>Request ID</h4><pre id="detail-request-id"></pre>
@@ -390,12 +399,12 @@ export class TrafficPanel {
       <div id="ws-frame-list"></div>
     </div>
     <div class="detail-actions">
-      <button onclick="replayRequest()">↺ Replay</button>
-      <button onclick="copyAsCurl()">⎘ Copy as curl</button>
-      <button onclick="copyRequestId()">⎘ Copy Request ID</button>
-      <button onclick="addBreakpoint()">⊕ Add Breakpoint</button>
+      <button onclick="replayRequest()" aria-label="Replay selected request">↺ Replay</button>
+      <button onclick="copyAsCurl()" aria-label="Copy selected request as curl">⎘ Copy as curl</button>
+      <button onclick="copyRequestId()" aria-label="Copy selected request identifier">⎘ Copy Request ID</button>
+      <button onclick="addBreakpoint()" aria-label="Add a breakpoint rule">⊕ Add Breakpoint</button>
     </div>
-  </div>
+  </aside>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let transactions = [];
@@ -416,6 +425,7 @@ export class TrafficPanel {
         transactions.push(msg.data);
         addRow(msg.data, count);
         document.getElementById('empty').style.display = 'none';
+        announceLiveRegion('New request captured. Total requests: ' + String(transactions.length));
       } else if (msg.type === 'websocketFrames') {
         if (msg.data && msg.data.requestId === currentFramesRequestId) {
           renderWebSocketFrames(msg.data.frames || []);
@@ -446,6 +456,12 @@ export class TrafficPanel {
 
     function addRow(tx, num) {
       rerenderTable();
+    }
+
+    function announceLiveRegion(message) {
+      const el = document.getElementById('sr-live');
+      el.textContent = '';
+      setTimeout(function() { el.textContent = message; }, 10);
     }
 
     function escHtml(str) {
@@ -954,7 +970,26 @@ export class TrafficPanel {
           '<td>' + escHtml(duration) + '</td>' +
           '<td>' + escHtml(time) + '</td>';
         tr.setAttribute('data-tx-index', String(transactions.indexOf(tx)));
+        tr.setAttribute('tabindex', '0');
+        tr.setAttribute('role', 'button');
+        tr.setAttribute('aria-label', method + ' ' + url + ', status ' + String(status) + ', duration ' + duration);
         tr.onclick = function() { showDetail(tx); };
+        tr.onkeydown = function(event) {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            showDetail(tx);
+            return;
+          }
+          if (event.key === 'ArrowDown' && tr.nextElementSibling) {
+            event.preventDefault();
+            tr.nextElementSibling.focus();
+            return;
+          }
+          if (event.key === 'ArrowUp' && tr.previousElementSibling) {
+            event.preventDefault();
+            tr.previousElementSibling.focus();
+          }
+        };
         tbody.appendChild(tr);
         displayNum++;
       });

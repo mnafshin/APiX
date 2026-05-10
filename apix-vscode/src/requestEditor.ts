@@ -154,39 +154,41 @@ export class RequestEditor {
   </style>
 </head>
 <body>
+  <main aria-label="Paused request editor">
   <h2>⏸ Paused Request <span class="badge">Breakpoint hit</span></h2>
   <div class="row">
-    <select id="method">
+    <select id="method" aria-label="HTTP method">
       <option>GET</option><option>POST</option><option>PUT</option>
       <option>DELETE</option><option>PATCH</option><option>HEAD</option><option>OPTIONS</option>
     </select>
-    <input type="text" id="url" value="${escAttr(req.url || '')}" />
+    <input type="text" id="url" value="${escAttr(req.url || '')}" aria-label="Request URL" />
   </div>
-  <label>Headers (JSON)</label>
-  <textarea id="headers" rows="6">${escAttr(headersJson)}</textarea>
-  <div class="json-error-msg" id="headers-error"></div>
-  <label>Request Body</label>
+  <label for="headers">Headers (JSON)</label>
+  <textarea id="headers" rows="6" aria-describedby="headers-error">${escAttr(headersJson)}</textarea>
+  <div class="json-error-msg" id="headers-error" role="alert" aria-live="polite"></div>
+  <label for="body">Request Body</label>
   <textarea id="body" rows="6">${escAttr(bodyStr)}</textarea>
 
-  <div id="respond-section">
+  <section id="respond-section" aria-label="Synthetic response editor">
     <h3>Synthetic Response</h3>
-    <label>Status Code</label>
-    <input type="number" id="resp-status" value="200" />
-    <label>Status Text</label>
-    <input type="text" id="resp-status-text" value="OK" />
-    <label>Response Headers (JSON)</label>
-    <textarea id="resp-headers" rows="4">{}</textarea>
-    <div class="json-error-msg" id="resp-headers-error"></div>
-    <label>Response Body</label>
+    <label for="resp-status">Status Code</label>
+    <input type="number" id="resp-status" value="200" aria-label="Synthetic response status code" />
+    <label for="resp-status-text">Status Text</label>
+    <input type="text" id="resp-status-text" value="OK" aria-label="Synthetic response status text" />
+    <label for="resp-headers">Response Headers (JSON)</label>
+    <textarea id="resp-headers" rows="4" aria-describedby="resp-headers-error">{}</textarea>
+    <div class="json-error-msg" id="resp-headers-error" role="alert" aria-live="polite"></div>
+    <label for="resp-body">Response Body</label>
     <textarea id="resp-body" rows="6"></textarea>
-  </div>
+  </section>
 
-  <div class="actions">
-    <button class="btn" id="forward-btn" onclick="forward()">▶ Forward</button>
-    <button class="btn btn-danger" onclick="drop()">✕ Drop</button>
-    <button class="btn btn-secondary" onclick="toggleRespond()">↩ Respond with...</button>
-    <button class="btn hidden" id="send-respond" onclick="sendRespond()">Send Response</button>
+  <div class="actions" role="group" aria-label="Paused request actions">
+    <button class="btn" id="forward-btn" onclick="forward()" aria-label="Forward request">▶ Forward</button>
+    <button class="btn btn-danger" onclick="drop()" aria-label="Drop request">✕ Drop</button>
+    <button class="btn btn-secondary" onclick="toggleRespond()" aria-label="Toggle synthetic response editor">↩ Respond with...</button>
+    <button class="btn hidden" id="send-respond" onclick="sendRespond()" aria-label="Send synthetic response">Send Response</button>
   </div>
+  </main>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
