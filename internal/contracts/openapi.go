@@ -282,7 +282,8 @@ func exportOpenAPISecurity(auth []AuthRequirement, path string, addDiag func(str
 			schemes[name] = map[string]any{"type": "http", "scheme": scheme}
 		case "oauth2":
 			schemes[name] = map[string]any{
-				"type":  "oauth2",
+				"type": "oauth2",
+				//nolint:gosec // clientCredentials is an OpenAPI field name, not a credential
 				"flows": map[string]any{"clientCredentials": map[string]any{"tokenUrl": "https://example.com/oauth/token", "scopes": map[string]any{}}},
 			}
 		case "mtls":
