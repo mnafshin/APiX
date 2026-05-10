@@ -364,7 +364,7 @@ func uniqueTypes(values []any) []string {
 }
 
 func valueType(v any) string {
-	switch v.(type) {
+	switch v := v.(type) {
 	case map[string]any:
 		return "object"
 	case []any:
@@ -374,8 +374,7 @@ func valueType(v any) string {
 	case bool:
 		return "boolean"
 	case float64:
-		f := v.(float64)
-		if f == float64(int64(f)) {
+		if v == float64(int64(v)) {
 			return "integer"
 		}
 		return "number"

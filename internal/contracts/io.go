@@ -39,7 +39,7 @@ func SaveYAML(path string, c *Contract) error {
 	if len(encoded) == 0 || encoded[len(encoded)-1] != '\n' {
 		encoded = append(encoded, '\n')
 	}
-	if err := os.WriteFile(cleanPath, encoded, 0o644); err != nil {
+	if err := os.WriteFile(cleanPath, encoded, 0o600); err != nil {
 		return fmt.Errorf("write contract %q: %w", cleanPath, err)
 	}
 	return nil
