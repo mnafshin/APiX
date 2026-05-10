@@ -40,7 +40,9 @@ func runPluginRequest(ctx context.Context, chain any, req *plugins.ProxyRequest,
 			var m2 runtime.MemStats
 			runtime.ReadMemStats(&m2)
 			memDeltaMB := float64((m2.Alloc - m1.Alloc)) / 1024 / 1024
-			if memDeltaMB > 10 {
+			// Warn only if delta is positive and reasonable (0-1000 MB threshold)
+			// Ignore unrealistic values from MemStats glitches in high-load/benchmark scenarios
+			if memDeltaMB > 10 && memDeltaMB < 1000 {
 				logging.Warnf(ctx, "%s: plugin %q allocated %.2f MB during OnRequest", logTag, pluginName, memDeltaMB)
 			}
 		}()
@@ -100,7 +102,9 @@ func runPluginResponse(ctx context.Context, chain any, req *plugins.ProxyRequest
 			var m2 runtime.MemStats
 			runtime.ReadMemStats(&m2)
 			memDeltaMB := float64((m2.Alloc - m1.Alloc)) / 1024 / 1024
-			if memDeltaMB > 10 {
+			// Warn only if delta is positive and reasonable (0-1000 MB threshold)
+			// Ignore unrealistic values from MemStats glitches in high-load/benchmark scenarios
+			if memDeltaMB > 10 && memDeltaMB < 1000 {
 				logging.Warnf(ctx, "%s: plugin %q allocated %.2f MB during OnResponse", logTag, pluginName, memDeltaMB)
 			}
 		}()
@@ -140,7 +144,7 @@ func pluginMetricName(chain any) string {
 		return "unknown"
 	}
 	t := reflect.TypeOf(chain)
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if name := t.Name(); name != "" {
