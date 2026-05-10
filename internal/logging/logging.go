@@ -9,9 +9,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // ctxKey is a private type for context keys in this package.
@@ -25,6 +28,9 @@ const RequestIDHeader = "X-Request-ID"
 // global holds the active *slog.Logger with lock-free loads/stores.
 var global atomic.Pointer[slog.Logger]
 var levelVar slog.LevelVar
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
 
 func getLogger() *slog.Logger {
 	if l := global.Load(); l != nil {
@@ -78,6 +84,40 @@ func parseLevel(level string) slog.Level {
 		return slog.LevelError
 	default:
 		return slog.LevelInfo
+	}
+}
+
+// OpenWriter returns a configured log writer based on output target.
+// output supports: "stdout", "stderr", or a file path.
+// File targets use size-based rotation with lumberjack.
+func OpenWriter(output string, maxSizeMB, maxFiles int, compress bool) (io.Writer, io.Closer, error) {
+	target := strings.TrimSpace(strings.ToLower(output))
+	switch target {
+	case "", "stdout":
+		return os.Stdout, noopCloser{}, nil
+	case "stderr":
+		return os.Stderr, noopCloser{}, nil
+	default:
+		dir := filepath.Dir(output)
+		if dir != "." && dir != "" {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("create log directory %q: %w", dir, err)
+			}
+		}
+		if maxSizeMB <= 0 {
+			maxSizeMB = 100
+		}
+		if maxFiles <= 0 {
+			maxFiles = 5
+		}
+		rotator := &lumberjack.Logger{
+			Filename:   output,
+			MaxSize:    maxSizeMB,
+			MaxBackups: maxFiles,
+			Compress:   compress,
+			LocalTime:  true,
+		}
+		return rotator, rotator, nil
 	}
 }
 

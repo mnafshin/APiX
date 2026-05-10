@@ -79,8 +79,12 @@ type Config struct {
 	HistoryMaxRows    int `yaml:"history_max_rows"`     // 0 = unlimited
 
 	// Logging
-	LogFormat string `yaml:"log_format"` // text|json
-	LogLevel  string `yaml:"log_level"`  // debug|info|warn|error
+	LogFormat    string `yaml:"log_format"`      // text|json
+	LogLevel     string `yaml:"log_level"`       // debug|info|warn|error
+	LogOutput    string `yaml:"log_output"`      // stdout|stderr|/path/to/file.log
+	LogMaxSizeMB int    `yaml:"log_max_size_mb"` // max size per file in MB before rotation
+	LogMaxFiles  int    `yaml:"log_max_files"`   // number of rotated files to keep
+	LogCompress  bool   `yaml:"log_compress"`    // gzip rotated files when true
 
 	// GRPCRateLimitPerSec is the maximum number of gRPC unary calls allowed
 	// per peer address per second. Stream RPCs count as 1 call on open.
@@ -210,6 +214,10 @@ func LoadConfig(path string) *Config {
 		OTelSampleRate:      1.0,
 		LogFormat:           "text",
 		LogLevel:            "info",
+		LogOutput:           "stdout",
+		LogMaxSizeMB:        100,
+		LogMaxFiles:         5,
+		LogCompress:         true,
 		MCPEnabled:          false,
 		MCPPort:             "9093",
 		MCPBindAddress:      "127.0.0.1",

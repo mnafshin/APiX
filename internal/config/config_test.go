@@ -106,6 +106,18 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if cfg.AuditLogPath != "stdout" {
 		t.Errorf("AuditLogPath: got %q want stdout", cfg.AuditLogPath)
 	}
+	if cfg.LogOutput != "stdout" {
+		t.Errorf("LogOutput: got %q want stdout", cfg.LogOutput)
+	}
+	if cfg.LogMaxSizeMB != 100 {
+		t.Errorf("LogMaxSizeMB: got %d want 100", cfg.LogMaxSizeMB)
+	}
+	if cfg.LogMaxFiles != 5 {
+		t.Errorf("LogMaxFiles: got %d want 5", cfg.LogMaxFiles)
+	}
+	if !cfg.LogCompress {
+		t.Error("LogCompress: expected true by default")
+	}
 }
 
 func TestLoadConfig_YAMLOverride(t *testing.T) {
@@ -126,6 +138,10 @@ mcp_enabled: true
 mcp_port: "9100"
 log_format: "json"
 log_level: "debug"
+log_output: "/tmp/apix-engine.log"
+log_max_size_mb: 250
+log_max_files: 12
+log_compress: false
 otel_enabled: true
 otel_endpoint: "otel-collector:4317"
 otel_service_name: "apix-dev"
@@ -183,6 +199,18 @@ audit_log_path: "/tmp/apix-audit.log"
 	}
 	if cfg.LogLevel != "debug" {
 		t.Errorf("LogLevel: got %q want debug", cfg.LogLevel)
+	}
+	if cfg.LogOutput != "/tmp/apix-engine.log" {
+		t.Errorf("LogOutput: got %q want /tmp/apix-engine.log", cfg.LogOutput)
+	}
+	if cfg.LogMaxSizeMB != 250 {
+		t.Errorf("LogMaxSizeMB: got %d want 250", cfg.LogMaxSizeMB)
+	}
+	if cfg.LogMaxFiles != 12 {
+		t.Errorf("LogMaxFiles: got %d want 12", cfg.LogMaxFiles)
+	}
+	if cfg.LogCompress {
+		t.Error("LogCompress should be false from YAML override")
 	}
 	if !cfg.OTelEnabled {
 		t.Error("OTelEnabled should be true from YAML override")

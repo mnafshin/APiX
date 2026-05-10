@@ -281,6 +281,12 @@ func (c *Config) validateLogging() []error {
 			errs = append(errs, fmt.Errorf("log_level %q is invalid — use debug|info|warn|error", c.LogLevel))
 		}
 	}
+	if c.LogMaxSizeMB < 0 {
+		errs = append(errs, fmt.Errorf("log_max_size_mb must be >= 0 (got %d)", c.LogMaxSizeMB))
+	}
+	if c.LogMaxFiles < 0 {
+		errs = append(errs, fmt.Errorf("log_max_files must be >= 0 (got %d)", c.LogMaxFiles))
+	}
 	if c.AccessLogFormat != "" {
 		switch strings.ToLower(c.AccessLogFormat) {
 		case "json", "common", "combined":
