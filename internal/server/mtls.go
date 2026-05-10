@@ -21,7 +21,8 @@ func NewClientAuthConfig(caPath string) (*ClientAuthConfig, error) {
 	}
 
 	// Try to load the CA certificate
-	caCertPEM, err := os.ReadFile(caPath)
+	// G304: caPath comes from validated config and is not user-controlled at runtime
+	caCertPEM, err := os.ReadFile(caPath) //nolint:gosec
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &ClientAuthConfig{Enabled: false}, nil
