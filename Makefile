@@ -1,4 +1,4 @@
-.PHONY: build build-cli test lint proto clean package-ext install-ext help
+.PHONY: build build-cli test lint proto clean package-ext install-ext bench perf-check help
 
 # Default Go binary output
 ENGINE_BIN := apix-engine
@@ -17,6 +17,15 @@ build-cli:
 # Go tests
 test:
 	go test ./... -count=1
+
+# Run benchmark suite
+bench:
+	go test ./internal/storage ./internal/pluginrt ./internal/proxy ./internal/breakpoints \
+		-run '^$$' -bench 'BenchmarkStorage_SaveRequest|BenchmarkStorage_ListTransactions|BenchmarkPluginRuntime_RunRequest_5Plugins|BenchmarkHTTPProxy_Parallel|BenchmarkBreakpoints_Evaluate' -benchmem -count=1
+
+# Check benchmark regression thresholds
+perf-check:
+	bash scripts/perf/check_benchmarks.sh
 
 # Go tests with coverage
 test-coverage:
@@ -86,6 +95,8 @@ help:
 	@echo "  build          - Build engine binary"
 	@echo "  build-cli      - Build apix (and apix-cli compatibility alias)"
 	@echo "  test           - Run Go tests"
+	@echo "  bench          - Run benchmark suite for core performance paths"
+	@echo "  perf-check     - Run benchmark regression threshold checks"
 	@echo "  test-coverage  - Run Go tests with coverage report"
 	@echo "  test-one       - Run single test (TEST=name PKG=path)"
 	@echo "  lint           - Run go vet"

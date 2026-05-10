@@ -84,6 +84,7 @@ Comprehensive testing coverage:
 - [`testing/testing_resilience.md`](testing/testing_resilience.md) — fault injection and resilience testing
 - [`testing/testing_stateful_workflows.md`](testing/testing_stateful_workflows.md) — end-to-end stateful workflows
 - [`testing/testing_mcp_suite.md`](testing/testing_mcp_suite.md) — MCP integration tests
+- [`testing/testing_performance_regression.md`](testing/testing_performance_regression.md) — benchmark thresholds and regression gate
 
 ---
 
