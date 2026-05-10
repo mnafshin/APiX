@@ -18,6 +18,7 @@ import {
     RewriteRuleList,
     RequestTemplate,
 } from './types';
+import { Logger } from './logger';
 
 const PROTO_PATH = path.resolve(__dirname, '../../proto/apix.proto');
 
@@ -32,7 +33,8 @@ export class EngineClient {
         private readonly host: string,
         private readonly port: number,
         private readonly tlsEnabled: boolean,
-        authToken: string
+        authToken: string,
+        private readonly logger?: Logger
     ) {
         this.authToken = authToken.trim();
         this.metadata = new grpc.Metadata();
@@ -57,7 +59,12 @@ export class EngineClient {
             this.stub = new EngineService(address, credentials);
             this.client = this.stub as grpc.Client;
         } catch (err) {
-            console.error('EngineClient: failed to load proto or create stub:', err);
+            this.logger?.error('Failed to initialize EngineClient gRPC stub', {
+                host: this.host,
+                port: this.port,
+                tlsEnabled: this.tlsEnabled,
+                error: err instanceof Error ? err.message : String(err),
+            });
         }
     }
 

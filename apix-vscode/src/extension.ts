@@ -10,6 +10,7 @@ import { RequestEditor } from './requestEditor';
 import { HttpTransaction } from './types';
 import { buildCurlCommand } from './trafficFormats';
 import { WelcomePanel } from './welcomePanel';
+import { Logger } from './logger';
 
 const AUTH_TOKEN_SECRET_KEY = 'apix.authToken';
 const WELCOME_SHOWN_KEY = 'apix.welcomeShown';
@@ -23,6 +24,7 @@ let trafficProvider: TrafficProvider | undefined;
 let breakpointsProvider: BreakpointsProvider | undefined;
 let mocksProvider: MocksProvider | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
+let logger: Logger | undefined;
 let pausedRetryTimer: ReturnType<typeof setTimeout> | undefined;
 let pausedRetryDelayMs = 1000;
 let trafficTreeView: vscode.TreeView<TrafficItem | ErrorItem> | undefined;
@@ -45,11 +47,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Output channel for extension logging and error reporting
     outputChannel = vscode.window.createOutputChannel('APiX');
+    logger = new Logger(outputChannel, 'extension');
     context.subscriptions.push(outputChannel);
 
-    processManager = new EngineProcessManager(context);
-    const authToken = await resolveAuthToken(context, config, outputChannel);
-    engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken);
+    processManager = new EngineProcessManager(context, logger.child('engineProcess'));
+    const authToken = await resolveAuthToken(context, config, logger.child('auth'));
+    engineClient = new EngineClient(host, grpcPort, tlsEnabled, authToken, logger.child('engineClient'));
     processManager.onUnexpectedExit = (message: string) => {
         statusBarItem!.text = '$(debug-disconnect) APiX: Disconnected';
         statusBarItem!.tooltip = message;
@@ -61,14 +64,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         statusBarItem!.command = 'apix.startEngine';
     };
     processManager.onRestart = () => {
-        outputChannel?.appendLine('[APiX] Engine restarted; re-initializing extension streams…');
+        logger?.info('Engine restarted; re-initializing extension streams');
         startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!, mocksProvider)
-            .catch(err => outputChannel?.appendLine(`APiX: reconnect failed — ${err?.message || err}`));
+            .catch(err => logger?.error('Reconnect failed', { message: err?.message || String(err) }));
     };
 
-    trafficProvider = new TrafficProvider(engineClient, outputChannel);
-    breakpointsProvider = new BreakpointsProvider(engineClient, outputChannel);
-    mocksProvider = new MocksProvider(engineClient, outputChannel);
+    trafficProvider = new TrafficProvider(engineClient, logger.child('trafficProvider'));
+    breakpointsProvider = new BreakpointsProvider(engineClient, logger.child('breakpointsProvider'));
+    mocksProvider = new MocksProvider(engineClient, logger.child('mocksProvider'));
 
     trafficTreeView = vscode.window.createTreeView('apix.trafficView', {
         treeDataProvider: trafficProvider,
@@ -194,7 +197,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Start engine asynchronously to avoid blocking extension activation.
         // Errors are logged to the output channel so the user can inspect them.
         startEngine(context, processManager!, engineClient!, breakpointsProvider!, trafficProvider!)
-            .catch(err => outputChannel?.appendLine(`APiX: auto-start failed — ${err?.message || err}`));
+            .catch(err => logger?.error('Auto-start failed', { message: err?.message || String(err) }));
 
     }
 
@@ -234,7 +237,8 @@ export function deactivate(): void {
     statusBarItem?.dispose();
 
     // Dispose output channel
-    outputChannel?.dispose();
+                outputChannel?.dispose();
+                logger = undefined;
 }
 
 async function startEngine(
@@ -315,7 +319,7 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
             },
             (err) => {
                 // Log to output channel so user can inspect stream errors
-                outputChannel?.appendLine(`[APiX] WatchPausedRequests stream error: ${err?.message || err}`);
+                logger?.error('WatchPausedRequests stream error', { message: err?.message || String(err) });
                 RequestEditor.closeAll();
                 breakpointsProvider?.refresh();
                 if (processManager?.isRunning()) {
@@ -327,7 +331,7 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
                 }
             },
             () => {
-                console.log('[APiX] WatchPausedRequests stream ended.');
+                logger?.warn('WatchPausedRequests stream ended');
                 RequestEditor.closeAll();
                 breakpointsProvider?.refresh();
                 if (processManager?.isRunning()) {
@@ -341,7 +345,7 @@ function _startWatchPausedRequests(context: vscode.ExtensionContext, client: Eng
         );
         pausedRequestsStream = stream;
     } catch (err) {
-        outputChannel?.appendLine(`[APiX] Could not start WatchPausedRequests: ${err}`);
+        logger?.error('Could not start WatchPausedRequests', { message: String(err) });
     }
 }
 
@@ -461,7 +465,7 @@ async function importHAR(client: EngineClient, provider: TrafficProvider): Promi
 async function resolveAuthToken(
     context: vscode.ExtensionContext,
     config: vscode.WorkspaceConfiguration,
-    output?: vscode.OutputChannel
+    authLogger: Logger
 ): Promise<string> {
     const legacy = (config.get<string>('engine.authToken', '') || '').trim();
     const secret = (await context.secrets.get(AUTH_TOKEN_SECRET_KEY))?.trim() || '';
@@ -473,14 +477,14 @@ async function resolveAuthToken(
     }
 
     await context.secrets.store(AUTH_TOKEN_SECRET_KEY, legacy);
-    await clearLegacyAuthTokenSetting(config, output);
-    output?.appendLine('[APiX] Migrated apix.engine.authToken to VS Code SecretStorage.');
+    await clearLegacyAuthTokenSetting(config, authLogger);
+    authLogger.info('Migrated apix.engine.authToken to VS Code SecretStorage');
     return legacy;
 }
 
 async function clearLegacyAuthTokenSetting(
     config: vscode.WorkspaceConfiguration,
-    output?: vscode.OutputChannel
+    authLogger?: Logger
 ): Promise<void> {
     const inspected = config.inspect<string>('engine.authToken');
     const tasks: Promise<void>[] = [];
@@ -499,7 +503,9 @@ async function clearLegacyAuthTokenSetting(
     const results = await Promise.allSettled(tasks);
     for (const result of results) {
         if (result.status === 'rejected') {
-            output?.appendLine(`[APiX] Failed to clear deprecated apix.engine.authToken setting: ${result.reason}`);
+            authLogger?.error('Failed to clear deprecated apix.engine.authToken setting', {
+                reason: String(result.reason),
+            });
         }
     }
 }
@@ -524,13 +530,17 @@ async function setAuthToken(
     if (trimmed === '') {
         await context.secrets.delete(AUTH_TOKEN_SECRET_KEY);
         client.setAuthToken('');
-        await clearLegacyAuthTokenSetting(config, outputChannel);
+        if (logger) {
+            await clearLegacyAuthTokenSetting(config, logger.child('auth'));
+        }
         vscode.window.showInformationMessage('APiX: Auth token cleared.');
         return;
     }
 
     await context.secrets.store(AUTH_TOKEN_SECRET_KEY, trimmed);
     client.setAuthToken(trimmed);
-    await clearLegacyAuthTokenSetting(config, outputChannel);
+    if (logger) {
+        await clearLegacyAuthTokenSetting(config, logger.child('auth'));
+    }
     vscode.window.showInformationMessage('APiX: Auth token saved to SecretStorage.');
 }

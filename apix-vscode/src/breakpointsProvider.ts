@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { BreakpointRule } from './types';
+import { Logger } from './logger';
 
 /**
  * BreakpointsProvider implements TreeDataProvider for the APiX Breakpoints view.
@@ -10,7 +11,7 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
     private _onDidChangeTreeData = new vscode.EventEmitter<BreakpointItem | ErrorItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {}
+    constructor(private readonly client: EngineClient, private readonly logger: Logger) {}
 
     /** Force a refresh of the tree view. */
     refresh(): void {
@@ -34,7 +35,7 @@ export class BreakpointsProvider implements vscode.TreeDataProvider<BreakpointIt
             return (list.breakpoints || []).map(rule => new BreakpointItem(rule));
         } catch (err: any) {
             const msg = err?.message || String(err);
-            this.output?.appendLine(`[APiX] Breakpoints view error: ${msg}`);
+            this.logger.error('Breakpoints view error', { message: msg });
             return [new ErrorItem(`Connection lost: ${msg}`, 'apix.refreshBreakpoints')];
         }
     }

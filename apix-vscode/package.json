@@ -344,6 +344,11 @@
           "type": "number",
           "default": 500,
           "description": "Maximum number of traffic items to display in the Traffic view."
+        },
+        "apix.logging.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose DEBUG logs in the APiX output channel."
         }
       }
     }

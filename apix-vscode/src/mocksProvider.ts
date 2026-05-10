@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { EngineClient } from './engineClient';
 import { RewriteRule } from './types';
+import { Logger } from './logger';
 
 /**
  * MocksProvider implements TreeDataProvider for the APiX Mocks view.
@@ -10,7 +11,7 @@ export class MocksProvider implements vscode.TreeDataProvider<MockItem | ErrorIt
     private _onDidChangeTreeData = new vscode.EventEmitter<MockItem | ErrorItem | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-    constructor(private readonly client: EngineClient, private readonly output?: vscode.OutputChannel) {}
+    constructor(private readonly client: EngineClient, private readonly logger: Logger) {}
 
     /** Force a refresh of the tree view. */
     refresh(): void {
@@ -34,7 +35,7 @@ export class MocksProvider implements vscode.TreeDataProvider<MockItem | ErrorIt
             return (list.rules || []).map(rule => new MockItem(rule));
         } catch (err: any) {
             const msg = err?.message || String(err);
-            this.output?.appendLine(`[APiX] Mocks view error: ${msg}`);
+            this.logger.error('Mocks view error', { message: msg });
             return [new ErrorItem(`Engine unreachable: ${msg}`)];
         }
     }
