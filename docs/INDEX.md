@@ -66,6 +66,7 @@ Stable contracts and schemas:
 - [`REFERENCE/cli-contract-v1.md`](REFERENCE/cli-contract-v1.md) — CLI flags, output formats, exit codes
 - [`REFERENCE/cli_mcp.md`](REFERENCE/cli_mcp.md) — MCP server integration and tools
 - [`REFERENCE/compatibility-matrix.md`](REFERENCE/compatibility-matrix.md) — engine/CLI/extension/API compatibility
+- [`REFERENCE/contract-schema-v1.md`](REFERENCE/contract-schema-v1.md) — APiX contract source-of-truth schema and validation rules
 - [`REFERENCE/glossary.md`](REFERENCE/glossary.md) — terminology and concepts
 - [`REFERENCE/OTEL.md`](REFERENCE/OTEL.md) — OpenTelemetry and Prometheus metrics
 - [`REFERENCE/plugin-sdk.md`](REFERENCE/plugin-sdk.md) — plugin interfaces and lifecycle

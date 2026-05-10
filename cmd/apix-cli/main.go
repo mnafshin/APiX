@@ -21,6 +21,7 @@ import (
 	"github.com/fatih/color"
 	tuimode "github.com/mnafshin/apix/cmd/apix-cli/tui"
 	"github.com/mnafshin/apix/internal/config"
+	"github.com/mnafshin/apix/internal/contracts"
 	"github.com/mnafshin/apix/internal/learn"
 	apix "github.com/mnafshin/apix/pkg/api/generated"
 	"google.golang.org/grpc"
@@ -387,6 +388,7 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		writeLine(errw, "  filter")
 		writeLine(errw, "  export")
 		writeLine(errw, "  learn")
+		writeLine(errw, "  contract init|validate")
 		writeLine(errw, "  breakpoints list|add|delete|enable|disable")
 		writeLine(errw, "  paused watch|forward|drop|respond")
 		writeLine(errw, "  send")
@@ -472,6 +474,8 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		return app.exec("export", func() error { return app.cmdExport(fs.Args()[1:]) })
 	case "learn":
 		return app.exec("learn", func() error { return app.cmdLearn(fs.Args()[1:]) })
+	case "contract":
+		return app.exec("contract", func() error { return app.cmdContract(fs.Args()[1:]) })
 	case "breakpoints":
 		return app.exec("breakpoints", func() error { return app.cmdBreakpoints(fs.Args()[1:]) })
 	case "paused":
@@ -1430,6 +1434,91 @@ func (a *app) cmdLearn(args []string) error {
 	return err
 }
 
+func (a *app) cmdContract(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: contract init|validate")
+	}
+	switch args[0] {
+	case "init":
+		fs := flag.NewFlagSet("contract init", flag.ContinueOnError)
+		fs.SetOutput(a.errw)
+		var outPath string
+		title := "APiX Contract"
+		version := "0.1.0"
+		fs.StringVar(&outPath, "output", "contract.apix.yaml", "output file path")
+		fs.StringVar(&title, "title", "APiX Contract", "contract info.title")
+		fs.StringVar(&version, "version", "0.1.0", "contract info.version")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if strings.TrimSpace(outPath) == "" {
+			return fmt.Errorf("output path must not be empty")
+		}
+		clean := filepath.Clean(outPath)
+		if _, err := os.Stat(clean); err == nil {
+			return fmt.Errorf("refusing to overwrite existing file: %s", clean)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("check output path: %w", err)
+		}
+		template := contracts.NewTemplate(title, version)
+		if err := contracts.SaveYAML(clean, template); err != nil {
+			return err
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"output":         clean,
+				"schema_version": contracts.CurrentSchemaVersion,
+				"title":          title,
+				"version":        version,
+			})
+		}
+		writef(a.out, "Contract scaffold written: %s\n", clean)
+		return nil
+	case "validate":
+		fs := flag.NewFlagSet("contract validate", flag.ContinueOnError)
+		fs.SetOutput(a.errw)
+		var path string
+		fs.StringVar(&path, "file", "", "contract file path (.yaml, .yml, .json)")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if strings.TrimSpace(path) == "" {
+			return fmt.Errorf("usage: contract validate --file <path>")
+		}
+		clean := filepath.Clean(path)
+		c, validation, err := contracts.ValidateFile(clean)
+		if err != nil {
+			return err
+		}
+		endpointCount := 0
+		if c != nil {
+			endpointCount = len(c.Endpoints)
+		}
+		if validation != nil {
+			if a.opts.output == "json" {
+				return emitJSON(a.out, map[string]any{
+					"valid":       false,
+					"file":        clean,
+					"diagnostics": validation.Diagnostics,
+				})
+			}
+			return validation
+		}
+		if a.opts.output == "json" {
+			return emitJSON(a.out, map[string]any{
+				"valid":          true,
+				"file":           clean,
+				"schema_version": c.SchemaVersion,
+				"endpoints":      endpointCount,
+			})
+		}
+		writef(a.out, "Contract valid: %s (schema=%s, endpoints=%d)\n", clean, c.SchemaVersion, endpointCount)
+		return nil
+	default:
+		return fmt.Errorf("usage: contract init|validate")
+	}
+}
+
 func (a *app) cmdBreakpoints(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: breakpoints list|add|delete|enable|disable")
@@ -2287,7 +2376,7 @@ func completionScript(shell string) (string, error) {
 _apix() {
   local cur prev words cword
   _init_completion || return
-  local commands="status plugins history watch filter export learn breakpoints paused send templates replay cert config setup tui completion doctor help"
+  local commands="status plugins history watch filter export learn contract breakpoints paused send templates replay cert config setup tui completion doctor help"
   local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status bundle"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
@@ -2302,6 +2391,7 @@ _apix() {
     'history:History commands'
     'watch:Watch traffic'
     'learn:Infer draft OpenAPI from observed traffic'
+    'contract:Contract schema commands'
     'breakpoints:Breakpoint commands'
     'paused:Paused request commands'
     'send:Send a raw request'
@@ -2319,7 +2409,7 @@ _apix() {
 }
 _apix "$@"
 `
-	const fish = `complete -c apix -f -a "status plugins history watch filter export learn breakpoints paused send templates replay cert config setup tui completion doctor help"
+	const fish = `complete -c apix -f -a "status plugins history watch filter export learn contract breakpoints paused send templates replay cert config setup tui completion doctor help"
 complete -c apix -n "__fish_seen_subcommand_from doctor" -f -a "bundle"
 `
 	switch shell {

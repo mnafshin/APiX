@@ -69,6 +69,7 @@ mcp_bind_address: "127.0.0.1"
 mcp_allow_replay: false
 mcp_allow_compose: false
 plugin_paths: []
+contract_paths: []
 url_patterns: []
 map_local_rules: []
 ```

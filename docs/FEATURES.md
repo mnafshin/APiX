@@ -361,6 +361,7 @@ paused watch|forward|drop|respond
 templates save|list|delete
 replay                   # replay stored requests
 learn                    # infer draft OpenAPI from observed traffic
+contract init|validate   # scaffold and lint APiX contract files
 config                   # show/validate config
 doctor [bundle]          # diagnostics or support bundle
 tui                      # interactive live traffic terminal UI

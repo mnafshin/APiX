@@ -641,6 +641,34 @@ func TestCLILearn_EngineBacked(t *testing.T) {
 	}
 }
 
+func TestCLIContractInitAndValidate(t *testing.T) {
+	t.Parallel()
+	contractPath := filepath.Join(t.TempDir(), "service.apix.yaml")
+
+	exit, out, errOut := runCLI(t, "--output", "json", "contract", "init", "--output", contractPath, "--title", "Billing API", "--version", "1.2.0")
+	if exit != 0 {
+		t.Fatalf("contract init exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"schema_version":"apix.contract/v1"`) {
+		t.Fatalf("unexpected init output: %s", out)
+	}
+	content, err := os.ReadFile(contractPath)
+	if err != nil {
+		t.Fatalf("read contract file: %v", err)
+	}
+	if !strings.Contains(string(content), "schema_version: apix.contract/v1") {
+		t.Fatalf("missing schema version in scaffold: %s", string(content))
+	}
+
+	exit, out, errOut = runCLI(t, "--output", "json", "contract", "validate", "--file", contractPath)
+	if exit != 0 {
+		t.Fatalf("contract validate exit=%d err=%s", exit, errOut)
+	}
+	if !strings.Contains(out, `"valid":true`) {
+		t.Fatalf("unexpected validate output: %s", out)
+	}
+}
+
 func TestCLIExport_EngineBacked(t *testing.T) {
 	t.Parallel()
 	stack := newCLITestStack(t, "")

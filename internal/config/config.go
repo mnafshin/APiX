@@ -101,6 +101,9 @@ type Config struct {
 	// Plugin paths — each entry is a path to a plugin shared library or
 	// script. Validated at startup via --config-check.
 	PluginPaths []string `yaml:"plugin_paths"`
+	// Contract paths — APiX contract documents loaded at startup.
+	// Each file must exist and pass contract schema validation.
+	ContractPaths []string `yaml:"contract_paths"`
 
 	// URLPatterns holds pre-configured URL regex patterns (e.g., allow/deny
 	// lists). Each entry must be a valid Go regexp; validated at startup.
