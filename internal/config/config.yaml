@@ -17,6 +17,10 @@ mcp_allow_compose: false
 # Logging
 log_format: "text"  # text | json
 log_level: "info"   # debug | info | warn | error
+log_output: "stdout"  # stdout | stderr | /path/to/apix.log
+log_max_size_mb: 100  # rotate after this size (MB)
+log_max_files: 5      # number of rotated files to retain
+log_compress: true    # gzip rotated files
 access_log_enabled: false
 access_log_format: "json"  # json | common | combined
 access_log_path: "stdout"  # stdout | stderr | /path/to/file.log

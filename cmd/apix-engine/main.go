@@ -45,7 +45,15 @@ func main() {
 	cfg := config.LoadConfig(cfgPath)
 	format := firstNonEmpty(*logFormat, os.Getenv("LOG_FORMAT"), cfg.LogFormat, "text")
 	level := firstNonEmpty(*logLevel, os.Getenv("LOG_LEVEL"), cfg.LogLevel, "info")
-	logging.InitWithFormatAndLevel(os.Stdout, format, level)
+	logWriter, logCloser, err := logging.OpenWriter(cfg.LogOutput, cfg.LogMaxSizeMB, cfg.LogMaxFiles, cfg.LogCompress)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "apix-engine: initialize log output failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() {
+		_ = logCloser.Close()
+	}()
+	logging.InitWithFormatAndLevel(logWriter, format, level)
 
 	// Initialize metrics (Prometheus endpoint + slowlog)
 	metrics.Init(cfg.MetricsEnabled)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -122,5 +123,32 @@ func TestEnsureRequestIDNilHeader(t *testing.T) {
 	rid := EnsureRequestID(nil)
 	if rid == "" {
 		t.Fatal("expected non-empty request ID for nil header")
+	}
+}
+
+func TestOpenWriterStdStreams(t *testing.T) {
+	writer, closer, err := OpenWriter("stdout", 0, 0, true)
+	if err != nil {
+		t.Fatalf("OpenWriter(stdout): %v", err)
+	}
+	if writer == nil {
+		t.Fatal("expected non-nil stdout writer")
+	}
+	if err := closer.Close(); err != nil {
+		t.Fatalf("stdout closer.Close(): %v", err)
+	}
+}
+
+func TestOpenWriterFileRotation(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "apix.log")
+	writer, closer, err := OpenWriter(logPath, 1, 2, true)
+	if err != nil {
+		t.Fatalf("OpenWriter(file): %v", err)
+	}
+	if writer == nil {
+		t.Fatal("expected non-nil file writer")
+	}
+	if err := closer.Close(); err != nil {
+		t.Fatalf("file closer.Close(): %v", err)
 	}
 }
