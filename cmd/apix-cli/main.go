@@ -2565,15 +2565,19 @@ func (a *app) cmdDoctorBundle(args []string) error {
 	}
 
 	payload, engine, _ := a.collectDoctorSnapshot()
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+	cleanPath := filepath.Clean(filePath)
+	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
 		return fmt.Errorf("create diagnostic bundle directory: %w", err)
 	}
 
-	outFile, err := os.Create(filePath)
+	//nolint:gosec // output path is intentionally user-provided for local diagnostic export
+	outFile, err := os.Create(cleanPath)
 	if err != nil {
 		return fmt.Errorf("create diagnostic bundle: %w", err)
 	}
-	defer outFile.Close()
+	defer func() {
+		_ = outFile.Close()
+	}()
 
 	zw := zip.NewWriter(outFile)
 
@@ -2617,9 +2621,7 @@ func (a *app) cmdDoctorBundle(args []string) error {
 	if err := zw.Close(); err != nil {
 		return err
 	}
-	if err := outFile.Close(); err != nil {
-		return err
-	}
+	filePath = cleanPath
 
 	if a.opts.output == "json" {
 		return emitJSON(a.out, map[string]any{
