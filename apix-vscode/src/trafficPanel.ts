@@ -247,6 +247,35 @@ export class TrafficPanel {
                     void this._saveDetailWidth(message.data.widthPercent);
                 }
                 break;
+            case 'refreshUnifiedData':
+                void this._sendUnifiedData();
+                break;
+            case 'toggleBreakpointFromPanel':
+                if (message.data?.id) {
+                    void this._toggleBreakpointFromPanel(String(message.data.id));
+                }
+                break;
+            case 'deleteBreakpointFromPanel':
+                if (message.data?.id) {
+                    void this._deleteBreakpointFromPanel(String(message.data.id));
+                }
+                break;
+            case 'toggleMockFromPanel':
+                if (message.data?.id) {
+                    void this._toggleMockFromPanel(String(message.data.id));
+                }
+                break;
+            case 'deleteMockFromPanel':
+                if (message.data?.id) {
+                    void this._deleteMockFromPanel(String(message.data.id));
+                }
+                break;
+            case 'openComposer':
+                void vscode.commands.executeCommand('apix.composeRequest');
+                break;
+            case 'openSettings':
+                void vscode.commands.executeCommand('workbench.action.openSettings', 'apix');
+                break;
         }
     }
 
@@ -262,7 +291,75 @@ export class TrafficPanel {
                 type: 'initDetailPaneWidth',
                 data: { widthPercent: this._detailWidthPercent },
             });
+            void this._sendUnifiedData();
         }, 100);
+    }
+
+    private async _sendUnifiedData(): Promise<void> {
+        try {
+            const [breakpointList, mockList] = await Promise.all([
+                this.client.listBreakpoints(),
+                this.client.listRewriteRules(),
+            ]);
+            this._panel.webview.postMessage({
+                type: 'unifiedData',
+                data: {
+                    breakpoints: breakpointList.breakpoints || [],
+                    mocks: mockList.rules || [],
+                },
+            });
+        } catch (err: any) {
+            this._panel.webview.postMessage({
+                type: 'unifiedDataError',
+                data: err?.message || String(err),
+            });
+        }
+    }
+
+    private async _toggleBreakpointFromPanel(id: string): Promise<void> {
+        try {
+            const list = await this.client.listBreakpoints();
+            const target = (list.breakpoints || []).find(bp => bp.id === id);
+            if (!target) {
+                this._panel.webview.postMessage({ type: 'unifiedDataError', data: `Breakpoint ${id} not found` });
+                return;
+            }
+            await this.client.setBreakpoint({ ...target, enabled: !target.enabled });
+            await this._sendUnifiedData();
+            await vscode.commands.executeCommand('apix.refreshBreakpoints');
+        } catch (err: any) {
+            this._panel.webview.postMessage({ type: 'unifiedDataError', data: err?.message || String(err) });
+        }
+    }
+
+    private async _deleteBreakpointFromPanel(id: string): Promise<void> {
+        try {
+            await this.client.deleteBreakpoint(id);
+            await this._sendUnifiedData();
+            await vscode.commands.executeCommand('apix.refreshBreakpoints');
+        } catch (err: any) {
+            this._panel.webview.postMessage({ type: 'unifiedDataError', data: err?.message || String(err) });
+        }
+    }
+
+    private async _toggleMockFromPanel(id: string): Promise<void> {
+        try {
+            await this.client.toggleRewriteRule(id);
+            await this._sendUnifiedData();
+            await vscode.commands.executeCommand('apix.mocks.refresh');
+        } catch (err: any) {
+            this._panel.webview.postMessage({ type: 'unifiedDataError', data: err?.message || String(err) });
+        }
+    }
+
+    private async _deleteMockFromPanel(id: string): Promise<void> {
+        try {
+            await this.client.deleteRewriteRule(id);
+            await this._sendUnifiedData();
+            await vscode.commands.executeCommand('apix.mocks.refresh');
+        } catch (err: any) {
+            this._panel.webview.postMessage({ type: 'unifiedDataError', data: err?.message || String(err) });
+        }
     }
 
     private _getNonce(): string {
@@ -346,15 +443,40 @@ export class TrafficPanel {
     @media (prefers-reduced-motion: reduce) {
       * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
     }
+    .tabs { display: flex; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 6px; }
+    .tabs button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    .tabs button.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+    .list-panel { border: 1px solid var(--vscode-panel-border); border-radius: 6px; overflow: hidden; }
+    .list-item { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--vscode-panel-border); }
+    .list-item:last-child { border-bottom: none; }
+    .list-item-title { font-weight: 600; }
+    .list-item-meta { font-size: 12px; color: var(--vscode-descriptionForeground); }
+    .list-actions { display: flex; gap: 6px; }
+    .list-actions button { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; border-radius: 3px; padding: 3px 8px; cursor: pointer; font-size: 12px; }
+    .tab-toolbar { display: flex; gap: 8px; margin-bottom: 8px; }
+    .tab-toolbar button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; font-size: 12px; }
+    #unified-status { margin-bottom: 8px; font-size: 12px; color: var(--vscode-descriptionForeground); }
   </style>
 </head>
 <body>
   <div class="sr-only" id="sr-live" aria-live="polite" aria-atomic="true"></div>
-  <header class="panel-toolbar">
-    <button id="toggle-filters-btn" onclick="toggleFilterBar()" title="Toggle filter bar (Ctrl+F)" aria-label="Toggle filter controls">Hide Filters</button>
-  </header>
-  <div id="stream-error"></div>
-  <section class="filter-bar" aria-label="Traffic filters">
+  <nav class="tabs" aria-label="Unified APiX workspace tabs">
+    <button id="tab-btn-traffic" class="active" onclick="switchTab('traffic')" aria-label="Traffic tab">Traffic</button>
+    <button id="tab-btn-breakpoints" onclick="switchTab('breakpoints')" aria-label="Breakpoints tab">Breakpoints</button>
+    <button id="tab-btn-mocks" onclick="switchTab('mocks')" aria-label="Mocks tab">Mocks</button>
+    <button id="tab-btn-composer" onclick="switchTab('composer')" aria-label="Composer tab">Composer</button>
+    <button id="tab-btn-settings" onclick="switchTab('settings')" aria-label="Settings tab">Settings</button>
+  </nav>
+  <div id="unified-status"></div>
+
+  <section id="pane-traffic" class="tab-pane active">
+    <header class="panel-toolbar">
+      <button id="toggle-filters-btn" onclick="toggleFilterBar()" title="Toggle filter bar (Ctrl+F)" aria-label="Toggle filter controls">Hide Filters</button>
+    </header>
+    <div id="stream-error"></div>
+    <section class="filter-bar" aria-label="Traffic filters">
     <div class="filter-row">
       <input type="text" id="filter" class="filter-url" placeholder="Filter by URL..." title="Filter by URL substring" aria-label="Filter by URL" />
       <select id="filter-method" title="Filter by HTTP method" aria-label="Filter by method">
@@ -376,16 +498,16 @@ export class TrafficPanel {
       <input type="number" id="filter-dur-max" class="filter-dur" placeholder="Max ms" title="Maximum duration (ms)" aria-label="Maximum duration in milliseconds" />
       <input type="text" id="filter-body" class="filter-body" placeholder="Body search…" title="Search in request or response body" aria-label="Filter by request or response body text" />
     </div>
-  </section>
-  <table aria-label="Captured API traffic">
+    </section>
+    <table aria-label="Captured API traffic">
     <thead>
       <tr><th scope="col">#</th><th scope="col" class="sortable" data-sort-key="method">Method<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="url">URL<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="status">Status<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="duration">Duration<span class="sort-indicator" aria-hidden="true"></span></th><th scope="col" class="sortable" data-sort-key="time">Time<span class="sort-indicator" aria-hidden="true"></span></th></tr>
     </thead>
     <tbody id="traffic"></tbody>
-  </table>
-  <div id="empty" class="empty">No traffic captured yet. Send requests through the proxy to see them here.</div>
-  <div id="detail-resizer" title="Drag to resize detail pane. Double-click to collapse/expand."></div>
-  <aside id="detail" aria-label="Traffic request details">
+    </table>
+    <div id="empty" class="empty">No traffic captured yet. Send requests through the proxy to see them here.</div>
+    <div id="detail-resizer" title="Drag to resize detail pane. Double-click to collapse/expand."></div>
+    <aside id="detail" aria-label="Traffic request details">
     <button class="close-btn" onclick="closeDetail()" aria-label="Close request details">✕</button>
     <h3 id="detail-title"></h3>
     <h4>Request Headers</h4><pre id="detail-req-headers"></pre>
@@ -404,7 +526,39 @@ export class TrafficPanel {
       <button onclick="copyRequestId()" aria-label="Copy selected request identifier">⎘ Copy Request ID</button>
       <button onclick="addBreakpoint()" aria-label="Add a breakpoint rule">⊕ Add Breakpoint</button>
     </div>
-  </aside>
+    </aside>
+  </section>
+
+  <section id="pane-breakpoints" class="tab-pane">
+    <div class="tab-toolbar">
+      <button onclick="requestUnifiedData()" aria-label="Refresh breakpoints">Refresh</button>
+      <button onclick="addBreakpoint()" aria-label="Open add breakpoint flow">Add Breakpoint</button>
+    </div>
+    <div id="breakpoints-list" class="list-panel"></div>
+  </section>
+
+  <section id="pane-mocks" class="tab-pane">
+    <div class="tab-toolbar">
+      <button onclick="requestUnifiedData()" aria-label="Refresh mocks">Refresh</button>
+    </div>
+    <div id="mocks-list" class="list-panel"></div>
+  </section>
+
+  <section id="pane-composer" class="tab-pane">
+    <div class="tab-toolbar">
+      <button onclick="openComposer()" aria-label="Open request composer">Open Request Composer</button>
+    </div>
+    <p>Use the request composer to craft and send custom HTTP requests, then inspect results in this unified panel.</p>
+  </section>
+
+  <section id="pane-settings" class="tab-pane">
+    <div class="tab-toolbar">
+      <button onclick="openSettings()" aria-label="Open APiX settings">Open APiX Settings</button>
+      <button onclick="requestUnifiedData()" aria-label="Refresh panel data">Refresh Data</button>
+    </div>
+    <p>Traffic capture, engine connection, and extension behavior can be configured from APiX settings.</p>
+  </section>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     let transactions = [];
@@ -417,6 +571,9 @@ export class TrafficPanel {
     let detailLastOpenWidthPercent = 50;
     let detailCollapsed = false;
     let isResizingDetail = false;
+    let activeTab = 'traffic';
+    let breakpoints = [];
+    let mocks = [];
 
     window.addEventListener('message', function(event) {
       const msg = event.data;
@@ -451,6 +608,14 @@ export class TrafficPanel {
           detailLastOpenWidthPercent = detailWidthPercent;
           applyDetailPaneLayout();
         }
+      } else if (msg.type === 'unifiedData') {
+        breakpoints = (msg.data && msg.data.breakpoints) || [];
+        mocks = (msg.data && msg.data.mocks) || [];
+        renderBreakpoints();
+        renderMocks();
+        setUnifiedStatus('', false);
+      } else if (msg.type === 'unifiedDataError') {
+        setUnifiedStatus('Panel data refresh failed: ' + String(msg.data || ''), true);
       }
     });
 
@@ -466,6 +631,10 @@ export class TrafficPanel {
 
     function escHtml(str) {
       return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function escJs(str) {
+      return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, '\\\'');
     }
 
     function showDetail(tx) {
@@ -722,6 +891,107 @@ export class TrafficPanel {
 
     function addBreakpoint() {
       vscode.postMessage({ type: 'addBreakpoint', data: {} });
+    }
+
+    function switchTab(tabName) {
+      activeTab = tabName;
+      ['traffic', 'breakpoints', 'mocks', 'composer', 'settings'].forEach(function(tab) {
+        const btn = document.getElementById('tab-btn-' + tab);
+        const pane = document.getElementById('pane-' + tab);
+        if (btn) {
+          btn.classList.toggle('active', tab === tabName);
+        }
+        if (pane) {
+          pane.classList.toggle('active', tab === tabName);
+        }
+      });
+      if (tabName !== 'traffic') {
+        closeDetail();
+      }
+      if (tabName === 'breakpoints' || tabName === 'mocks') {
+        requestUnifiedData();
+      }
+    }
+
+    function requestUnifiedData() {
+      vscode.postMessage({ type: 'refreshUnifiedData', data: {} });
+    }
+
+    function setUnifiedStatus(message, isError) {
+      const el = document.getElementById('unified-status');
+      if (!message) {
+        el.textContent = '';
+        return;
+      }
+      el.textContent = message;
+      el.style.color = isError ? 'var(--vscode-errorForeground)' : 'var(--vscode-descriptionForeground)';
+    }
+
+    function renderBreakpoints() {
+      const root = document.getElementById('breakpoints-list');
+      if (!breakpoints || breakpoints.length === 0) {
+        root.innerHTML = '<div class="list-item"><div class="list-item-meta">No breakpoints configured.</div></div>';
+        return;
+      }
+      root.innerHTML = breakpoints.map(function(bp) {
+        const methods = (bp.methods && bp.methods.length > 0) ? bp.methods.join(', ') : 'ALL';
+        const title = bp.label || bp.urlPattern || '(unnamed breakpoint)';
+        return '<div class="list-item">' +
+          '<div>' +
+          '<div class="list-item-title">' + escHtml(title) + '</div>' +
+          '<div class="list-item-meta">' + escHtml(methods) + ' • ' + escHtml(bp.enabled ? 'enabled' : 'disabled') + '</div>' +
+          '</div>' +
+          '<div class="list-actions">' +
+          '<button onclick="toggleBreakpointFromPanel(\'' + escJs(bp.id) + '\')" aria-label="Toggle breakpoint">Toggle</button>' +
+          '<button onclick="deleteBreakpointFromPanel(\'' + escJs(bp.id) + '\')" aria-label="Delete breakpoint">Delete</button>' +
+          '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function renderMocks() {
+      const root = document.getElementById('mocks-list');
+      if (!mocks || mocks.length === 0) {
+        root.innerHTML = '<div class="list-item"><div class="list-item-meta">No mock rules configured.</div></div>';
+        return;
+      }
+      root.innerHTML = mocks.map(function(rule) {
+        const title = rule.name || rule.id || '(unnamed mock)';
+        return '<div class="list-item">' +
+          '<div>' +
+          '<div class="list-item-title">' + escHtml(title) + '</div>' +
+          '<div class="list-item-meta">' + escHtml(rule.action || '') + ' • ' + escHtml(rule.enabled ? 'enabled' : 'disabled') + '</div>' +
+          '</div>' +
+          '<div class="list-actions">' +
+          '<button onclick="toggleMockFromPanel(\'' + escJs(rule.id) + '\')" aria-label="Toggle mock rule">Toggle</button>' +
+          '<button onclick="deleteMockFromPanel(\'' + escJs(rule.id) + '\')" aria-label="Delete mock rule">Delete</button>' +
+          '</div>' +
+          '</div>';
+      }).join('');
+    }
+
+    function toggleBreakpointFromPanel(id) {
+      vscode.postMessage({ type: 'toggleBreakpointFromPanel', data: { id: id } });
+    }
+
+    function deleteBreakpointFromPanel(id) {
+      vscode.postMessage({ type: 'deleteBreakpointFromPanel', data: { id: id } });
+    }
+
+    function toggleMockFromPanel(id) {
+      vscode.postMessage({ type: 'toggleMockFromPanel', data: { id: id } });
+    }
+
+    function deleteMockFromPanel(id) {
+      vscode.postMessage({ type: 'deleteMockFromPanel', data: { id: id } });
+    }
+
+    function openComposer() {
+      vscode.postMessage({ type: 'openComposer', data: {} });
+    }
+
+    function openSettings() {
+      vscode.postMessage({ type: 'openSettings', data: {} });
     }
 
     function copyAsCurl() {
@@ -1120,6 +1390,7 @@ export class TrafficPanel {
     document.getElementById('detail-resizer').addEventListener('dblclick', toggleDetailCollapse);
     window.addEventListener('mousemove', onDetailResizeMove);
     window.addEventListener('mouseup', onDetailResizeEnd);
+    requestUnifiedData();
   </script>
 </body>
 </html>`;
