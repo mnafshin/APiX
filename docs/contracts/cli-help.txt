@@ -24,7 +24,7 @@ Commands:
   config show|reload
   setup [profile]
   completion <bash|zsh|fish>
-  doctor
+  doctor [bundle]
   help
 
   -config string

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/tls"
 	"encoding/json"
@@ -9,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -381,7 +384,7 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		writeLine(errw, "  config show|reload")
 		writeLine(errw, "  setup [profile]")
 		writeLine(errw, "  completion <bash|zsh|fish>")
-		writeLine(errw, "  doctor")
+		writeLine(errw, "  doctor [bundle]")
 		writeLine(errw, "  help")
 		writeLine(errw)
 		fs.PrintDefaults()
@@ -404,11 +407,11 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 		cfgPath = config.DefaultPath()
 	}
 	app := &app{
-		opts: opts,
-		out:  out,
-		errw: errw,
+		opts:  opts,
+		out:   out,
+		errw:  errw,
 		stdin: stdin,
-		cfg:  config.LoadConfig(cfgPath),
+		cfg:   config.LoadConfig(cfgPath),
 	}
 
 	// Initialize color functions based on noColor flag
@@ -473,7 +476,7 @@ func runWithStdin(args []string, out io.Writer, errw io.Writer, stdin io.Reader)
 	case "setup":
 		return app.exec("setup", func() error { return app.cmdSetup(fs.Args()[1:]) })
 	case "doctor":
-		return app.exec("doctor", app.cmdDoctor)
+		return app.exec("doctor", func() error { return app.cmdDoctor(fs.Args()[1:]) })
 	case "help":
 		fs.Usage()
 		return 0
@@ -1563,10 +1566,10 @@ func (a *app) cmdPausedForward(client apix.EngineClient, args []string) error {
 	fs.StringVar(&opts.body, "body", "", "override body")
 	requestID, flagArgs, err := splitPausedArgs(args, map[string]struct{}{
 		"request-id": {},
-		"method":      {},
-		"url":         {},
-		"header":      {},
-		"body":        {},
+		"method":     {},
+		"url":        {},
+		"header":     {},
+		"body":       {},
 	})
 	if err != nil {
 		return err
@@ -2152,7 +2155,7 @@ _apix() {
   local cur prev words cword
   _init_completion || return
   local commands="status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
-  local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status"
+  local subcommands="list get clear add delete enable disable watch forward drop respond save execute show reload status bundle"
   COMPREPLY=( $(compgen -W "${commands} ${subcommands}" -- "$cur") )
 }
 complete -F _apix apix
@@ -2181,6 +2184,7 @@ _apix() {
 _apix "$@"
 `
 	const fish = `complete -c apix -f -a "status plugins history watch breakpoints paused send templates replay cert config completion doctor help"
+complete -c apix -n "__fish_seen_subcommand_from doctor" -f -a "bundle"
 `
 	switch shell {
 	case "bash":
@@ -2412,7 +2416,75 @@ func (a *app) setupPrintProfile(name, proxyPort string) error {
 	return fmt.Errorf("unknown profile %q — run 'apix setup list'", name)
 }
 
-func (a *app) cmdDoctor() error {
+func (a *app) cmdDoctor(args []string) error {
+	help, remaining := checkHelpFlag(args)
+	if help {
+		writeLine(a.out, "Usage: doctor [bundle]")
+		writeLine(a.out)
+		writeLine(a.out, "Subcommands:")
+		writeLine(a.out, "  bundle   Create a diagnostic zip bundle for bug reports")
+		return nil
+	}
+	if len(remaining) > 0 {
+		switch remaining[0] {
+		case "bundle":
+			return a.cmdDoctorBundle(remaining[1:])
+		default:
+			return fmt.Errorf("unknown doctor subcommand: %s", remaining[0])
+		}
+	}
+
+	payload, engine, configValidation := a.collectDoctorSnapshot()
+	if a.opts.output == "json" {
+		if err := emitJSON(a.out, payload); err != nil {
+			return err
+		}
+		if reachable, _ := engine["reachable"].(bool); !reachable {
+			if msg, _ := engine["error"].(string); msg != "" {
+				return status.Error(codes.Unavailable, msg)
+			}
+			return status.Error(codes.Unavailable, "engine unreachable")
+		}
+		if configValidation != "ok" {
+			return errors.New(configValidation)
+		}
+		return nil
+	}
+
+	writef(a.out, "Config: %s\n", payload["config_path"])
+	configMsg := configValidation
+	if configValidation != "ok" && a.opts.output == "text" {
+		configMsg = a.errorColor("%s", configValidation)
+	}
+	writef(a.out, "Config validation: %s\n", configMsg)
+
+	cert, _ := payload["cert"].(map[string]any)
+	certReady := cert["ready"]
+	certMsg := fmt.Sprintf("%v", certReady)
+	if ok, _ := certReady.(bool); !ok && a.opts.output == "text" {
+		certMsg = a.warnColor("%s", certMsg)
+	}
+	writef(a.out, "Cert ready: %s\n", certMsg)
+
+	if reachable, _ := engine["reachable"].(bool); reachable {
+		statusLabel := a.successColor("reachable")
+		writef(a.out, "Engine: %s (%s)\n", statusLabel, engine["version"])
+	} else {
+		writef(a.out, "Engine: unreachable (%v)\n", engine["error"])
+	}
+	if reachable, _ := engine["reachable"].(bool); !reachable {
+		if msg, _ := engine["error"].(string); msg != "" {
+			return status.Error(codes.Unavailable, msg)
+		}
+		return status.Error(codes.Unavailable, "engine unreachable")
+	}
+	if configValidation != "ok" {
+		return errors.New(configValidation)
+	}
+	return nil
+}
+
+func (a *app) collectDoctorSnapshot() (map[string]any, map[string]any, string) {
 	configPath := a.opts.configPath
 	if configPath == "" {
 		configPath = config.DefaultPath()
@@ -2453,52 +2525,153 @@ func (a *app) cmdDoctor() error {
 		"cert":              cert,
 		"engine":            engine,
 	}
+	return payload, engine, configValidation
+}
+
+func (a *app) cmdDoctorBundle(args []string) error {
+	fs := flag.NewFlagSet("doctor bundle", flag.ContinueOnError)
+	fs.SetOutput(a.errw)
+	defaultPath := filepath.Join(".", fmt.Sprintf("apix-diagnostic-%s.zip", time.Now().UTC().Format("20060102-150405")))
+	filePath := defaultPath
+	redact := true
+	notes := ""
+	fs.StringVar(&filePath, "file", defaultPath, "path to write diagnostic zip bundle")
+	fs.BoolVar(&redact, "redact", true, "redact sensitive fields in config/env snapshots")
+	fs.StringVar(&notes, "notes", "", "optional reproduction notes to include")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("usage: doctor bundle [--file <path>] [--redact=true|false] [--notes <text>]")
+	}
+
+	payload, engine, _ := a.collectDoctorSnapshot()
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		return fmt.Errorf("create diagnostic bundle directory: %w", err)
+	}
+
+	outFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("create diagnostic bundle: %w", err)
+	}
+	defer outFile.Close()
+
+	zw := zip.NewWriter(outFile)
+
+	if err := addZipJSON(zw, "doctor.json", payload); err != nil {
+		return err
+	}
+	if err := addZipJSON(zw, "cli.json", map[string]any{
+		"host":        a.opts.host,
+		"port":        a.opts.port,
+		"tls":         a.opts.tls,
+		"output":      a.opts.output,
+		"timeout":     a.opts.timeout.String(),
+		"generated":   time.Now().UTC().Format(time.RFC3339),
+		"redacted":    redact,
+		"engine_live": engine["reachable"],
+	}); err != nil {
+		return err
+	}
+	configSnapshot := a.configSnapshot(redact)
+	if err := addZipText(zw, "config_snapshot.json", configSnapshot); err != nil {
+		return err
+	}
+	envSnapshot, err := a.envSnapshot(redact)
+	if err != nil {
+		return err
+	}
+	if err := addZipText(zw, "environment.json", envSnapshot); err != nil {
+		return err
+	}
+	repro := "Bug reproduction template:\n1) Describe expected behavior\n2) Describe actual behavior\n3) Exact command used\n4) Attach this zip bundle\n"
+	if strings.TrimSpace(notes) != "" {
+		repro += "\nReporter notes:\n" + notes + "\n"
+	}
+	if err := addZipText(zw, "reproduction.txt", repro); err != nil {
+		return err
+	}
+	readme := "APiX diagnostic bundle\n\nThis bundle is generated with safe-sharing defaults.\nReview contents before sharing. If --redact=false was used, sensitive values may be present.\n"
+	if err := addZipText(zw, "README.txt", readme); err != nil {
+		return err
+	}
+	if err := zw.Close(); err != nil {
+		return err
+	}
+	if err := outFile.Close(); err != nil {
+		return err
+	}
+
 	if a.opts.output == "json" {
-		if err := emitJSON(a.out, payload); err != nil {
-			return err
-		}
-		if reachable, _ := engine["reachable"].(bool); !reachable {
-			if msg, _ := engine["error"].(string); msg != "" {
-				return status.Error(codes.Unavailable, msg)
-			}
-			return status.Error(codes.Unavailable, "engine unreachable")
-		}
-		if configValidation != "ok" {
-			return errors.New(configValidation)
-		}
-		return nil
+		return emitJSON(a.out, map[string]any{
+			"bundle_path": filePath,
+			"redacted":    redact,
+		})
 	}
-
-	writef(a.out, "Config: %s\n", configPath)
-	configMsg := configValidation
-	if configValidation != "ok" && a.opts.output == "text" {
-		configMsg = a.errorColor("%s", configValidation)
-	}
-	writef(a.out, "Config validation: %s\n", configMsg)
-
-	certReady := cert["ready"]
-	certMsg := fmt.Sprintf("%v", certReady)
-	if ok, _ := certReady.(bool); !ok && a.opts.output == "text" {
-		certMsg = a.warnColor("%s", certMsg)
-	}
-	writef(a.out, "Cert ready: %s\n", certMsg)
-
-	if reachable, _ := engine["reachable"].(bool); reachable {
-		status := a.successColor("reachable")
-		writef(a.out, "Engine: %s (%s)\n", status, engine["version"])
-	} else {
-		writef(a.out, "Engine: unreachable (%v)\n", engine["error"])
-	}
-	if reachable, _ := engine["reachable"].(bool); !reachable {
-		if msg, _ := engine["error"].(string); msg != "" {
-			return status.Error(codes.Unavailable, msg)
-		}
-		return status.Error(codes.Unavailable, "engine unreachable")
-	}
-	if configValidation != "ok" {
-		return errors.New(configValidation)
-	}
+	writef(a.out, "Diagnostic bundle written: %s\n", filePath)
+	writeLine(a.out, "Attach this file when opening a bug report.")
 	return nil
+}
+
+func addZipJSON(zw *zip.Writer, name string, payload any) error {
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	return addZipText(zw, name, string(b))
+}
+
+func addZipText(zw *zip.Writer, name, body string) error {
+	w, err := zw.Create(name)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, body)
+	return err
+}
+
+func (a *app) configSnapshot(redact bool) string {
+	snapshot := map[string]any{
+		"http_port":       a.cfg.HTTPPort,
+		"grpc_port":       a.cfg.GRPCPort,
+		"grpc_bind":       a.cfg.GRPCBindAddress,
+		"tls_enabled":     a.cfg.TLSEnabled,
+		"log_format":      a.cfg.LogFormat,
+		"log_level":       a.cfg.LogLevel,
+		"log_output":      a.cfg.LogOutput,
+		"log_max_size_mb": a.cfg.LogMaxSizeMB,
+		"log_max_files":   a.cfg.LogMaxFiles,
+		"log_compress":    a.cfg.LogCompress,
+		"metrics_enabled": a.cfg.MetricsEnabled,
+	}
+	tokenVal := a.cfg.AuthToken
+	if redact && tokenVal != "" {
+		tokenVal = "<redacted>"
+	}
+	snapshot["auth_token"] = tokenVal
+	raw, _ := json.MarshalIndent(snapshot, "", "  ")
+	return string(raw)
+}
+
+func (a *app) envSnapshot(redact bool) (string, error) {
+	token := os.Getenv("APIX_TOKEN")
+	if redact && token != "" {
+		token = "<redacted>"
+	}
+	payload := map[string]any{
+		"GOOS":        runtime.GOOS,
+		"GOARCH":      runtime.GOARCH,
+		"APIX_HOST":   os.Getenv("APIX_HOST"),
+		"APIX_PORT":   os.Getenv("APIX_PORT"),
+		"APIX_TLS":    os.Getenv("APIX_TLS"),
+		"APIX_OUTPUT": os.Getenv("APIX_OUTPUT"),
+		"APIX_TOKEN":  token,
+	}
+	b, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func main() {
